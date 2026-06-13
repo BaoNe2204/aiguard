@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Cấu hình AIGuard</title>
+  <link rel="stylesheet" href="ui.css">
+</head>
+<body class="options-body">
+  <main class="options-shell">
+    <header class="options-header">
+      <div class="brand">
+        <span class="brand-shield">A</span>
+        <span><strong>AIGuard</strong><small>ENDPOINT DLP</small></span>
+      </div>
+      <span id="version" class="version-pill"></span>
+    </header>
+
+    <section class="hero-panel">
+      <span class="eyebrow">CẤU HÌNH BẢO VỆ TRÌNH DUYỆT</span>
+      <h1>Đăng ký thiết bị với AIGuard</h1>
+      <p>Nhập enrollment token do quản trị viên cung cấp. Extension sẽ tự nhận endpoint key và bắt đầu quét trước khi dữ liệu được gửi đến AI.</p>
+    </section>
+
+    <div id="statusBanner" class="status-banner hidden"></div>
+
+    <section class="settings-card">
+      <div class="section-title">
+        <span class="step-number">1</span>
+        <div><h2>Kết nối Backend API</h2><p>Địa chỉ API AIGuard của doanh nghiệp.</p></div>
+      </div>
+      <label class="field">
+        <span>API URL</span>
+        <input id="api" type="url" placeholder="http://127.0.0.1:5185" spellcheck="false">
+      </label>
+    </section>
+
+    <section class="settings-card">
+      <div class="section-title">
+        <span class="step-number">2</span>
+        <div><h2>Thông tin thiết bị</h2><p>Email phải tồn tại trong tài khoản doanh nghiệp.</p></div>
+      </div>
+      <div class="field-grid">
+        <label class="field">
+          <span>Tên thiết bị</span>
+          <input id="host" type="text" placeholder="LAPTOP-NGUYENVANA" spellcheck="false">
+        </label>
+        <label class="field">
+          <span>Phòng ban</span>
+          <input id="department" type="text" placeholder="Dev, HR, Sales, Finance">
+        </label>
+      </div>
+      <label class="field">
+        <span>Email nhân viên</span>
+        <input id="email" type="email" placeholder="nhanvien@company.com" spellcheck="false">
+      </label>
+    </section>
+
+    <section class="settings-card">
+      <div class="section-title">
+        <span class="step-number">3</span>
+        <div><h2>Enrollment token</h2><p>Token có thời hạn và chỉ được cấp bởi quản trị viên AIGuard.</p></div>
+      </div>
+      <label class="field">
+        <span>Token đăng ký</span>
+        <input id="enrollmentToken" type="password" placeholder="Dán enrollment token tại đây" autocomplete="off">
+      </label>
+      <button id="enroll" class="primary-button" type="button">
+        Đăng ký và bật bảo vệ
+      </button>
+    </section>
+
+    <section class="settings-card">
+      <div class="section-title">
+        <span class="step-number success-step">✓</span>
+        <div><h2>Trạng thái bảo vệ</h2><p>Kiểm tra policy và khóa thiết bị hiện tại.</p></div>
+      </div>
+
+      <div class="toggle-row">
+        <div><strong>Bật AIGuard</strong><small>Quét prompt và file upload trên website AI.</small></div>
+        <label class="switch"><input id="enabled" type="checkbox" checked><span></span></label>
+      </div>
+      <div class="toggle-row">
+        <div><strong>Fail closed khi mất kết nối</strong><small>Chặn gửi nếu Backend API không thể xác minh.</small></div>
+        <label class="switch"><input id="offline" type="checkbox" checked><span></span></label>
+      </div>
+
+      <div class="connection-actions">
+        <button id="save" class="secondary-button" type="button">Lưu cấu hình</button>
+        <button id="test" class="secondary-button" type="button">Kiểm tra kết nối</button>
+      </div>
+
+      <details class="advanced-settings">
+        <summary>Cấu hình nâng cao</summary>
+        <label class="field">
+          <span>Endpoint key</span>
+          <input id="key" type="password" placeholder="Tự động nhận sau khi enroll" autocomplete="off">
+        </label>
+        <p>Chỉ nhập thủ công khi quản trị viên vừa rotate endpoint key.</p>
+      </details>
+    </section>
+
+    <section class="supported-sites">
+      <strong>Website đang được bảo vệ</strong>
+      <div><span>ChatGPT</span><span>Gemini</span><span>Claude</span></div>
+    </section>
+  </main>
+  <script src="options.js"></script>
+</body>
+</html>

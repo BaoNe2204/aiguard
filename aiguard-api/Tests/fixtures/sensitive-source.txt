@@ -1,0 +1,4 @@
+public class InternalPaymentService
+{
+    private const string ApiKey = "sk-abcdefghijklmnopqrstuvwxyz123456";
+}

@@ -1,0 +1,17 @@
+{
+  "name": "aiguard-contracts",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "compile": "node scripts/compile.js",
+    "deploy": "node scripts/deploy.js"
+  },
+  "dependencies": {
+    "ethers": "^6.15.0",
+    "solc": "^0.8.30"
+  },
+  "overrides": {
+    "tmp": "0.2.6",
+    "ws": "8.20.1"
+  }
+}

@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>AIGuard</title>
+  <link rel="stylesheet" href="ui.css">
+</head>
+<body class="popup-body">
+  <main class="popup-shell">
+    <header class="popup-header">
+      <div class="brand">
+        <span class="brand-shield">A</span>
+        <span><strong>AIGuard</strong><small>ENDPOINT DLP</small></span>
+      </div>
+      <label class="switch"><input id="enabled" type="checkbox"><span></span></label>
+    </header>
+
+    <section id="protectionCard" class="protection-card">
+      <div id="protectionIcon" class="protection-icon">✓</div>
+      <div>
+        <strong id="protectionTitle">Đang kiểm tra...</strong>
+        <p id="protectionDescription">Đọc trạng thái AIGuard</p>
+      </div>
+    </section>
+
+    <dl class="popup-details">
+      <div><dt>Thiết bị</dt><dd id="hostname">—</dd></div>
+      <div><dt>Người dùng</dt><dd id="userEmail">—</dd></div>
+      <div><dt>Policy</dt><dd id="policyVersion">—</dd></div>
+      <div><dt>Backend</dt><dd id="apiBaseUrl">—</dd></div>
+    </dl>
+
+    <div class="popup-sites">
+      <span>ChatGPT</span><span>Gemini</span><span>Claude</span>
+    </div>
+
+    <div id="testResult" class="popup-result hidden"></div>
+    <div class="popup-actions">
+      <button id="test" class="secondary-button" type="button">Kiểm tra</button>
+      <button id="settings" class="primary-button" type="button">Cấu hình</button>
+    </div>
+    <small id="version" class="popup-version"></small>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>

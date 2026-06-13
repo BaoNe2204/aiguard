@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AIGuard đã chặn website AI</title>
+  <link rel="stylesheet" href="ui.css">
+</head>
+<body class="aiguard-blocked-page">
+  <main class="aiguard-blocked-card">
+    <div class="aiguard-blocked-icon">!</div>
+    <p class="eyebrow">AIGuard Endpoint Protection</p>
+    <h1>Website AI chưa được doanh nghiệp cho phép</h1>
+    <p class="muted">Truy cập đã được ghi nhận để Security Admin kiểm tra. AIGuard không thu thập nội dung trang hoặc mật khẩu.</p>
+    <dl>
+      <div><dt>Tên miền</dt><dd id="domain">-</dd></div>
+      <div><dt>Quyết định</dt><dd id="decision">Block</dd></div>
+    </dl>
+    <div class="aiguard-blocked-actions">
+      <button id="back" class="primary">Quay lại trang trước</button>
+      <button id="settings">Mở cấu hình AIGuard</button>
+    </div>
+  </main>
+  <script src="blocked.js"></script>
+</body>
+</html>

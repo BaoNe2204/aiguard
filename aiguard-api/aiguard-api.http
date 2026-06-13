@@ -1,0 +1,65 @@
+@host = http://localhost:5185
+@jwt = REPLACE_WITH_ACCESS_TOKEN
+@endpointKey = REPLACE_WITH_ENDPOINT_KEY
+
+### Health
+GET {{host}}/api/health/live
+
+### Login
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@aiguard.com",
+  "password": "Admin@123"
+}
+
+### Rotate enrollment token
+POST {{host}}/api/endpoints/deployment/rotate-token?tenantCode=DEMO
+Authorization: Bearer {{jwt}}
+
+### Enroll device
+POST {{host}}/api/endpoints/deployment/enroll
+Content-Type: application/json
+
+{
+  "enrollmentToken": "REPLACE_WITH_ENROLLMENT_TOKEN",
+  "hostname": "DESKTOP-DEMO01",
+  "userEmail": "nguyenvana@company.com",
+  "departmentName": "Engineering / Phat trien",
+  "agentVersion": "1.0.0",
+  "extensionVersion": "1.0.0"
+}
+
+### Get endpoint policy
+GET {{host}}/api/policies/current?hostname=DESKTOP-DEMO01
+X-Endpoint-Key: {{endpointKey}}
+
+### Scan content
+POST {{host}}/api/dlp/scan
+Content-Type: application/json
+X-Endpoint-Key: {{endpointKey}}
+
+{
+  "hostname": "DESKTOP-DEMO01",
+  "userEmail": "nguyenvana@company.com",
+  "websiteAi": "ChatGPT",
+  "departmentCode": "ENG",
+  "content": "password=TopSecret123 sk-abcdefghijklmnopqrstuvwxyz123456"
+}
+
+### Check Agent tool-call
+POST {{host}}/api/agents/tool-call/check
+Authorization: Bearer {{jwt}}
+Content-Type: application/json
+
+{
+  "agentId": "REPLACE_WITH_AGENT_ID",
+  "toolName": "ExportCustomerReport",
+  "actionType": "Export",
+  "targetResource": "customer-summary",
+  "recordCount": 10,
+  "payloadJson": "{\"scope\":\"summary\"}"
+}
+
+###

@@ -1,0 +1,11 @@
+🚀 Initial Commit: AIGuard Control Tower Core Infrastructure
+
+✨ Features & Updates:
+- 🎨 Tích hợp Tailwind CSS & chuẩn hóa giao diện Glassmorphism
+- 🌐 Khắc phục lỗi font chữ tiếng Việt bằng Be Vietnam Pro
+- 🧩 Bố cục lại Navbar, chuyển Hồ sơ cá nhân sang Avatar Dropdown
+- 🚪 Cải tiến logic Đăng xuất, tự động điều hướng về Trang chủ
+- 📁 Tổ chức lại thư mục, đưa file database SQL ra thư mục gốc
+- 📖 Cập nhật toàn bộ tài liệu README.md hướng dẫn khởi chạy chi tiết
+
+🔥 Hệ thống đã sẵn sàng cho giai đoạn phát triển tiếp theo!

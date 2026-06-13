@@ -1,0 +1,119 @@
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from './contexts/AuthContext';
+import { LanguageProvider } from './contexts/LanguageContext';
+import { ProtectedRoute } from './components/layout/ProtectedRoute';
+import { AppLayout } from './components/layout/AppLayout';
+import { Login } from './pages/Login';
+import { Landing } from './pages/Landing';
+import { Dashboard } from './pages/Dashboard';
+import { Endpoints } from './pages/Endpoints';
+import { Approvals } from './pages/Approvals';
+import { Policies } from './pages/Policies';
+import { Agents } from './pages/Agents';
+import { Audit } from './pages/Audit';
+import { MyUsage } from './pages/MyUsage';
+import { Forbidden } from './pages/Forbidden';
+import { Governance } from './pages/Governance';
+import { BusinessPackaging } from './pages/BusinessPackaging';
+import { PaymentConfirmation } from './pages/PaymentConfirmation';
+import { BusinessOperations } from './pages/BusinessOperations';
+import { Profile } from './pages/Profile';
+import { useAuth } from './contexts/AuthContext';
+import './App.css';
+
+const DASHBOARD_ROLES = ['DepartmentManager', 'SecurityAdmin', 'SystemAdmin', 'Auditor'];
+const SECURITY_ROLES = ['SecurityAdmin', 'SystemAdmin'];
+const APPROVAL_ROLES = ['DepartmentManager', 'SecurityAdmin', 'SystemAdmin'];
+const AUDIT_ROLES = ['SecurityAdmin', 'SystemAdmin', 'Auditor'];
+const GOVERNANCE_ROLES = ['DepartmentManager', 'SecurityAdmin', 'SystemAdmin', 'Auditor'];
+
+const RoleHomeRedirect = () => {
+  const { user } = useAuth();
+  return <Navigate to={user?.role === 'Employee' ? '/app/my-usage/logs' : '/app/dashboard'} replace />;
+};
+
+function App() {
+  return (
+    <LanguageProvider>
+      <AuthProvider>
+        <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<Landing />} />
+          <Route path="/login" element={<Login />} />
+          
+          <Route path="/app" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+            <Route path="dashboard" element={<ProtectedRoute allowedRoles={DASHBOARD_ROLES}><Dashboard /></ProtectedRoute>} />
+            <Route path="profile" element={<Profile />} />
+            
+            {/* Endpoints subroutes */}
+            <Route path="endpoints" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><Endpoints /></ProtectedRoute>} />
+            <Route path="endpoints/devices" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><Endpoints /></ProtectedRoute>} />
+            <Route path="endpoints/events" element={<ProtectedRoute allowedRoles={DASHBOARD_ROLES}><Endpoints /></ProtectedRoute>} />
+            <Route path="endpoints/ai-websites" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><Endpoints /></ProtectedRoute>} />
+            <Route path="endpoints/deployment" element={<ProtectedRoute allowedRoles={['SystemAdmin']}><Endpoints /></ProtectedRoute>} />
+            
+            {/* Approvals subroutes */}
+            <Route path="approvals/prompts" element={<ProtectedRoute allowedRoles={APPROVAL_ROLES}><Approvals /></ProtectedRoute>} />
+            <Route path="approvals/agents" element={<ProtectedRoute allowedRoles={APPROVAL_ROLES}><Approvals /></ProtectedRoute>} />
+            <Route path="approvals/history" element={<ProtectedRoute allowedRoles={APPROVAL_ROLES}><Approvals /></ProtectedRoute>} />
+            
+            {/* Policies subroutes */}
+            <Route path="policies/rules" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><Policies /></ProtectedRoute>} />
+            <Route path="policies/detectors" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><Policies /></ProtectedRoute>} />
+            <Route path="policies/whitelist-blacklist" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><Policies /></ProtectedRoute>} />
+            <Route path="policies/versions" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><Policies /></ProtectedRoute>} />
+            
+            {/* Agents subroutes */}
+            <Route path="agents" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><Agents /></ProtectedRoute>} />
+            <Route path="agents/permissions" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><Agents /></ProtectedRoute>} />
+            <Route path="agents/monitor" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><Agents /></ProtectedRoute>} />
+            <Route path="agents/prompt-injection" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><Agents /></ProtectedRoute>} />
+            <Route path="agents/simulation" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><Agents /></ProtectedRoute>} />
+            <Route path="agents/runtime" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><Agents /></ProtectedRoute>} />
+            <Route path="agents/red-team" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><Agents /></ProtectedRoute>} />
+            
+            {/* Audit & Blockchain subroutes */}
+            <Route path="audit/logs" element={<ProtectedRoute allowedRoles={AUDIT_ROLES}><Audit /></ProtectedRoute>} />
+            <Route path="audit/worker" element={<ProtectedRoute allowedRoles={AUDIT_ROLES}><Audit /></ProtectedRoute>} />
+            <Route path="blockchain/batches" element={<ProtectedRoute allowedRoles={AUDIT_ROLES}><Audit /></ProtectedRoute>} />
+
+            {/* Security governance */}
+            <Route path="governance/health" element={<ProtectedRoute allowedRoles={GOVERNANCE_ROLES}><Governance /></ProtectedRoute>} />
+            <Route path="governance/identity" element={<ProtectedRoute allowedRoles={['SystemAdmin']}><Governance /></ProtectedRoute>} />
+            <Route path="governance/false-positives" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><Governance /></ProtectedRoute>} />
+            <Route path="governance/incidents" element={<ProtectedRoute allowedRoles={GOVERNANCE_ROLES}><Governance /></ProtectedRoute>} />
+            <Route path="governance/rules" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><Governance /></ProtectedRoute>} />
+            <Route path="governance/settings" element={<ProtectedRoute allowedRoles={['SystemAdmin']}><Governance /></ProtectedRoute>} />
+
+            {/* Business packaging */}
+            <Route path="business/packages" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><BusinessPackaging /></ProtectedRoute>} />
+            <Route path="business/payment" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><PaymentConfirmation /></ProtectedRoute>} />
+            <Route path="business/orders" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><BusinessOperations /></ProtectedRoute>} />
+            <Route path="business/licenses" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><BusinessOperations /></ProtectedRoute>} />
+            <Route path="business/customers" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><BusinessOperations /></ProtectedRoute>} />
+            <Route path="business/invoices" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><BusinessOperations /></ProtectedRoute>} />
+            <Route path="business/onboarding" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><BusinessOperations /></ProtectedRoute>} />
+            <Route path="business/company" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><BusinessOperations /></ProtectedRoute>} />
+            <Route path="business/quotations" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><BusinessOperations /></ProtectedRoute>} />
+            <Route path="business/support" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><BusinessOperations /></ProtectedRoute>} />
+            
+            {/* My Usage portal subroutes */}
+            <Route path="my-usage/logs" element={<MyUsage />} />
+            <Route path="my-usage/approvals" element={<MyUsage />} />
+            <Route path="my-usage/summary" element={<MyUsage />} />
+
+            {/* Fallbacks */}
+            <Route path="forbidden" element={<Forbidden />} />
+            <Route index element={<RoleHomeRedirect />} />
+            <Route path="*" element={<RoleHomeRedirect />} />
+          </Route>
+
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
+        </BrowserRouter>
+      </AuthProvider>
+    </LanguageProvider>
+  );
+}
+
+export default App;
