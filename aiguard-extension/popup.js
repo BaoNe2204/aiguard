@@ -7,6 +7,7 @@ const ui = {
   hostname: document.getElementById("hostname"),
   userEmail: document.getElementById("userEmail"),
   policyVersion: document.getElementById("policyVersion"),
+  managedState: document.getElementById("managedState"),
   apiBaseUrl: document.getElementById("apiBaseUrl"),
   testResult: document.getElementById("testResult"),
   test: document.getElementById("test"),
@@ -28,12 +29,19 @@ async function loadStatus() {
   ui.hostname.textContent = status.hostname || "Chưa đăng ký";
   ui.userEmail.textContent = status.userEmail || "—";
   ui.policyVersion.textContent = status.policyVersion || "—";
+  ui.managedState.textContent = status.managedLockSettings
+    ? "Policy khóa"
+    : status.managedConfigApplied ? "Policy" : "Thủ công";
   ui.apiBaseUrl.textContent = status.apiBaseUrl || "—";
   ui.apiBaseUrl.title = status.apiBaseUrl || "";
   ui.version.textContent = `AIGuard Extension v${status.version}`;
 
   if (!status.configured) {
-    setProtectionState("error", "Chưa đăng ký", "Mở cấu hình và nhập enrollment token.");
+    setProtectionState(
+      "error",
+      "Chưa đăng ký",
+      status.lastEnrollmentError || "Mở cấu hình và nhập enrollment token."
+    );
   } else if (!status.enabled) {
     setProtectionState("disabled", "Bảo vệ đang tắt", "Prompt và file sẽ không được quét.");
   } else {

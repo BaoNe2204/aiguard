@@ -18,17 +18,20 @@ public class DeploymentService : IDeploymentService
     private readonly IEndpointSecurityService _security;
     private readonly IDataScopeContext _scope;
     private readonly ILicenseEntitlementService _entitlements;
+    private readonly IConfiguration _configuration;
 
     public DeploymentService(
         AiguardDbContext db,
         IEndpointSecurityService security,
         IDataScopeContext scope,
-        ILicenseEntitlementService entitlements)
+        ILicenseEntitlementService entitlements,
+        IConfiguration configuration)
     {
         _db = db;
         _security = security;
         _scope = scope;
         _entitlements = entitlements;
+        _configuration = configuration;
     }
 
     public async Task<DeploymentTokenResponse> GetActiveTokenInfoAsync()
@@ -41,7 +44,7 @@ public class DeploymentService : IDeploymentService
         if (token == null)
             return await RotateTokenAsync(_scope.TenantCode);
 
-        return MapToken(token, null);
+        return MapToken(token, null, ApiBaseUrl());
     }
 
     public async Task<DeploymentTokenResponse> RotateTokenAsync(string tenantCode)
@@ -51,7 +54,9 @@ public class DeploymentService : IDeploymentService
             : tenantCode.Trim().ToUpperInvariant();
         if (!_scope.IsPlatformAdmin && normalizedTenant != _scope.TenantCode)
             throw new UnauthorizedAccessException();
-        var activeTokens = await _db.EnrollmentTokens.Where(t => !t.IsRevoked).ToListAsync();
+        var activeTokens = await _db.EnrollmentTokens
+            .Where(t => t.TenantCode == normalizedTenant && !t.IsRevoked)
+            .ToListAsync();
         foreach (var active in activeTokens) active.IsRevoked = true;
 
         var rawToken = _security.GenerateSecret();
@@ -63,7 +68,7 @@ public class DeploymentService : IDeploymentService
         };
         _db.EnrollmentTokens.Add(token);
         await _db.SaveChangesAsync();
-        return MapToken(token, rawToken);
+        return MapToken(token, rawToken, ApiBaseUrl());
     }
 
     public async Task<EnrollDeviceResponse?> EnrollAsync(EnrollDeviceRequest request)
@@ -118,7 +123,12 @@ public class DeploymentService : IDeploymentService
         };
     }
 
-    private static DeploymentTokenResponse MapToken(EnrollmentToken token, string? rawToken) => new()
+    private string ApiBaseUrl() =>
+        _configuration["PublicApi:BaseUrl"] ??
+        _configuration["ApiBaseUrl"] ??
+        "http://127.0.0.1:5185";
+
+    private static DeploymentTokenResponse MapToken(EnrollmentToken token, string? rawToken, string apiBaseUrl) => new()
     {
         TokenId = token.Id,
         Token = rawToken,
@@ -127,6 +137,17 @@ public class DeploymentService : IDeploymentService
         ExpiresAt = token.ExpiresAt,
         InstallCommand = rawToken == null
             ? "Rotate the enrollment token to generate a new install command."
-            : $"AIGuardAgentSetup.exe /tenant {token.TenantCode} /token \"{rawToken}\" /silent"
+            : $$"""
+              .\aiguard-endpoint-agent.exe configure --api {{apiBaseUrl}} --token "{{rawToken}}" --email "<employee@company.com>" --department "<department>" --clear-state
+              .\aiguard-endpoint-agent.exe enroll
+              sc.exe create AIGuardEndpointAgent binPath= "C:\Program Files\AIGuard\aiguard-endpoint-agent.exe run" start= auto
+              sc.exe start AIGuardEndpointAgent
+              """,
+        ExtensionSetupCommand = rawToken == null
+            ? "Rotate the enrollment token to generate a new extension setup command."
+            : $".\\aiguard-extension setup --api {apiBaseUrl} --token \"{rawToken}\" --email \"<employee@company.com>\" --department \"<department>\"",
+        ExtensionSetupUrl = rawToken == null
+            ? ""
+            : $"chrome-extension://<extension-id>/options.html?api={Uri.EscapeDataString(apiBaseUrl)}&token={Uri.EscapeDataString(rawToken)}&email=<employee@company.com>&department=<department>"
     };
 }

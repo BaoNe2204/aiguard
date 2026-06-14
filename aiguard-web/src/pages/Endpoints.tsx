@@ -57,7 +57,7 @@ export const Endpoints: React.FC = () => {
   // ── Deployment state ──
   const [deployToken, setDeployToken] = useState<DeploymentTokenResponse | null>(null);
   const [deployLoading, setDeployLoading] = useState(false);
-  const [isCopied, setIsCopied] = useState(false);
+  const [copiedCommand, setCopiedCommand] = useState<'agent' | 'extension' | 'url' | null>(null);
 
   // ── Overview stats (reuse from devices) ──
   const [overviewLoading, setOverviewLoading] = useState(false);
@@ -222,11 +222,11 @@ export const Endpoints: React.FC = () => {
     }
   };
 
-  const copyToClipboard = () => {
-    if (deployToken?.installCommand) {
-      navigator.clipboard.writeText(deployToken.installCommand);
-      setIsCopied(true);
-      setTimeout(() => setIsCopied(false), 2000);
+  const copyToClipboard = (kind: 'agent' | 'extension' | 'url', value?: string) => {
+    if (value) {
+      navigator.clipboard.writeText(value);
+      setCopiedCommand(kind);
+      setTimeout(() => setCopiedCommand(null), 2000);
     }
   };
 
@@ -472,15 +472,53 @@ export const Endpoints: React.FC = () => {
               </div>
 
               <div className="card glass p-6">
-                <h2 className="mb-2">{t('2. Quiet installation command (GPO/Intune)', '2. Lệnh cài đặt im lặng (GPO/Intune)')}</h2>
-                <p className="text-sm text-zinc-400 mb-4">{t('Run the following command as System Admin to install the Desktop Agent silently on domain machines.', 'Chạy lệnh sau với quyền quản trị hệ thống để cài Desktop Agent im lặng trên máy trong miền.')}</p>
-                <div className="p-4 rounded bg-zinc-900 border border-zinc-700 flex justify-between items-center">
-                  <code className="text-xs text-indigo-400 font-mono select-all">
-                    {deployToken?.installCommand || 'AIGuardAgentSetup.exe /tenant PROD-COMPANY /token {TOKEN} /silent'}
-                  </code>
-                  <button className="p-1 hover:text-white transition-colors" onClick={copyToClipboard} title={t('Copy command', 'Sao chép lệnh')}>
-                    {isCopied ? <span className="text-xs text-emerald-400 font-sans font-semibold">{t('Copied!', 'Đã sao chép!')}</span> : <Copy size={16} />}
-                  </button>
+                <h2 className="mb-2">{t('2. Deployment commands', '2. Lệnh triển khai')}</h2>
+                <p className="text-sm text-zinc-400 mb-4">{t('Copy the correct command for Desktop Agent or Browser Extension deployment.', 'Sao chép lệnh phù hợp để triển khai Desktop Agent hoặc Browser Extension.')}</p>
+
+                <div className="space-y-4">
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-sm font-bold text-white">Desktop Agent</h3>
+                      <button
+                        className="btn-action text-xs flex items-center gap-1"
+                        onClick={() => copyToClipboard('agent', deployToken?.installCommand)}
+                        title={t('Copy command', 'Sao chép lệnh')}
+                      >
+                        {copiedCommand === 'agent' ? t('Copied!', 'Đã sao chép!') : <><Copy size={13} /> Copy</>}
+                      </button>
+                    </div>
+                    <div className="p-4 rounded bg-zinc-900 border border-zinc-700">
+                      <code className="block whitespace-pre-wrap text-xs text-indigo-400 font-mono select-all">
+                        {deployToken?.installCommand || 'Rotate token to generate Desktop Agent install command'}
+                      </code>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-sm font-bold text-white">Browser Extension</h3>
+                      <button
+                        className="btn-action text-xs flex items-center gap-1"
+                        onClick={() => copyToClipboard('extension', deployToken?.extensionSetupCommand)}
+                        title={t('Copy extension setup', 'Sao chép lệnh setup extension')}
+                      >
+                        {copiedCommand === 'extension' ? t('Copied!', 'Đã sao chép!') : <><Copy size={13} /> Copy</>}
+                      </button>
+                    </div>
+                    <div className="p-4 rounded bg-zinc-900 border border-zinc-700">
+                      <code className="block whitespace-pre-wrap text-xs text-emerald-400 font-mono select-all">
+                        {deployToken?.extensionSetupCommand || 'Rotate token to generate Browser Extension setup command'}
+                      </code>
+                    </div>
+                    {deployToken?.extensionSetupUrl && (
+                      <button
+                        className="btn-action text-xs mt-2 flex items-center gap-1"
+                        onClick={() => copyToClipboard('url', deployToken.extensionSetupUrl)}
+                      >
+                        {copiedCommand === 'url' ? t('Copied setup URL!', 'Đã sao chép setup URL!') : <><Copy size={13} /> Copy setup URL</>}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

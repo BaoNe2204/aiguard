@@ -3,7 +3,9 @@
     ? "Gemini"
     : location.hostname.includes("claude")
       ? "Claude"
-      : "ChatGPT";
+      : location.hostname.includes("copilot")
+        ? "Copilot"
+        : "ChatGPT";
   const MAX_FILE_BYTES = 25 * 1024 * 1024;
   const replayButtons = new WeakSet();
   const replayFileInputs = new WeakSet();

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "AIGuard Endpoint DLP",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Ngăn dữ liệu nhạy cảm của doanh nghiệp bị gửi tới AI và phát hiện website AI chưa được phép.",
   "permissions": [
     "storage",
@@ -9,12 +9,13 @@
     "alarms"
   ],
   "host_permissions": [
-    "http://localhost/*",
-    "http://127.0.0.1/*",
+    "http://*/*",
+    "https://*/*",
     "https://chatgpt.com/*",
     "https://chat.openai.com/*",
     "https://gemini.google.com/*",
-    "https://claude.ai/*"
+    "https://claude.ai/*",
+    "https://copilot.microsoft.com/*"
   ],
   "optional_host_permissions": [
     "http://*/*",
@@ -29,7 +30,8 @@
         "https://chatgpt.com/*",
         "https://chat.openai.com/*",
         "https://gemini.google.com/*",
-        "https://claude.ai/*"
+        "https://claude.ai/*",
+        "https://copilot.microsoft.com/*"
       ],
       "js": [
         "content.js"
@@ -40,6 +42,9 @@
   "options_ui": {
     "page": "options.html",
     "open_in_tab": true
+  },
+  "storage": {
+    "managed_schema": "managed_schema.json"
   },
   "action": {
     "default_title": "AIGuard Endpoint DLP",

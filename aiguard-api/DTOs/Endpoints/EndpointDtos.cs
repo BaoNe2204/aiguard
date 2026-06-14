@@ -136,6 +136,8 @@ public class DeploymentTokenResponse
     public DateTime CreatedAt { get; set; }
     public DateTime ExpiresAt { get; set; }
     public string InstallCommand { get; set; } = string.Empty;
+    public string ExtensionSetupCommand { get; set; } = string.Empty;
+    public string ExtensionSetupUrl { get; set; } = string.Empty;
 }
 
 public class EnrollDeviceRequest

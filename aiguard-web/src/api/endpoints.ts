@@ -76,6 +76,8 @@ export interface DeploymentTokenResponse {
   createdAt: string;
   expiresAt: string;
   installCommand: string;
+  extensionSetupCommand: string;
+  extensionSetupUrl: string;
 }
 
 export interface RotateEndpointKeyResponse {

@@ -24,6 +24,21 @@
 
     <div id="statusBanner" class="status-banner hidden"></div>
 
+    <section class="settings-card quick-setup-card">
+      <div class="section-title">
+        <span class="step-number">⚡</span>
+        <div><h2>Setup nhanh cho nhân viên</h2><p>Dán token, setup link hoặc lệnh triển khai mà quản trị viên gửi. Extension sẽ tự điền thông tin cần thiết.</p></div>
+      </div>
+      <label class="field">
+        <span>Dán token/link/lệnh triển khai</span>
+        <textarea id="quickSetup" rows="4" placeholder='Ví dụ: .\aiguard-extension setup --api https://api.company.vn --token "..." --email user@company.com --department Dev'></textarea>
+      </label>
+      <div class="connection-actions">
+        <button id="parseSetup" class="secondary-button" type="button">Tự điền thông tin</button>
+        <button id="enrollQuick" class="primary-button" type="button">Đăng ký ngay</button>
+      </div>
+    </section>
+
     <section class="settings-card">
       <div class="section-title">
         <span class="step-number">1</span>
@@ -43,7 +58,7 @@
       <div class="field-grid">
         <label class="field">
           <span>Tên thiết bị</span>
-          <input id="host" type="text" placeholder="LAPTOP-NGUYENVANA" spellcheck="false">
+          <input id="host" type="text" placeholder="Tự tạo nếu để trống" spellcheck="false">
         </label>
         <label class="field">
           <span>Phòng ban</span>
@@ -102,7 +117,7 @@
 
     <section class="supported-sites">
       <strong>Website đang được bảo vệ</strong>
-      <div><span>ChatGPT</span><span>Gemini</span><span>Claude</span></div>
+      <div><span>ChatGPT</span><span>Gemini</span><span>Claude</span><span>Copilot</span></div>
     </section>
   </main>
   <script src="options.js"></script>
