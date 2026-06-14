@@ -10,7 +10,7 @@ namespace aiguard_api.Controllers;
 
 [ApiController]
 [Route("api/endpoints/shadow-ai")]
-[Authorize(Roles = "DepartmentManager,SecurityAdmin,SystemAdmin,Auditor")]
+[Authorize(Roles = "DepartmentManager,SecurityAdmin,TenantOwner")]
 public class ShadowAiController : ControllerBase
 {
     private readonly IShadowAiService _shadowAi;
@@ -55,7 +55,8 @@ public class ShadowAiController : ControllerBase
             return StatusCode(StatusCodes.Status423Locked, ApiResponse<object>.Fail("Device protection is locked"));
         var result = await _shadowAi.DiscoverAsync(device, request);
         if (!result.IsApproved)
-            await _hub.Clients.All.SendAsync("EmergencyAlert", new
+        {
+            await _hub.Clients.Group(NotificationGroups.Role(device.TenantCode, "SecurityAdmin")).SendAsync("EmergencyAlert", new
             {
                 type = "ShadowAI",
                 result.Domain,
@@ -63,6 +64,15 @@ public class ShadowAiController : ControllerBase
                 result.UserEmail,
                 result.Decision
             });
+            await _hub.Clients.Group(NotificationGroups.Role(device.TenantCode, "TenantOwner")).SendAsync("EmergencyAlert", new
+            {
+                type = "ShadowAI",
+                result.Domain,
+                result.Hostname,
+                result.UserEmail,
+                result.Decision
+            });
+        }
         return Ok(ApiResponse<ShadowAiDiscoveryResponse>.Ok(result));
     }
 }

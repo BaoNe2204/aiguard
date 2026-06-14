@@ -28,6 +28,7 @@ public class Approval
     public DateTime ExpiresAt { get; set; } = DateTime.UtcNow.AddMinutes(30);
     public DateTime? DecidedAt { get; set; }
     public DateTime? RevokedAt { get; set; }
+    public Guid ConcurrencyToken { get; set; } = Guid.NewGuid();
     [Required, MaxLength(100)] public string TenantCode { get; set; } = "DEFAULT";
     public Guid? DepartmentId { get; set; }
 

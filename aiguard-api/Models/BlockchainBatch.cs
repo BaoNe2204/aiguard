@@ -17,10 +17,14 @@ public class BlockchainBatch
     public long? BlockNumber { get; set; }
 
     [Required, MaxLength(50)]
-    public string Status { get; set; } = "Pending"; // Pending, Anchored, Failed
+    public string Status { get; set; } = "Pending"; // Pending, Anchored, LocalAnchored, Failed
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? AnchoredAt { get; set; }
+    public DateTime? LastAttemptAt { get; set; }
+    public DateTime? NextRetryAt { get; set; }
+    public int RetryCount { get; set; }
+    [MaxLength(2000)] public string? LastError { get; set; }
     [Required, MaxLength(100)] public string TenantCode { get; set; } = "DEFAULT";
 
     // Navigation

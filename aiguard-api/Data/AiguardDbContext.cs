@@ -37,6 +37,25 @@ public class AiguardDbContext : DbContext
     public DbSet<ExactDataMatchRecord> ExactDataMatchRecords => Set<ExactDataMatchRecord>();
     public DbSet<ShadowAiDiscoveryEvent> ShadowAiDiscoveryEvents => Set<ShadowAiDiscoveryEvent>();
     public DbSet<EndpointTelemetryEvent> EndpointTelemetryEvents => Set<EndpointTelemetryEvent>();
+    public DbSet<Tenant> Tenants => Set<Tenant>();
+    public DbSet<TenantSettings> TenantSettings => Set<TenantSettings>();
+    public DbSet<CustomerContact> CustomerContacts => Set<CustomerContact>();
+    public DbSet<ProductPlan> ProductPlans => Set<ProductPlan>();
+    public DbSet<SalesOrder> SalesOrders => Set<SalesOrder>();
+    public DbSet<PaymentRecord> PaymentRecords => Set<PaymentRecord>();
+    public DbSet<Subscription> Subscriptions => Set<Subscription>();
+    public DbSet<TenantLicense> TenantLicenses => Set<TenantLicense>();
+    public DbSet<Invoice> Invoices => Set<Invoice>();
+    public DbSet<Quotation> Quotations => Set<Quotation>();
+    public DbSet<CommercialContract> CommercialContracts => Set<CommercialContract>();
+    public DbSet<TenantOnboarding> TenantOnboardings => Set<TenantOnboarding>();
+    public DbSet<SupportTicket> SupportTickets => Set<SupportTicket>();
+    public DbSet<SupportTicketMessage> SupportTicketMessages => Set<SupportTicketMessage>();
+    public DbSet<RefreshSession> RefreshSessions => Set<RefreshSession>();
+    public DbSet<MfaRecoveryCode> MfaRecoveryCodes => Set<MfaRecoveryCode>();
+    public DbSet<SecurityPolicyVersion> SecurityPolicyVersions => Set<SecurityPolicyVersion>();
+    public DbSet<AgentCredential> AgentCredentials => Set<AgentCredential>();
+    public DbSet<TenantSignupVerificationToken> TenantSignupVerificationTokens => Set<TenantSignupVerificationToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -93,6 +112,44 @@ public class AiguardDbContext : DbContext
             x.TenantCode == _scope.TenantCode && (!_scope.RestrictToDepartment || x.DepartmentId == _scope.DepartmentId));
         modelBuilder.Entity<EndpointTelemetryEvent>().HasQueryFilter(x =>
             x.TenantCode == _scope.TenantCode && (!_scope.RestrictToDepartment || x.DepartmentId == _scope.DepartmentId));
+        modelBuilder.Entity<EnrollmentToken>().HasQueryFilter(x =>
+            _scope.IsPlatformAdmin || x.TenantCode == _scope.TenantCode);
+        modelBuilder.Entity<Tenant>().HasQueryFilter(x =>
+            _scope.IsPlatformAdmin || x.Code == _scope.TenantCode);
+        modelBuilder.Entity<TenantSettings>().HasQueryFilter(x =>
+            _scope.IsPlatformAdmin || x.TenantCode == _scope.TenantCode);
+        modelBuilder.Entity<CustomerContact>().HasQueryFilter(x =>
+            _scope.IsPlatformAdmin || x.TenantCode == _scope.TenantCode);
+        modelBuilder.Entity<SalesOrder>().HasQueryFilter(x =>
+            _scope.IsPlatformAdmin || x.TenantCode == _scope.TenantCode);
+        modelBuilder.Entity<PaymentRecord>().HasQueryFilter(x =>
+            _scope.IsPlatformAdmin || x.TenantCode == _scope.TenantCode);
+        modelBuilder.Entity<Subscription>().HasQueryFilter(x =>
+            _scope.IsPlatformAdmin || x.TenantCode == _scope.TenantCode);
+        modelBuilder.Entity<TenantLicense>().HasQueryFilter(x =>
+            _scope.IsPlatformAdmin || x.TenantCode == _scope.TenantCode);
+        modelBuilder.Entity<Invoice>().HasQueryFilter(x =>
+            _scope.IsPlatformAdmin || x.TenantCode == _scope.TenantCode);
+        modelBuilder.Entity<Quotation>().HasQueryFilter(x =>
+            _scope.IsPlatformAdmin || x.TenantCode == _scope.TenantCode);
+        modelBuilder.Entity<CommercialContract>().HasQueryFilter(x =>
+            _scope.IsPlatformAdmin || x.TenantCode == _scope.TenantCode);
+        modelBuilder.Entity<TenantOnboarding>().HasQueryFilter(x =>
+            _scope.IsPlatformAdmin || x.TenantCode == _scope.TenantCode);
+        modelBuilder.Entity<SupportTicket>().HasQueryFilter(x =>
+            _scope.IsPlatformAdmin || x.TenantCode == _scope.TenantCode);
+        modelBuilder.Entity<SupportTicketMessage>().HasQueryFilter(x =>
+            _scope.IsPlatformAdmin || x.TenantCode == _scope.TenantCode);
+        modelBuilder.Entity<RefreshSession>().HasQueryFilter(x =>
+            _scope.IsPlatformAdmin || x.TenantCode == _scope.TenantCode);
+        modelBuilder.Entity<MfaRecoveryCode>().HasQueryFilter(x =>
+            _scope.IsPlatformAdmin || x.TenantCode == _scope.TenantCode);
+        modelBuilder.Entity<SecurityPolicyVersion>().HasQueryFilter(x =>
+            _scope.IsPlatformAdmin || x.TenantCode == _scope.TenantCode);
+        modelBuilder.Entity<AgentCredential>().HasQueryFilter(x =>
+            _scope.IsPlatformAdmin || x.TenantCode == _scope.TenantCode);
+        modelBuilder.Entity<TenantSignupVerificationToken>().HasQueryFilter(x =>
+            _scope.IsPlatformAdmin || x.TenantCode == _scope.TenantCode);
 
         // ── Department ──
         modelBuilder.Entity<Department>(e =>
@@ -137,6 +194,7 @@ public class AiguardDbContext : DbContext
         modelBuilder.Entity<Agent>(e =>
         {
             e.HasIndex(a => new { a.TenantCode, a.Code }).IsUnique();
+            e.Property(a => a.MonthlyCostLimit).HasPrecision(18, 4);
             e.HasOne(a => a.Department)
                 .WithMany(d => d.Agents)
                 .HasForeignKey(a => a.DepartmentId)
@@ -151,6 +209,8 @@ public class AiguardDbContext : DbContext
                 .HasForeignKey(l => l.AgentId)
                 .OnDelete(DeleteBehavior.Cascade);
             e.HasIndex(l => l.CreatedAt);
+            e.HasIndex(l => new { l.AgentId, l.RequestId }).IsUnique().HasFilter("[RequestId] IS NOT NULL");
+            e.Property(l => l.EstimatedCost).HasPrecision(18, 6);
         });
 
         modelBuilder.Entity<AgentToolPermission>(e =>
@@ -224,6 +284,7 @@ public class AiguardDbContext : DbContext
                 .OnDelete(DeleteBehavior.NoAction);
 
             e.HasIndex(a => a.Status);
+            e.Property(a => a.ConcurrencyToken).IsConcurrencyToken();
         });
 
         // ── AuditLog ──
@@ -246,6 +307,7 @@ public class AiguardDbContext : DbContext
         modelBuilder.Entity<BlockchainBatch>(e =>
         {
             e.HasIndex(b => b.Status);
+            e.HasIndex(b => new { b.Status, b.NextRetryAt });
         });
 
         modelBuilder.Entity<FalsePositiveReport>(e =>
@@ -321,6 +383,179 @@ public class AiguardDbContext : DbContext
             e.HasIndex(x => x.DeviceId);
             e.HasOne(x => x.Device).WithMany().HasForeignKey(x => x.DeviceId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(x => x.Department).WithMany().HasForeignKey(x => x.DepartmentId).OnDelete(DeleteBehavior.NoAction);
+        });
+
+        modelBuilder.Entity<Tenant>(e =>
+        {
+            e.HasIndex(x => x.Code).IsUnique();
+            e.HasIndex(x => x.Status);
+        });
+
+        modelBuilder.Entity<TenantSettings>(e =>
+        {
+            e.HasIndex(x => x.TenantId).IsUnique();
+            e.HasOne(x => x.Tenant).WithOne(x => x.Settings)
+                .HasForeignKey<TenantSettings>(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<CustomerContact>(e =>
+        {
+            e.HasIndex(x => new { x.TenantId, x.Email }).IsUnique();
+            e.HasOne(x => x.Tenant).WithMany(x => x.Contacts)
+                .HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ProductPlan>(e =>
+        {
+            e.HasIndex(x => x.Code).IsUnique();
+            e.Property(x => x.MonthlyPrice).HasPrecision(18, 2);
+            e.Property(x => x.YearlyPrice).HasPrecision(18, 2);
+        });
+
+        modelBuilder.Entity<SalesOrder>(e =>
+        {
+            e.HasIndex(x => x.OrderNumber).IsUnique();
+            e.HasIndex(x => new { x.TenantCode, x.Status, x.CreatedAt });
+            e.Property(x => x.Subtotal).HasPrecision(18, 2);
+            e.Property(x => x.DiscountAmount).HasPrecision(18, 2);
+            e.Property(x => x.TaxAmount).HasPrecision(18, 2);
+            e.Property(x => x.TotalAmount).HasPrecision(18, 2);
+            e.HasOne(x => x.Tenant).WithMany(x => x.Orders)
+                .HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.ProductPlan).WithMany()
+                .HasForeignKey(x => x.ProductPlanId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<PaymentRecord>(e =>
+        {
+            e.HasIndex(x => x.PaymentNumber).IsUnique();
+            e.HasIndex(x => new { x.TenantCode, x.Status, x.CreatedAt });
+            e.Property(x => x.Amount).HasPrecision(18, 2);
+            e.HasOne(x => x.Order).WithMany(x => x.Payments)
+                .HasForeignKey(x => x.OrderId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.Tenant).WithMany()
+                .HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<Subscription>(e =>
+        {
+            e.HasIndex(x => new { x.TenantCode, x.Status });
+            e.HasOne(x => x.Tenant).WithMany(x => x.Subscriptions)
+                .HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.ProductPlan).WithMany()
+                .HasForeignKey(x => x.ProductPlanId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.Order).WithMany()
+                .HasForeignKey(x => x.OrderId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<TenantLicense>(e =>
+        {
+            e.HasIndex(x => x.KeyHash).IsUnique();
+            e.HasIndex(x => new { x.TenantCode, x.Status, x.ExpiresAt });
+            e.HasOne(x => x.Tenant).WithMany(x => x.Licenses)
+                .HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.Subscription).WithMany()
+                .HasForeignKey(x => x.SubscriptionId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<Invoice>(e =>
+        {
+            e.HasIndex(x => x.InvoiceNumber).IsUnique();
+            e.HasIndex(x => new { x.TenantCode, x.Status, x.IssuedAt });
+            e.Property(x => x.Subtotal).HasPrecision(18, 2);
+            e.Property(x => x.DiscountAmount).HasPrecision(18, 2);
+            e.Property(x => x.TaxAmount).HasPrecision(18, 2);
+            e.Property(x => x.TotalAmount).HasPrecision(18, 2);
+            e.HasOne(x => x.Tenant).WithMany()
+                .HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.Order).WithMany()
+                .HasForeignKey(x => x.OrderId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<Quotation>(e =>
+        {
+            e.HasIndex(x => x.QuotationNumber).IsUnique();
+            e.HasIndex(x => new { x.TenantCode, x.Status, x.CreatedAt });
+            e.Property(x => x.Subtotal).HasPrecision(18, 2);
+            e.Property(x => x.DiscountAmount).HasPrecision(18, 2);
+            e.Property(x => x.TaxAmount).HasPrecision(18, 2);
+            e.Property(x => x.TotalAmount).HasPrecision(18, 2);
+            e.HasOne(x => x.Tenant).WithMany()
+                .HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.ProductPlan).WithMany()
+                .HasForeignKey(x => x.ProductPlanId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<CommercialContract>(e =>
+        {
+            e.HasIndex(x => x.ContractNumber).IsUnique();
+            e.HasIndex(x => new { x.TenantCode, x.Status, x.CreatedAt });
+            e.HasOne(x => x.Tenant).WithMany()
+                .HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.Quotation).WithMany()
+                .HasForeignKey(x => x.QuotationId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<TenantOnboarding>(e =>
+        {
+            e.HasIndex(x => x.TenantId).IsUnique();
+            e.HasOne(x => x.Tenant).WithMany()
+                .HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<SupportTicket>(e =>
+        {
+            e.HasIndex(x => x.TicketNumber).IsUnique();
+            e.HasIndex(x => new { x.TenantCode, x.Status, x.Priority, x.CreatedAt });
+            e.HasOne(x => x.Tenant).WithMany()
+                .HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<SupportTicketMessage>(e =>
+        {
+            e.HasIndex(x => new { x.SupportTicketId, x.CreatedAt });
+            e.HasOne(x => x.SupportTicket).WithMany(x => x.Messages)
+                .HasForeignKey(x => x.SupportTicketId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<RefreshSession>(e =>
+        {
+            e.HasIndex(x => x.TokenHash).IsUnique();
+            e.HasIndex(x => new { x.UserId, x.RevokedAt, x.ExpiresAt });
+            e.HasOne(x => x.User).WithMany(x => x.RefreshSessions)
+                .HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<MfaRecoveryCode>(e =>
+        {
+            e.HasIndex(x => x.CodeHash).IsUnique();
+            e.HasOne(x => x.User).WithMany(x => x.MfaRecoveryCodes)
+                .HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<SecurityPolicyVersion>(e =>
+        {
+            e.HasIndex(x => new { x.SecurityPolicyId, x.Version }).IsUnique();
+            e.HasOne(x => x.SecurityPolicy).WithMany()
+                .HasForeignKey(x => x.SecurityPolicyId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<AgentCredential>(e =>
+        {
+            e.HasIndex(x => x.KeyHash).IsUnique();
+            e.HasIndex(x => new { x.AgentId, x.Status, x.ExpiresAt });
+            e.HasOne(x => x.Agent).WithMany(x => x.Credentials)
+                .HasForeignKey(x => x.AgentId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<TenantSignupVerificationToken>(e =>
+        {
+            e.HasIndex(x => x.TokenHash).IsUnique();
+            e.HasIndex(x => x.ExpiresAt);
+            e.HasOne(x => x.Tenant).WithMany()
+                .HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.User).WithMany()
+                .HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

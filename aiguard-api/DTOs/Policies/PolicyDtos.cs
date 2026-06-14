@@ -36,6 +36,8 @@ public class SecurityPolicyResponse
 
 public class UpdatePolicyRequest
 {
+    [MaxLength(2000)]
+    public string? ChangeReason { get; set; }
     public int? SensitivityThreshold { get; set; }
     public bool? EnableEmailDetection { get; set; }
     public bool? EnablePhoneDetection { get; set; }
@@ -63,6 +65,9 @@ public class UpdatePolicyRequest
 public class PolicyVersionResponse
 {
     public Guid Id { get; set; }
+    public Guid PolicyId { get; set; }
+    public string PolicyName { get; set; } = string.Empty;
+    public string? DepartmentName { get; set; }
     public string Version { get; set; } = string.Empty;
     public string UpdatedBy { get; set; } = string.Empty;
     public DateTime UpdatedAt { get; set; }

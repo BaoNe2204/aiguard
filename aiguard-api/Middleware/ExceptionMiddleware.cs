@@ -38,6 +38,7 @@ public class ExceptionMiddleware
             UnauthorizedAccessException => (int)HttpStatusCode.Unauthorized,
             KeyNotFoundException => (int)HttpStatusCode.NotFound,
             ArgumentException => (int)HttpStatusCode.BadRequest,
+            InvalidOperationException => (int)HttpStatusCode.Conflict,
             _ => (int)HttpStatusCode.InternalServerError
         };
 
@@ -49,6 +50,7 @@ public class ExceptionMiddleware
                 UnauthorizedAccessException => "Unauthorized access",
                 KeyNotFoundException => "Resource not found",
                 ArgumentException => exception.Message,
+                InvalidOperationException => exception.Message,
                 _ => "An internal server error occurred"
             },
             data = (object?)null

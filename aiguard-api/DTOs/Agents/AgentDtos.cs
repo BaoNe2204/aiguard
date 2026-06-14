@@ -14,6 +14,12 @@ public class AgentResponse
     public DateTime CreatedAt { get; set; }
     public int ToolCallsToday { get; set; }
     public int RiskScoreToday { get; set; }
+    public int DailyCallLimit { get; set; }
+    public int DailyRecordLimit { get; set; }
+    public decimal MonthlyCostLimit { get; set; }
+    public bool AllowAgentDelegation { get; set; }
+    public int MaxDelegationDepth { get; set; }
+    public string? ActiveCredentialPrefix { get; set; }
 }
 
 public class CreateAgentRequest
@@ -26,6 +32,11 @@ public class CreateAgentRequest
 
     public string? Description { get; set; }
     public Guid? DepartmentId { get; set; }
+    public int DailyCallLimit { get; set; } = 1000;
+    public int DailyRecordLimit { get; set; } = 10000;
+    public decimal MonthlyCostLimit { get; set; } = 100;
+    public bool AllowAgentDelegation { get; set; }
+    public int MaxDelegationDepth { get; set; } = 1;
 }
 
 public class UpdateAgentRequest
@@ -34,6 +45,11 @@ public class UpdateAgentRequest
     public string? Description { get; set; }
     public bool? IsEnabled { get; set; }
     public Guid? DepartmentId { get; set; }
+    public int? DailyCallLimit { get; set; }
+    public int? DailyRecordLimit { get; set; }
+    public decimal? MonthlyCostLimit { get; set; }
+    public bool? AllowAgentDelegation { get; set; }
+    public int? MaxDelegationDepth { get; set; }
 }
 
 public class ToolPermissionResponse
@@ -49,6 +65,7 @@ public class ToolPermissionResponse
     public bool CanDelete { get; set; }
     public bool CanSendExternal { get; set; }
     public bool CanExport { get; set; }
+    public bool RequiresSandbox { get; set; }
 }
 
 public class UpdateToolPermissionRequest
@@ -64,18 +81,26 @@ public class UpdateToolPermissionRequest
     public bool CanDelete { get; set; }
     public bool CanSendExternal { get; set; }
     public bool CanExport { get; set; }
+    public bool RequiresSandbox { get; set; }
 }
 
 public class ToolCallCheckRequest : SimulateRequest
 {
     public string ActionType { get; set; } = "Read";
     public string? TargetResource { get; set; }
+    [MaxLength(100)]
+    public string RequestId { get; set; } = string.Empty;
+    public decimal EstimatedCost { get; set; }
+    public Guid? ParentAgentId { get; set; }
+    public int DelegationDepth { get; set; }
+    public bool IsSandboxed { get; set; }
 }
 
 public class ToolCallCheckResponse : SimulateResponse
 {
     public Guid ActionLogId { get; set; }
     public Guid? ApprovalId { get; set; }
+    public bool IsReplay { get; set; }
 }
 
 public class ToolCallLogResponse
@@ -91,6 +116,9 @@ public class ToolCallLogResponse
     public string Decision { get; set; } = string.Empty;
     public string? Reason { get; set; }
     public DateTime CreatedAt { get; set; }
+    public string? RequestId { get; set; }
+    public int RecordCount { get; set; }
+    public decimal EstimatedCost { get; set; }
 }
 
 public class SimulateRequest
@@ -112,4 +140,13 @@ public class SimulateResponse
     public int RiskScore { get; set; }
     public string RuleMatched { get; set; } = string.Empty;
     public string Reason { get; set; } = string.Empty;
+    public bool RequiresSandbox { get; set; }
+}
+
+public class AgentCredentialResponse
+{
+    public Guid AgentId { get; set; }
+    public string KeyPrefix { get; set; } = string.Empty;
+    public string AgentKey { get; set; } = string.Empty;
+    public DateTime ExpiresAt { get; set; }
 }

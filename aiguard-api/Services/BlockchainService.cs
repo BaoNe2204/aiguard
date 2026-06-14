@@ -42,7 +42,11 @@ public class BlockchainService : IBlockchainService
                 BlockNumber = b.BlockNumber,
                 Status = b.Status,
                 CreatedAt = b.CreatedAt,
-                AnchoredAt = b.AnchoredAt
+                AnchoredAt = b.AnchoredAt,
+                LastAttemptAt = b.LastAttemptAt,
+                NextRetryAt = b.NextRetryAt,
+                RetryCount = b.RetryCount,
+                LastError = b.LastError
             })
             .ToListAsync();
 
@@ -66,10 +70,17 @@ public class BlockchainService : IBlockchainService
         var computedHash = ComputeSha256(concatenated);
 
         var isMatch = computedHash == batch.BatchHash;
-        var onChainMatch = batch.Status == "Anchored" && _chain.IsEnabled
-            ? await _chain.VerifyOnChainAsync(batch.BatchHash)
-            : batch.Status != "Anchored";
-        isMatch = isMatch && onChainMatch;
+        var verificationStatus = batch.Status switch
+        {
+            "Anchored" when !_chain.IsEnabled => "BlockchainUnavailable",
+            "Anchored" => await _chain.VerifyOnChainAsync(batch.BatchHash)
+                ? "VerifiedOnChain"
+                : "OnChainMismatch",
+            "LocalAnchored" => "VerifiedLocal",
+            "Failed" => "AnchorFailed",
+            _ => "AnchorPending"
+        };
+        isMatch = isMatch && verificationStatus is "VerifiedOnChain" or "VerifiedLocal";
 
         return new VerifyBatchResponse
         {
@@ -77,9 +88,9 @@ public class BlockchainService : IBlockchainService
             BatchHash = batch.BatchHash,
             ComputedHash = computedHash,
             IsMatch = isMatch,
-            VerificationStatus = isMatch
-                ? batch.Status == "Anchored" ? "VerifiedOnChain" : "VerifiedLocal"
-                : "Mismatch",
+            VerificationStatus = computedHash != batch.BatchHash
+                ? "DatabaseHashMismatch"
+                : verificationStatus,
             VerifiedAt = DateTime.UtcNow
         };
     }

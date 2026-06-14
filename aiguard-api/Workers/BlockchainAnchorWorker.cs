@@ -1,3 +1,4 @@
+using System.Data;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
@@ -7,29 +8,29 @@ using aiguard_api.Services;
 
 namespace aiguard_api.Workers;
 
-/// <summary>
-/// Background worker that runs every 5 minutes to:
-/// 1. Collect un-anchored audit logs
-/// 2. Compute BatchHash = SHA256(EventHash_1 + EventHash_2 + ... + EventHash_M)
-/// 3. Create a BlockchainBatch record
-/// 4. In production: send transaction to Smart Contract anchorBatch(bytes32 batchHash, string metadata)
-/// </summary>
 public class BlockchainAnchorWorker : BackgroundService
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<BlockchainAnchorWorker> _logger;
     private readonly TimeSpan _interval;
-    private readonly bool _onChainEnabled;
+    private readonly int _maxRetries;
+    private readonly int _retryBaseSeconds;
+    private readonly int _batchSize;
 
-    public BlockchainAnchorWorker(IServiceProvider serviceProvider, ILogger<BlockchainAnchorWorker> logger, IConfiguration config)
+    public BlockchainAnchorWorker(
+        IServiceProvider serviceProvider,
+        ILogger<BlockchainAnchorWorker> logger,
+        IConfiguration config)
     {
         _serviceProvider = serviceProvider;
         _logger = logger;
         var intervalSeconds = config.GetValue<int?>("BlockchainSettings:AnchorIntervalSeconds");
         _interval = intervalSeconds is > 0
             ? TimeSpan.FromSeconds(intervalSeconds.Value)
-            : TimeSpan.FromMinutes(Math.Max(1, config.GetValue<int>("BlockchainSettings:AnchorIntervalMinutes", 5)));
-        _onChainEnabled = config.GetValue<bool>("BlockchainSettings:Enabled", false);
+            : TimeSpan.FromMinutes(Math.Max(1, config.GetValue("BlockchainSettings:AnchorIntervalMinutes", 5)));
+        _maxRetries = Math.Clamp(config.GetValue("BlockchainSettings:MaxRetries", 8), 1, 50);
+        _retryBaseSeconds = Math.Clamp(config.GetValue("BlockchainSettings:RetryBaseSeconds", 30), 1, 3600);
+        _batchSize = Math.Clamp(config.GetValue("BlockchainSettings:BatchSize", 1000), 1, 10000);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -40,7 +41,11 @@ public class BlockchainAnchorWorker : BackgroundService
         {
             try
             {
-                await AnchorPendingLogsAsync();
+                await ProcessAsync(stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
             }
             catch (Exception ex)
             {
@@ -51,84 +56,145 @@ public class BlockchainAnchorWorker : BackgroundService
         }
     }
 
-    private async Task AnchorPendingLogsAsync()
+    private async Task ProcessAsync(CancellationToken cancellationToken)
     {
         using var scope = _serviceProvider.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AiguardDbContext>();
         var chain = scope.ServiceProvider.GetRequiredService<IEvmBlockchainAnchorClient>();
 
-        // Get un-anchored audit logs
-        var pendingLogs = await db.AuditLogs.IgnoreQueryFilters()
-            .Where(l => l.BlockchainBatchId == null)
-            .OrderBy(l => l.CreatedAt)
-            .ToListAsync();
-
-        if (pendingLogs.Count == 0)
-        {
-            _logger.LogDebug("No pending logs to anchor");
-            return;
-        }
-
-        foreach (var tenantLogs in pendingLogs.GroupBy(l => l.TenantCode))
-            await AnchorTenantLogsAsync(db, chain, tenantLogs.Key, tenantLogs.ToList());
+        await RetryFailedBatchesAsync(db, chain, cancellationToken);
+        await ClaimAndAnchorPendingLogsAsync(db, chain, cancellationToken);
     }
 
-    private async Task AnchorTenantLogsAsync(
+    private async Task RetryFailedBatchesAsync(
         AiguardDbContext db,
         IEvmBlockchainAnchorClient chain,
-        string tenantCode,
-        List<AuditLog> pendingLogs)
+        CancellationToken cancellationToken)
     {
-        var concatenatedHashes = string.Join("", pendingLogs.Select(l => l.EventHash));
-        var batchHash = ComputeSha256(concatenatedHashes);
+        if (!chain.IsEnabled) return;
 
-        // Create batch record
-        var batch = new BlockchainBatch
+        var now = DateTime.UtcNow;
+        var retryIds = await db.BlockchainBatches.IgnoreQueryFilters()
+            .Where(x => x.Status == "Failed" &&
+                x.RetryCount < _maxRetries &&
+                (x.NextRetryAt == null || x.NextRetryAt <= now))
+            .OrderBy(x => x.NextRetryAt)
+            .Select(x => x.Id)
+            .Take(20)
+            .ToListAsync(cancellationToken);
+
+        foreach (var batchId in retryIds)
         {
-            LogCount = pendingLogs.Count,
-            BatchHash = batchHash,
-            Status = _onChainEnabled ? "Pending" : "LocalAnchored",
-            AnchoredAt = DateTime.UtcNow,
-            TransactionHash = null,
-            BlockNumber = null,
-            TenantCode = tenantCode
-        };
+            var batch = await db.BlockchainBatches.IgnoreQueryFilters()
+                .FirstOrDefaultAsync(x => x.Id == batchId, cancellationToken);
+            if (batch != null)
+                await AnchorBatchAsync(db, chain, batch, cancellationToken);
+        }
+    }
 
-        db.BlockchainBatches.Add(batch);
-        await db.SaveChangesAsync();
+    private async Task ClaimAndAnchorPendingLogsAsync(
+        AiguardDbContext db,
+        IEvmBlockchainAnchorClient chain,
+        CancellationToken cancellationToken)
+    {
+        List<Guid> batchIds = [];
 
-        if (chain.IsEnabled)
+        await using (var transaction = await db.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable, cancellationToken))
         {
-            try
+            var pendingLogs = await db.AuditLogs.IgnoreQueryFilters()
+                .Where(x => x.BlockchainBatchId == null)
+                .OrderBy(x => x.CreatedAt)
+                .Take(_batchSize)
+                .ToListAsync(cancellationToken);
+
+            foreach (var tenantLogs in pendingLogs.GroupBy(x => x.TenantCode))
             {
-                var transaction = await chain.AnchorAsync(batchHash, $"aiguard:{tenantCode}:{batch.Id:N}:{pendingLogs.Count}");
-                batch.Status = "Anchored";
-                batch.TransactionHash = transaction.TransactionHash;
-                batch.BlockNumber = transaction.BlockNumber;
-                batch.AnchoredAt = DateTime.UtcNow;
+                var logs = tenantLogs.ToList();
+                var batch = new BlockchainBatch
+                {
+                    LogCount = logs.Count,
+                    BatchHash = ComputeSha256(string.Concat(logs.Select(x => x.EventHash))),
+                    Status = chain.IsEnabled ? "Pending" : "LocalAnchored",
+                    AnchoredAt = chain.IsEnabled ? null : DateTime.UtcNow,
+                    TenantCode = tenantLogs.Key
+                };
+
+                db.BlockchainBatches.Add(batch);
+                foreach (var log in logs)
+                    log.BlockchainBatchId = batch.Id;
+                batchIds.Add(batch.Id);
             }
-            catch (Exception ex)
-            {
-                batch.Status = "Failed";
-                _logger.LogError(ex, "Failed to anchor blockchain batch {BatchId}", batch.Id);
-            }
+
+            await db.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
         }
 
-        // Link logs to batch
-        foreach (var log in pendingLogs)
+        foreach (var batchId in batchIds)
         {
-            log.BlockchainBatchId = batch.Id;
+            var batch = await db.BlockchainBatches.IgnoreQueryFilters()
+                .FirstAsync(x => x.Id == batchId, cancellationToken);
+            if (chain.IsEnabled)
+                await AnchorBatchAsync(db, chain, batch, cancellationToken);
+            else
+                LogBatch(batch);
         }
-        await db.SaveChangesAsync();
+    }
 
+    private async Task AnchorBatchAsync(
+        AiguardDbContext db,
+        IEvmBlockchainAnchorClient chain,
+        BlockchainBatch batch,
+        CancellationToken cancellationToken)
+    {
+        batch.LastAttemptAt = DateTime.UtcNow;
+        batch.NextRetryAt = null;
+
+        try
+        {
+            var transaction = await chain.AnchorAsync(
+                batch.BatchHash,
+                $"aiguard:{batch.TenantCode}:{batch.Id:N}:{batch.LogCount}");
+            batch.Status = "Anchored";
+            batch.TransactionHash = transaction.TransactionHash;
+            batch.BlockNumber = transaction.BlockNumber;
+            batch.AnchoredAt = DateTime.UtcNow;
+            batch.LastError = null;
+        }
+        catch (Exception ex)
+        {
+            batch.Status = "Failed";
+            batch.RetryCount++;
+            batch.LastError = ex.Message.Length > 2000 ? ex.Message[..2000] : ex.Message;
+            if (batch.RetryCount < _maxRetries)
+            {
+                var delay = Math.Min(
+                    3600,
+                    _retryBaseSeconds * Math.Pow(2, Math.Min(batch.RetryCount - 1, 10)));
+                batch.NextRetryAt = DateTime.UtcNow.AddSeconds(delay);
+            }
+
+            _logger.LogError(
+                ex,
+                "Failed blockchain batch {BatchId}; retry {RetryCount}/{MaxRetries} at {NextRetryAt}",
+                batch.Id,
+                batch.RetryCount,
+                _maxRetries,
+                batch.NextRetryAt);
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+        LogBatch(batch);
+    }
+
+    private void LogBatch(BlockchainBatch batch) =>
         _logger.LogInformation(
-            "Created {Status} batch {BatchId} with {LogCount} logs. BatchHash: {BatchHash}",
-            batch.Status, batch.Id, batch.LogCount, batch.BatchHash);
-    }
+            "Blockchain batch {BatchId}: {Status}, {LogCount} logs, hash {BatchHash}",
+            batch.Id,
+            batch.Status,
+            batch.LogCount,
+            batch.BatchHash);
 
-    private static string ComputeSha256(string input)
-    {
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(input));
-        return Convert.ToHexStringLower(bytes);
-    }
+    private static string ComputeSha256(string input) =>
+        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(input)));
 }

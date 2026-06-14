@@ -22,6 +22,7 @@ public class GovernanceController : ControllerBase
         _governance = governance;
         _hub = hub;
     }
+    private string TenantCode => User.FindFirstValue("tenantCode") ?? "DEFAULT";
 
     [HttpPost("false-positives")]
     public async Task<IActionResult> CreateFalsePositive([FromBody] FalsePositiveCreateRequest request)
@@ -34,18 +35,21 @@ public class GovernanceController : ControllerBase
             "FalsePositive", "New false-positive report",
             $"{email} reported detector {result.DetectorName}.",
             "/app/governance/false-positives", recipientRole: "SecurityAdmin");
-        await _hub.Clients.All.SendAsync("FalsePositiveSubmitted", result);
+        await _hub.Clients.Group(NotificationGroups.Role(TenantCode, "SecurityAdmin"))
+            .SendAsync("FalsePositiveSubmitted", result);
+        await _hub.Clients.Group(NotificationGroups.Role(TenantCode, "TenantOwner"))
+            .SendAsync("FalsePositiveSubmitted", result);
         return StatusCode(StatusCodes.Status201Created, ApiResponse<FalsePositiveResponse>.Ok(result));
     }
 
     [HttpGet("false-positives")]
-    [Authorize(Roles = "SecurityAdmin,SystemAdmin")]
+    [Authorize(Roles = "SecurityAdmin,TenantOwner")]
     public async Task<IActionResult> GetFalsePositives([FromQuery] PagedQuery query, [FromQuery] string? status) =>
         Ok(ApiResponse<PagedResult<FalsePositiveResponse>>.Ok(
             await _governance.GetFalsePositivesAsync(query, status)));
 
     [HttpPost("false-positives/{id:guid}/review")]
-    [Authorize(Roles = "SecurityAdmin,SystemAdmin")]
+    [Authorize(Roles = "SecurityAdmin,TenantOwner")]
     public async Task<IActionResult> ReviewFalsePositive(Guid id, [FromBody] FalsePositiveReviewRequest request)
     {
         var reviewerId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ??
@@ -56,33 +60,40 @@ public class GovernanceController : ControllerBase
             "FalsePositiveDecision", "False-positive report reviewed",
             $"Your report was {result.Status.ToLowerInvariant()}.",
             "/app/my-usage/logs", recipientEmail: result.ReportedByEmail);
-        await _hub.Clients.All.SendAsync("FalsePositiveReviewed", result);
+        await _hub.Clients.Group(NotificationGroups.User(TenantCode, result.ReportedByEmail))
+            .SendAsync("FalsePositiveReviewed", result);
         return Ok(ApiResponse<FalsePositiveResponse>.Ok(result));
     }
 
     [HttpGet("incidents")]
-    [Authorize(Roles = "DepartmentManager,SecurityAdmin,SystemAdmin,Auditor")]
+    [Authorize(Roles = "DepartmentManager,SecurityAdmin,TenantOwner")]
     public async Task<IActionResult> GetIncidents(
         [FromQuery] PagedQuery query, [FromQuery] string? status, [FromQuery] string? severity) =>
         Ok(ApiResponse<PagedResult<IncidentResponse>>.Ok(
             await _governance.GetIncidentsAsync(query, status, severity)));
 
     [HttpPost("incidents")]
-    [Authorize(Roles = "SecurityAdmin,SystemAdmin")]
+    [Authorize(Roles = "SecurityAdmin,TenantOwner")]
     public async Task<IActionResult> CreateIncident([FromBody] CreateIncidentRequest request)
     {
         var result = await _governance.CreateIncidentAsync(request);
-        await _hub.Clients.All.SendAsync("IncidentCreated", result);
+        await _hub.Clients.Group(NotificationGroups.Role(TenantCode, "SecurityAdmin"))
+            .SendAsync("IncidentCreated", result);
+        await _hub.Clients.Group(NotificationGroups.Role(TenantCode, "TenantOwner"))
+            .SendAsync("IncidentCreated", result);
         return StatusCode(StatusCodes.Status201Created, ApiResponse<IncidentResponse>.Ok(result));
     }
 
     [HttpPut("incidents/{id:guid}")]
-    [Authorize(Roles = "SecurityAdmin,SystemAdmin")]
+    [Authorize(Roles = "SecurityAdmin,TenantOwner")]
     public async Task<IActionResult> UpdateIncident(Guid id, [FromBody] UpdateIncidentRequest request)
     {
         var result = await _governance.UpdateIncidentAsync(id, request);
         if (result == null) return NotFound(ApiResponse<object>.Fail("Incident not found."));
-        await _hub.Clients.All.SendAsync("IncidentUpdated", result);
+        await _hub.Clients.Group(NotificationGroups.Role(TenantCode, "SecurityAdmin"))
+            .SendAsync("IncidentUpdated", result);
+        await _hub.Clients.Group(NotificationGroups.Role(TenantCode, "TenantOwner"))
+            .SendAsync("IncidentUpdated", result);
         return Ok(ApiResponse<IncidentResponse>.Ok(result));
     }
 
@@ -109,18 +120,18 @@ public class GovernanceController : ControllerBase
     }
 
     [HttpGet("policy-rules")]
-    [Authorize(Roles = "SecurityAdmin,SystemAdmin")]
+    [Authorize(Roles = "SecurityAdmin,TenantOwner")]
     public async Task<IActionResult> GetPolicyRules() =>
         Ok(ApiResponse<List<PolicyRuleResponse>>.Ok(await _governance.GetPolicyRulesAsync()));
 
     [HttpPost("policy-rules")]
-    [Authorize(Roles = "SecurityAdmin,SystemAdmin")]
+    [Authorize(Roles = "SecurityAdmin,TenantOwner")]
     public async Task<IActionResult> CreatePolicyRule([FromBody] PolicyRuleRequest request) =>
         StatusCode(StatusCodes.Status201Created,
             ApiResponse<PolicyRuleResponse>.Ok(await _governance.CreatePolicyRuleAsync(request)));
 
     [HttpPut("policy-rules/{id:guid}")]
-    [Authorize(Roles = "SecurityAdmin,SystemAdmin")]
+    [Authorize(Roles = "SecurityAdmin,TenantOwner")]
     public async Task<IActionResult> UpdatePolicyRule(Guid id, [FromBody] PolicyRuleRequest request)
     {
         var result = await _governance.UpdatePolicyRuleAsync(id, request);
@@ -129,28 +140,28 @@ public class GovernanceController : ControllerBase
     }
 
     [HttpPost("policy-rules/{id:guid}/publish")]
-    [Authorize(Roles = "SecurityAdmin,SystemAdmin")]
+    [Authorize(Roles = "SecurityAdmin,TenantOwner")]
     public async Task<IActionResult> PublishPolicyRule(Guid id)
     {
         var email = User.FindFirstValue(ClaimTypes.Email) ?? User.FindFirstValue("email");
         var result = await _governance.PublishPolicyRuleAsync(id, email);
         if (result == null) return NotFound(ApiResponse<object>.Fail("Policy rule not found."));
-        await _hub.Clients.All.SendAsync("PolicyUpdated", result);
+        await _hub.Clients.Group(NotificationGroups.Tenant(TenantCode)).SendAsync("PolicyUpdated", result);
         return Ok(ApiResponse<PolicyRuleResponse>.Ok(result));
     }
 
     [HttpPost("policy-rules/simulate")]
-    [Authorize(Roles = "SecurityAdmin,SystemAdmin")]
+    [Authorize(Roles = "SecurityAdmin,TenantOwner")]
     public async Task<IActionResult> SimulatePolicy([FromBody] PolicySimulationRequest request) =>
         Ok(ApiResponse<object>.Ok(await _governance.SimulatePolicyAsync(request)));
 
     [HttpGet("retention")]
-    [Authorize(Roles = "SecurityAdmin,SystemAdmin")]
+    [Authorize(Roles = "SecurityAdmin,TenantOwner")]
     public async Task<IActionResult> GetRetention() =>
         Ok(ApiResponse<RetentionPolicy>.Ok(await _governance.GetRetentionPolicyAsync()));
 
     [HttpPut("retention")]
-    [Authorize(Roles = "SystemAdmin")]
+    [Authorize(Roles = "TenantOwner")]
     public async Task<IActionResult> UpdateRetention([FromBody] RetentionPolicyRequest request)
     {
         var email = User.FindFirstValue(ClaimTypes.Email) ?? User.FindFirstValue("email");
@@ -158,35 +169,35 @@ public class GovernanceController : ControllerBase
     }
 
     [HttpGet("integrations")]
-    [Authorize(Roles = "SecurityAdmin,SystemAdmin")]
+    [Authorize(Roles = "SecurityAdmin,TenantOwner")]
     public async Task<IActionResult> GetIntegrations() =>
         Ok(ApiResponse<List<IntegrationResponse>>.Ok(await _governance.GetIntegrationsAsync()));
 
     [HttpPost("integrations")]
-    [Authorize(Roles = "SystemAdmin")]
+    [Authorize(Roles = "TenantOwner")]
     public async Task<IActionResult> CreateIntegration([FromBody] IntegrationRequest request) =>
         StatusCode(StatusCodes.Status201Created,
             ApiResponse<IntegrationResponse>.Ok(await _governance.CreateIntegrationAsync(request)));
 
     [HttpDelete("integrations/{id:guid}")]
-    [Authorize(Roles = "SystemAdmin")]
+    [Authorize(Roles = "TenantOwner")]
     public async Task<IActionResult> DeleteIntegration(Guid id) =>
         await _governance.DeleteIntegrationAsync(id)
             ? Ok(ApiResponse<object>.Ok(new { }))
             : NotFound(ApiResponse<object>.Fail("Integration not found."));
 
     [HttpGet("health")]
-    [Authorize(Roles = "SecurityAdmin,SystemAdmin,Auditor")]
+    [Authorize(Roles = "SecurityAdmin,TenantOwner")]
     public async Task<IActionResult> GetGovernanceHealth() =>
         Ok(ApiResponse<GovernanceHealthResponse>.Ok(await _governance.GetHealthAsync()));
 
     [HttpGet("exact-data-match")]
-    [Authorize(Roles = "SecurityAdmin,SystemAdmin")]
+    [Authorize(Roles = "SecurityAdmin,TenantOwner")]
     public async Task<IActionResult> GetExactDataMatches() =>
         Ok(ApiResponse<List<ExactDataMatchResponse>>.Ok(await _governance.GetExactDataMatchesAsync()));
 
     [HttpPost("exact-data-match/import")]
-    [Authorize(Roles = "SecurityAdmin,SystemAdmin")]
+    [Authorize(Roles = "SecurityAdmin,TenantOwner")]
     public async Task<IActionResult> ImportExactDataMatches([FromBody] ExactDataMatchImportRequest request) =>
         Ok(ApiResponse<object>.Ok(new
         {
@@ -194,7 +205,7 @@ public class GovernanceController : ControllerBase
         }));
 
     [HttpDelete("exact-data-match/{id:guid}")]
-    [Authorize(Roles = "SecurityAdmin,SystemAdmin")]
+    [Authorize(Roles = "SecurityAdmin,TenantOwner")]
     public async Task<IActionResult> DeleteExactDataMatch(Guid id) =>
         await _governance.DeleteExactDataMatchAsync(id)
             ? Ok(ApiResponse<object>.Ok(new { }))

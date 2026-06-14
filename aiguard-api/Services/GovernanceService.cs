@@ -57,23 +57,26 @@ public interface IGovernanceService
 public class GovernanceService : IGovernanceService
 {
     private static readonly HashSet<string> Roles =
-        ["Employee", "DepartmentManager", "SecurityAdmin", "SystemAdmin", "Auditor"];
+        ["Employee", "DepartmentManager", "SecurityAdmin", "TenantOwner", "PlatformAdmin"];
     private static readonly HashSet<string> Actions =
         ["Allow", "Mask", "PendingApproval", "Block"];
     private readonly AiguardDbContext _db;
     private readonly IDataScopeContext _scope;
     private readonly IEndpointSecurityService _security;
+    private readonly ILicenseEntitlementService _entitlements;
     private readonly IDataProtector _integrationProtector;
 
     public GovernanceService(
         AiguardDbContext db,
         IDataScopeContext scope,
         IEndpointSecurityService security,
-        IDataProtectionProvider dataProtection)
+        IDataProtectionProvider dataProtection,
+        ILicenseEntitlementService entitlements)
     {
         _db = db;
         _scope = scope;
         _security = security;
+        _entitlements = entitlements;
         _integrationProtector = dataProtection.CreateProtector("AIGuard.IntegrationSecrets.v1");
     }
 
@@ -100,6 +103,8 @@ public class GovernanceService : IGovernanceService
     public async Task<UserAdminResponse> CreateUserAsync(UpsertUserRequest request)
     {
         ValidateUser(request, creating: true);
+        ValidateRoleAssignment(request.Role);
+        if (request.IsActive) await _entitlements.EnsureCanAddUserAsync();
         var normalizedEmail = request.Email.Trim().ToLowerInvariant();
         if (await _db.Users.AnyAsync(u => u.Email == normalizedEmail))
             throw new ArgumentException("Email already exists.");
@@ -127,8 +132,10 @@ public class GovernanceService : IGovernanceService
     public async Task<UserAdminResponse?> UpdateUserAsync(Guid id, UpsertUserRequest request)
     {
         ValidateUser(request, creating: false);
+        ValidateRoleAssignment(request.Role);
         var user = await _db.Users.Include(u => u.Department).FirstOrDefaultAsync(u => u.Id == id);
         if (user == null) return null;
+        if (!user.IsActive && request.IsActive) await _entitlements.EnsureCanAddUserAsync();
         var normalizedEmail = request.Email.Trim().ToLowerInvariant();
         if (await _db.Users.AnyAsync(u => u.Id != id && u.Email == normalizedEmail))
             throw new ArgumentException("Email already exists.");
@@ -156,6 +163,11 @@ public class GovernanceService : IGovernanceService
         user.IsActive = false;
         user.RefreshToken = null;
         user.RefreshTokenExpiry = null;
+        await _db.RefreshSessions
+            .Where(s => s.UserId == id && s.RevokedAt == null)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(s => s.RevokedAt, DateTime.UtcNow)
+                .SetProperty(s => s.RevokeReason, "Account disabled"));
         await _db.MfaLoginChallenges
             .Where(c => c.UserId == id && c.ConsumedAt == null)
             .ExecuteDeleteAsync();
@@ -631,6 +643,12 @@ public class GovernanceService : IGovernanceService
         if (!Roles.Contains(request.Role)) throw new ArgumentException("Invalid role.");
         if (creating && string.IsNullOrWhiteSpace(request.Password) && request.AuthProvider == "Local")
             throw new ArgumentException("Password is required for local users.");
+    }
+
+    private void ValidateRoleAssignment(string role)
+    {
+        if (role == "PlatformAdmin" && !_scope.IsPlatformAdmin)
+            throw new UnauthorizedAccessException();
     }
 
     private static void ValidatePolicyRule(PolicyRuleRequest request)

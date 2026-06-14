@@ -16,7 +16,7 @@ public class User
     public string PasswordHash { get; set; } = string.Empty;
 
     [Required, MaxLength(50)]
-    public string Role { get; set; } = "Employee"; // Employee, DepartmentManager, SecurityAdmin, SystemAdmin, Auditor
+    public string Role { get; set; } = "Employee"; // Employee, DepartmentManager, SecurityAdmin, TenantOwner, PlatformAdmin
 
     public Guid? DepartmentId { get; set; }
 
@@ -28,6 +28,11 @@ public class User
     [MaxLength(50)] public string AuthProvider { get; set; } = "Local";
     [MaxLength(255)] public string? ExternalSubjectId { get; set; }
     public DateTime? LastLoginAt { get; set; }
+    public DateTime? EmailVerifiedAt { get; set; }
+    public DateTime? PasswordChangedAt { get; set; }
+    public int FailedLoginAttempts { get; set; }
+    public DateTime? LastFailedLoginAt { get; set; }
+    public DateTime? LockoutEnd { get; set; }
 
     public string? RefreshToken { get; set; }
     public DateTime? RefreshTokenExpiry { get; set; }
@@ -39,4 +44,6 @@ public class User
     public Department? Department { get; set; }
     public ICollection<Approval> AssignedApprovals { get; set; } = new List<Approval>();
     public ICollection<MfaLoginChallenge> MfaLoginChallenges { get; set; } = new List<MfaLoginChallenge>();
+    public ICollection<RefreshSession> RefreshSessions { get; set; } = new List<RefreshSession>();
+    public ICollection<MfaRecoveryCode> MfaRecoveryCodes { get; set; } = new List<MfaRecoveryCode>();
 }

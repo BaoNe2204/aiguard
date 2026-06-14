@@ -8,7 +8,7 @@ namespace aiguard_api.Controllers;
 
 [ApiController]
 [Route("api/agents")]
-[Authorize(Roles = "SecurityAdmin,SystemAdmin")]
+[Authorize(Roles = "SecurityAdmin,TenantOwner")]
 public class AgentsController : ControllerBase
 {
     private readonly IAgentService _agentService;
@@ -77,5 +77,15 @@ public class AgentsController : ControllerBase
     {
         var result = await _agentService.CheckToolCallAsync(request);
         return Ok(ApiResponse<ToolCallCheckResponse>.Ok(result));
+    }
+
+    [HttpPost("{id:guid}/credentials/rotate")]
+    public async Task<IActionResult> RotateCredential(Guid id)
+    {
+        var result = await _agentService.RotateCredentialAsync(id);
+        if (result == null) return NotFound(ApiResponse<object>.Fail("Agent not found"));
+        return Ok(ApiResponse<AgentCredentialResponse>.Ok(
+            result,
+            "Store this agent key now. It will not be shown again."));
     }
 }

@@ -17,12 +17,18 @@ public class DeploymentService : IDeploymentService
     private readonly AiguardDbContext _db;
     private readonly IEndpointSecurityService _security;
     private readonly IDataScopeContext _scope;
+    private readonly ILicenseEntitlementService _entitlements;
 
-    public DeploymentService(AiguardDbContext db, IEndpointSecurityService security, IDataScopeContext scope)
+    public DeploymentService(
+        AiguardDbContext db,
+        IEndpointSecurityService security,
+        IDataScopeContext scope,
+        ILicenseEntitlementService entitlements)
     {
         _db = db;
         _security = security;
         _scope = scope;
+        _entitlements = entitlements;
     }
 
     public async Task<DeploymentTokenResponse> GetActiveTokenInfoAsync()
@@ -33,20 +39,25 @@ public class DeploymentService : IDeploymentService
             .FirstOrDefaultAsync();
 
         if (token == null)
-            return await RotateTokenAsync("DEFAULT");
+            return await RotateTokenAsync(_scope.TenantCode);
 
         return MapToken(token, null);
     }
 
     public async Task<DeploymentTokenResponse> RotateTokenAsync(string tenantCode)
     {
+        var normalizedTenant = string.IsNullOrWhiteSpace(tenantCode)
+            ? _scope.TenantCode
+            : tenantCode.Trim().ToUpperInvariant();
+        if (!_scope.IsPlatformAdmin && normalizedTenant != _scope.TenantCode)
+            throw new UnauthorizedAccessException();
         var activeTokens = await _db.EnrollmentTokens.Where(t => !t.IsRevoked).ToListAsync();
         foreach (var active in activeTokens) active.IsRevoked = true;
 
         var rawToken = _security.GenerateSecret();
         var token = new EnrollmentToken
         {
-            TenantCode = string.IsNullOrWhiteSpace(tenantCode) ? "DEFAULT" : tenantCode.Trim(),
+            TenantCode = normalizedTenant,
             TokenHash = _security.HashSecret(rawToken),
             ExpiresAt = DateTime.UtcNow.AddHours(24)
         };
@@ -68,6 +79,7 @@ public class DeploymentService : IDeploymentService
             d.Hostname == request.Hostname && d.TenantCode == token.TenantCode);
         if (device == null)
         {
+            await _entitlements.EnsureCanEnrollDeviceAsync(token.TenantCode);
             device = new Device { Hostname = request.Hostname };
             _db.Devices.Add(device);
         }

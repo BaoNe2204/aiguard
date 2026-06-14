@@ -36,7 +36,7 @@ export const Governance: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const tab = (location.pathname.split('/').pop() || 'health') as Tab;
-  const isSystemAdmin = user?.role === 'SystemAdmin';
+  const isSystemAdmin = user?.role === 'TenantOwner';
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -302,7 +302,7 @@ const IdentityTab = ({
           <input required type="email" placeholder="Email" value={userForm.email} onChange={e => setUserForm({ ...userForm, email: e.target.value })} />
           <input required type="password" placeholder="Mat khau tam" value={userForm.password} onChange={e => setUserForm({ ...userForm, password: e.target.value })} />
           <select value={userForm.role} onChange={e => setUserForm({ ...userForm, role: e.target.value })}>
-            {['Employee', 'DepartmentManager', 'SecurityAdmin', 'SystemAdmin', 'Auditor'].map(role => <option key={role}>{role}</option>)}
+            {['Employee', 'DepartmentManager', 'SecurityAdmin', 'TenantOwner', 'PlatformAdmin'].map(role => <option key={role}>{role}</option>)}
           </select>
           <select value={userForm.departmentId} onChange={e => setUserForm({ ...userForm, departmentId: e.target.value })}>
             <option value="">Khong gan phong ban</option>

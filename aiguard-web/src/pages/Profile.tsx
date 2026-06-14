@@ -14,7 +14,6 @@ import {
   Lock,
   LogOut,
   Mail,
-  Phone,
   RefreshCw,
   Save,
   ShieldCheck,

@@ -29,23 +29,26 @@ export interface LoginResponse {
   refreshToken?: string;
   expiresAt?: string;
   user?: UserProfile;
+  mfaRecoveryCodes?: string[];
 }
 
 export const authApi = {
-  async login(email: string, password: string): Promise<LoginResponse> {
+  async login(email: string, password: string, tenantCode = 'DEFAULT'): Promise<LoginResponse> {
     const result = await apiRequest<LoginResponse>('/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email, password, tenantCode: 'DEFAULT' }),
+      body: JSON.stringify({ email, password, tenantCode }),
     });
+    localStorage.setItem('aiguard_tenant_code', tenantCode.trim().toUpperCase());
     if (!result.requiresMfa) persistSession(result);
     return result;
   },
 
-  async verifyMfa(challengeToken: string, code: string): Promise<LoginResponse> {
+  async verifyMfa(challengeToken: string, code: string, tenantCode = 'DEFAULT'): Promise<LoginResponse> {
     const result = await apiRequest<LoginResponse>('/auth/mfa/verify', {
       method: 'POST',
-      body: JSON.stringify({ challengeToken, code, tenantCode: 'DEFAULT' }),
+      body: JSON.stringify({ challengeToken, code, tenantCode }),
     });
+    localStorage.setItem('aiguard_tenant_code', tenantCode.trim().toUpperCase());
     persistSession(result);
     return result;
   },

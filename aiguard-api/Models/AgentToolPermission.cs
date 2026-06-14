@@ -20,6 +20,7 @@ public class AgentToolPermission
     public bool CanExport { get; set; }
     public bool RequiresApproval { get; set; }
     public int MaxRecordsPerCall { get; set; } = 100;
+    public bool RequiresSandbox { get; set; }
 
     public Agent Agent { get; set; } = null!;
 }

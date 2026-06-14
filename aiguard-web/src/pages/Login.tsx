@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { KeyRound, Loader, Lock, Mail, Shield } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { LanguageSwitcher } from '../components/ui/LanguageSwitcher';
 
 interface PendingMfa {
+  tenantCode: string;
   challengeToken: string;
   setupRequired: boolean;
   setupSecret?: string;
@@ -14,8 +15,14 @@ interface PendingMfa {
 
 export const Login: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { login, verifyMfa } = useAuth();
   const { t } = useLanguage();
+  const [tenantCode, setTenantCode] = useState(
+    searchParams.get('tenant') ||
+    localStorage.getItem('aiguard_tenant_code') ||
+    'DEFAULT'
+  );
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [mfaCode, setMfaCode] = useState('');
@@ -24,12 +31,14 @@ export const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   const goToHome = (role: string) => {
-    navigate(role === 'Employee' ? '/app/my-usage/logs' : '/app/dashboard');
+    if (role === 'Employee') navigate('/app/my-usage/logs');
+    else if (role === 'TenantOwner') navigate('/app/business/onboarding');
+    else navigate('/app/dashboard');
   };
 
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!email || !password) {
+    if (!tenantCode.trim() || !email.trim() || !password) {
       setError(t('Please fill in all fields', 'Vui lòng điền đầy đủ thông tin'));
       return;
     }
@@ -37,10 +46,12 @@ export const Login: React.FC = () => {
     setError('');
     setLoading(true);
     try {
-      const result = await login(email, password);
+      const normalizedTenant = tenantCode.trim().toUpperCase();
+      const result = await login(normalizedTenant, email.trim(), password);
       if (result.requiresMfa) {
         if (!result.mfaChallengeToken) throw new Error('MFA challenge is missing');
         setPendingMfa({
+          tenantCode: normalizedTenant,
           challengeToken: result.mfaChallengeToken,
           setupRequired: !!result.mfaSetupRequired,
           setupSecret: result.mfaSetupSecret,
@@ -70,7 +81,7 @@ export const Login: React.FC = () => {
     setError('');
     setLoading(true);
     try {
-      const user = await verifyMfa(pendingMfa.challengeToken, mfaCode.trim());
+      const user = await verifyMfa(pendingMfa.tenantCode, pendingMfa.challengeToken, mfaCode.trim());
       goToHome(user.role);
     } catch (caught: unknown) {
       setError(caught instanceof Error ? caught.message : t('MFA failed', 'Xác thực MFA thất bại'));
@@ -109,19 +120,14 @@ export const Login: React.FC = () => {
                   type="email"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
-                  placeholder="email@company.com"
+                  placeholder="owner@company.com"
                   disabled={loading}
                 />
               </div>
             </div>
 
             <div className="form-group">
-              <div className="flex justify-between items-center">
-                <label>{t('Password', 'Mật khẩu')}</label>
-                <a href="#forgot" className="forgot-link text-xs text-indigo-400">
-                  {t('Forgot?', 'Quên mật khẩu?')}
-                </a>
-              </div>
+              <label>{t('Password', 'Mật khẩu')}</label>
               <div className="input-with-icon">
                 <Lock size={16} className="input-icon" />
                 <input
@@ -132,13 +138,11 @@ export const Login: React.FC = () => {
                   disabled={loading}
                 />
               </div>
-            </div>
-
-            <div className="login-options">
-              <label className="remember-me">
-                <input type="checkbox" defaultChecked />
-                <span>{t('Remember me', 'Ghi nhớ đăng nhập')}</span>
-              </label>
+              <div className="flex justify-end mt-2">
+                <a href="#forgot" className="forgot-link text-xs text-indigo-400 hover:text-indigo-300">
+                  {t('Forgot?', 'Quên mật khẩu?')}
+                </a>
+              </div>
             </div>
 
             <button type="submit" className="login-btn" disabled={loading}>
@@ -149,6 +153,10 @@ export const Login: React.FC = () => {
                 </span>
               ) : t('Sign In', 'Đăng nhập')}
             </button>
+
+            <div className="login-register-note">
+              Chưa có tenant? <Link to="/signup">Đăng ký doanh nghiệp dùng thử</Link>
+            </div>
           </form>
         ) : (
           <form onSubmit={handleVerifyMfa} className="login-form">
@@ -220,7 +228,7 @@ export const Login: React.FC = () => {
 
         <div className="login-footer">
           <p className="text-xs text-zinc-500">
-            {t('Authorized personnel only', 'Chỉ dành cho nhân viên được cấp quyền')}
+            {t('Authorized personnel only', 'Chỉ dành cho người được cấp quyền')}
           </p>
         </div>
       </div>

@@ -18,6 +18,7 @@ public class MfaLoginChallenge
     public DateTime ExpiresAt { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? ConsumedAt { get; set; }
+    public int AttemptCount { get; set; }
 
     public User User { get; set; } = null!;
 }
