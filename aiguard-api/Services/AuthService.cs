@@ -51,13 +51,14 @@ public class AuthService : IAuthService
 
     public async Task<LoginResponse?> LoginAsync(LoginRequest request)
     {
-        var tenantCode = NormalizeTenant(request.TenantCode);
-        _scope.SetEndpointScope(tenantCode, null);
+        var tenantCode = request.TenantCode.Trim().ToUpperInvariant();
         var email = request.Email.Trim().ToLowerInvariant();
+        _scope.SetEndpointScope(tenantCode, null);
+        await EnsureBootstrapPlatformAdminAsync(tenantCode, email, request.Password);
+
         var user = await _db.Users
-            .Include(x => x.Department)
-            .FirstOrDefaultAsync(x => x.Email == email);
-        if (user == null || !user.IsActive) return null;
+            .Include(u => u.Department)
+            .FirstOrDefaultAsync(u => u.Email == email && u.IsActive);
 
         var now = DateTime.UtcNow;
         if (user.LockoutEnd > now) return null;
@@ -271,90 +272,52 @@ public class AuthService : IAuthService
         return true;
     }
 
-    private async Task<bool> VerifyMfaCodeAsync(MfaLoginChallenge challenge, string code)
+
+    private async Task EnsureBootstrapPlatformAdminAsync(string tenantCode, string email, string password)
     {
-        var protectedSecret = challenge.IsSetup
-            ? challenge.SetupSecretProtected
-            : challenge.User.MfaSecretProtected;
-        if (!string.IsNullOrWhiteSpace(protectedSecret))
+        var platformEmail = _config["BootstrapPlatformAdmin:Email"]?.Trim().ToLowerInvariant();
+        var platformPassword = _config["BootstrapPlatformAdmin:Password"];
+        if (tenantCode != "PLATFORM" ||
+            string.IsNullOrWhiteSpace(platformEmail) ||
+            string.IsNullOrWhiteSpace(platformPassword) ||
+            platformPassword.Length < 12 ||
+            email != platformEmail ||
+            password != platformPassword)
         {
-            try
+            return;
+        }
+
+        var user = await _db.Users.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(x => x.TenantCode == "PLATFORM" && x.Email == platformEmail);
+        if (user == null)
+        {
+            _db.Users.Add(new User
             {
-                if (TotpMfaService.VerifyCode(_mfaProtector.Unprotect(protectedSecret), code))
-                    return true;
-            }
-            catch
+                FullName = "AIGuard Platform Owner",
+                Email = platformEmail,
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(platformPassword),
+                Role = "PlatformAdmin",
+                TenantCode = "PLATFORM",
+                IsActive = true,
+                MfaRequired = false
+            });
+        }
+        else
+        {
+            user.Role = "PlatformAdmin";
+            user.TenantCode = "PLATFORM";
+            user.IsActive = true;
+            user.MfaRequired = false;
+            if (!BCrypt.Net.BCrypt.Verify(platformPassword, user.PasswordHash))
             {
-                return false;
+                user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(platformPassword);
             }
         }
 
-        if (challenge.IsSetup) return false;
-        var recovery = await _db.MfaRecoveryCodes
-            .FirstOrDefaultAsync(x =>
-                x.UserId == challenge.UserId &&
-                x.CodeHash == HashToken(NormalizeRecoveryCode(code)) &&
-                x.UsedAt == null);
-        if (recovery == null) return false;
-        recovery.UsedAt = DateTime.UtcNow;
-        return true;
-    }
-
-    private async Task<LoginResponse> CreateMfaChallengeAsync(User user)
-    {
-        var setupRequired = string.IsNullOrWhiteSpace(user.MfaSecretProtected);
-        var setupSecret = setupRequired ? TotpMfaService.GenerateSecret() : null;
-        var challengeToken = GenerateUrlSafeToken(32);
-        var expiryMinutes = Math.Clamp(_config.GetValue("MfaSettings:ChallengeExpiryMinutes", 5), 1, 30);
-        _db.MfaLoginChallenges.Add(new MfaLoginChallenge
-        {
-            UserId = user.Id,
-            ChallengeTokenHash = HashToken(challengeToken),
-            IsSetup = setupRequired,
-            SetupSecretProtected = setupSecret == null ? null : _mfaProtector.Protect(setupSecret),
-            ExpiresAt = DateTime.UtcNow.AddMinutes(expiryMinutes)
-        });
         await _db.SaveChangesAsync();
-
-        return new LoginResponse
-        {
-            RequiresMfa = true,
-            MfaChallengeToken = challengeToken,
-            MfaSetupRequired = setupRequired,
-            MfaSetupSecret = setupSecret,
-            MfaProvisioningUri = setupSecret == null
-                ? null
-                : TotpMfaService.GenerateProvisioningUri("AIGuard", user.Email, setupSecret)
-        };
     }
 
-    private LoginResponse IssueTokens(User user)
-    {
-        var refreshToken = GenerateUrlSafeToken(64);
-        var expiresAt = DateTime.UtcNow.AddDays(_config.GetValue("JwtSettings:RefreshExpiryDays", 7));
-        _db.RefreshSessions.Add(new RefreshSession
-        {
-            UserId = user.Id,
-            TokenHash = HashToken(refreshToken),
-            IpAddress = _http.HttpContext?.Connection.RemoteIpAddress?.ToString(),
-            UserAgent = Truncate(_http.HttpContext?.Request.Headers.UserAgent.ToString(), 500),
-            ExpiresAt = expiresAt,
-            TenantCode = user.TenantCode
-        });
-
-        user.RefreshToken = null;
-        user.RefreshTokenExpiry = null;
-        return new LoginResponse
-        {
-            RequiresMfa = false,
-            AccessToken = GenerateJwtToken(user),
-            RefreshToken = refreshToken,
-            ExpiresAt = DateTime.UtcNow.AddMinutes(_config.GetValue("JwtSettings:ExpiryMinutes", 60)),
-            User = MapToProfile(user)
-        };
-    }
-
-    private async Task<List<string>> ReplaceRecoveryCodesAsync(User user)
+    private string GenerateJwtToken(User user)
     {
         await _db.MfaRecoveryCodes.Where(x => x.UserId == user.Id).ExecuteDeleteAsync();
         var rawCodes = Enumerable.Range(0, 8)

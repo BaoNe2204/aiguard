@@ -224,7 +224,8 @@ using (var scope = app.Services.CreateScope())
             db, app.Logger, app.Lifetime.ApplicationStopping);
         await db.Database.MigrateAsync();
     }
-    await DbSeeder.SeedAsync(db, builder.Configuration);
+    await DbSeeder.SeedAsync(db, app.Configuration);
+
 }
 
 app.Run();

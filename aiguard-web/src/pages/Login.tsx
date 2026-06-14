@@ -32,6 +32,7 @@ export const Login: React.FC = () => {
 
   const goToHome = (role: string) => {
     if (role === 'Employee') navigate('/app/my-usage/logs');
+    else if (role === 'PlatformAdmin') navigate('/app/business/operations');
     else if (role === 'TenantOwner') navigate('/app/business/onboarding');
     else navigate('/app/dashboard');
   };
