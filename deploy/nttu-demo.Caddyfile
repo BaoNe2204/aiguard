@@ -1,0 +1,7 @@
+http://nttu-demo.io.vn {
+  encode zstd gzip
+
+  reverse_proxy /api/* http://127.0.0.1:5185
+  reverse_proxy /hubs/* http://127.0.0.1:5185
+  reverse_proxy http://127.0.0.1:5174
+}
