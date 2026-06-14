@@ -56,11 +56,14 @@ const defaultOpenMenus: Record<string, boolean> = {
 
 export const Sidebar: React.FC = () => {
   const { user, logout } = useAuth();
+
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>(defaultOpenMenus);
+
 
   const toggleMenu = (key: string) => {
     setOpenMenus((previous) => ({ ...previous, [key]: !previous[key] }));
   };
+
 
   const menuItems = useMemo<SidebarItem[]>(() => {
     switch (user?.role) {
@@ -209,6 +212,7 @@ export const Sidebar: React.FC = () => {
     }
   }, [user?.role]);
 
+
   const userInitials = user?.fullName
     ? user.fullName.split(' ').map(name => name[0]).join('').substring(0, 2).toUpperCase()
     : 'AG';
@@ -279,11 +283,13 @@ export const Sidebar: React.FC = () => {
         <div className="user-profile">
           <div className="user-avatar">{userInitials}</div>
           <div className="user-info">
+
             <span className="user-name">{user?.fullName || 'AIGuard User'}</span>
             <span className="user-role">{roleLabel}</span>
           </div>
         </div>
         <button className="btn-logout" onClick={logout} title="Đăng xuất">
+
           <LogOut size={18} />
         </button>
       </div>

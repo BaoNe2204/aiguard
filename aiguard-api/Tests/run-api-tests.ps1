@@ -142,6 +142,62 @@ try {
     Add-Result "Application starts" $ready "API did not become ready"
     Expect-Status "Readiness health check" (Invoke-Api GET "/api/health/ready") 200
     Expect-Status "Dashboard rejects anonymous access" (Invoke-Api GET "/api/dashboard/stats") 401
+    Expect-Status "SignalR negotiation rejects anonymous access" (
+        Invoke-Api POST "/hubs/notifications/negotiate?negotiateVersion=1"
+    ) 401
+    $publicPlans = Invoke-Api GET "/api/business/plans"
+    Add-Result "Public pricing plans are available for signup" (
+        $publicPlans.Status -eq 200 -and
+        @($publicPlans.Body.data | Where-Object { $_.code -eq "STARTER" }).Count -ge 1
+    ) "$($publicPlans.Status)"
+    $signupCode = "FLOWCO-$([Guid]::NewGuid().ToString('N').Substring(0, 6).ToUpperInvariant())"
+    $signupEmail = "owner@$($signupCode.ToLowerInvariant()).example"
+    $signupDomain = "$($signupCode.ToLowerInvariant()).example"
+    $publicSignup = Invoke-Api POST "/api/signup/trial" @{
+        preferredTenantCode = $signupCode
+        companyName = "FlowCo Signup Test"
+        taxCode = "TAX-$signupCode"
+        emailDomain = $signupDomain
+        ownerName = "FlowCo Owner"
+        ownerEmail = $signupEmail
+        ownerPhone = "0901000000"
+        companySize = "10-50"
+        productPlanCode = "STARTER"
+        trialDays = 14
+    }
+    Expect-Status "Public company signup creates trial tenant" $publicSignup 201
+    Add-Result "Signup returns tenant code and verification token in testing" (
+        $publicSignup.Body.data.tenantCode -eq $signupCode -and
+        -not [string]::IsNullOrWhiteSpace($publicSignup.Body.data.verificationToken)
+    ) "$($publicSignup.Body.data.tenantCode)"
+    Expect-Status "Tenant owner cannot login before email verification" (
+        Invoke-Api POST "/api/auth/login" @{
+            tenantCode = $signupCode; email = $signupEmail; password = "Owner@12345"
+        }
+    ) 401
+    Expect-Status "Tenant owner verifies email and sets first password" (
+        Invoke-Api POST "/api/signup/verify" @{
+            verificationToken = $publicSignup.Body.data.verificationToken
+            newPassword = "Owner@12345"
+        }
+    ) 200
+    $signupOwnerLogin = Invoke-Api POST "/api/auth/login" @{
+        tenantCode = $signupCode; email = $signupEmail; password = "Owner@12345"
+    }
+    Add-Result "Verified TenantOwner login requires MFA setup" (
+        $signupOwnerLogin.Status -eq 200 -and
+        $signupOwnerLogin.Body.data.requiresMfa -eq $true -and
+        $signupOwnerLogin.Body.data.mfaSetupRequired -eq $true
+    ) "$($signupOwnerLogin.Status)"
+    $signupOwnerMfa = Invoke-Api POST "/api/auth/mfa/verify" @{
+        tenantCode = $signupCode
+        challengeToken = $signupOwnerLogin.Body.data.mfaChallengeToken
+        code = Get-TotpCode $signupOwnerLogin.Body.data.mfaSetupSecret
+    }
+    Expect-Status "Verified TenantOwner completes MFA" $signupOwnerMfa 200
+    Expect-Status "Verified TenantOwner reads trial entitlement" (
+        Invoke-Api GET "/api/business/entitlement" $null $signupOwnerMfa.Body.data.accessToken
+    ) 200
     Expect-Status "Invalid login rejected" (Invoke-Api POST "/api/auth/login" @{
         email = "admin@aiguard.com"; password = "WrongPassword!"
     }) 401
@@ -171,10 +227,20 @@ try {
 
     $refresh = Invoke-Api POST "/api/auth/refresh-token" @{ refreshToken = $oldRefreshToken }
     Expect-Status "Refresh token rotates" $refresh 200
+    $rotatedRefreshToken = $refresh.Body.data.refreshToken
+    $adminToken = $refresh.Body.data.accessToken
+    Expect-Status "Logout revokes one refresh session" (Invoke-Api POST "/api/auth/logout" @{
+        refreshToken = $rotatedRefreshToken; allSessions = $false
+    } $adminToken) 200
+    Expect-Status "Logged-out refresh token is rejected" (
+        Invoke-Api POST "/api/auth/refresh-token" @{ refreshToken = $rotatedRefreshToken }
+    ) 401
     Expect-Status "Used refresh token is rejected" (
         Invoke-Api POST "/api/auth/refresh-token" @{ refreshToken = $oldRefreshToken }
     ) 401
-    $adminToken = $refresh.Body.data.accessToken
+    Expect-Status "Invalid OIDC exchange is rejected" (Invoke-Api POST "/api/auth/sso/exchange" @{
+        tenantCode = "DEFAULT"; provider = "Microsoft"; idToken = "invalid"
+    }) 401
 
     $forgot = Invoke-Api POST "/api/auth/forgot-password" @{ email = "nguyenvana@company.com" }
     Expect-Status "Password reset request" $forgot 200
@@ -191,10 +257,7 @@ try {
     }) 200
 
     $foreignDeployment = Invoke-Api POST "/api/endpoints/deployment/rotate-token?tenantCode=OTHER-TENANT" $null $adminToken
-    Expect-Status "Cross-tenant enrollment is rejected" (Invoke-Api POST "/api/endpoints/deployment/enroll" @{
-        enrollmentToken = $foreignDeployment.Body.data.token; hostname = "CROSS-TENANT-ENDPOINT"
-        userEmail = "nguyenvana@company.com"; departmentName = "Engineering"
-    }) 401
+    Expect-Status "Cross-tenant enrollment token creation is rejected" $foreignDeployment 401
     $deployment = Invoke-Api POST "/api/endpoints/deployment/rotate-token?tenantCode=DEFAULT" $null $adminToken
     Expect-Status "Enrollment token rotation" $deployment 200
     $enrollmentToken = $deployment.Body.data.token
@@ -395,6 +458,33 @@ try {
         recordCount = 10; targetResource = "crm.customers"
     } $adminToken
     Add-Result "Allowed agent tool call" ($allowedTool.Body.data.decision -eq "Allow") $allowedTool.Body.data.decision
+    $agentCredential = Invoke-Api POST "/api/agents/$($salesAgent.id)/credentials/rotate" $null $adminToken
+    Expect-Status "Agent credential is rotated" $agentCredential 200
+    $runtimeRequestId = "runtime-$([Guid]::NewGuid().ToString('N'))"
+    $runtimeHeaders = @{ "X-Agent-Key" = $agentCredential.Body.data.agentKey }
+    $runtimeTool = Invoke-Api POST "/api/agent-runtime/tool-call/check" @{
+        agentId = $salesAgent.id; requestId = $runtimeRequestId
+        toolName = "QueryCustomerTable"; actionType = "Read"
+        recordCount = 2; targetResource = "crm.customers"
+    } "" $runtimeHeaders
+    Add-Result "Agent runtime accepts its own credential" (
+        $runtimeTool.Status -eq 200 -and $runtimeTool.Body.data.decision -eq "Allow"
+    ) "$($runtimeTool.Status)/$($runtimeTool.Body.data.decision)"
+    $runtimeReplay = Invoke-Api POST "/api/agent-runtime/tool-call/check" @{
+        agentId = $salesAgent.id; requestId = $runtimeRequestId
+        toolName = "QueryCustomerTable"; actionType = "Read"
+        recordCount = 2; targetResource = "crm.customers"
+    } "" $runtimeHeaders
+    Add-Result "Agent runtime request ID is idempotent" (
+        $runtimeReplay.Status -eq 200 -and $runtimeReplay.Body.data.isReplay -eq $true -and
+        $runtimeReplay.Body.data.actionLogId -eq $runtimeTool.Body.data.actionLogId
+    ) "$($runtimeReplay.Status)/$($runtimeReplay.Body.data.isReplay)"
+    Expect-Status "Invalid agent credential is rejected" (
+        Invoke-Api POST "/api/agent-runtime/tool-call/check" @{
+            agentId = $salesAgent.id; requestId = "invalid-$([Guid]::NewGuid().ToString('N'))"
+            toolName = "QueryCustomerTable"; actionType = "Read"; recordCount = 1
+        } "" @{ "X-Agent-Key" = "invalid" }
+    ) 401
     $pendingTool = Invoke-Api POST "/api/agents/tool-call/check" @{
         agentId = $salesAgent.id; toolName = "ExportCustomerReport"; actionType = "Export"
         recordCount = 10; targetResource = "crm.customers"
@@ -450,14 +540,46 @@ try {
         -not [string]::IsNullOrWhiteSpace($mfaVerify.Body.data.accessToken) -and
         $mfaVerify.Body.data.user.mfaEnabled -eq $true
     ) "$($mfaVerify.Status)"
+    Add-Result "MFA setup returns one-time recovery codes" (
+        $mfaVerify.Body.data.mfaRecoveryCodes.Count -eq 8
+    ) "$($mfaVerify.Body.data.mfaRecoveryCodes.Count)"
     Expect-Status "MFA challenge cannot be reused" (Invoke-Api POST "/api/auth/mfa/verify" @{
         challengeToken = $mfaChallenge.Body.data.mfaChallengeToken
         code = $mfaCode
         tenantCode = "DEFAULT"
     }) 401
+    $recoveryChallenge = Invoke-Api POST "/api/auth/login" @{
+        email = "governance.user@company.com"; password = "Governance@123"; tenantCode = "DEFAULT"
+    }
+    $recoveryVerify = Invoke-Api POST "/api/auth/mfa/verify" @{
+        challengeToken = $recoveryChallenge.Body.data.mfaChallengeToken
+        code = $mfaVerify.Body.data.mfaRecoveryCodes[0]
+        tenantCode = "DEFAULT"
+    }
+    Add-Result "Single-use MFA recovery code issues JWT" (
+        $recoveryVerify.Status -eq 200 -and
+        -not [string]::IsNullOrWhiteSpace($recoveryVerify.Body.data.accessToken)
+    ) "$($recoveryVerify.Status)"
     Expect-Status "System admin lists users" (Invoke-Api GET "/api/admin/users?pageSize=100" $null $adminToken) 200
     Expect-Status "System admin disables user" (
         Invoke-Api DELETE "/api/admin/users/$($createdUser.Body.data.id)" $null $adminToken
+    ) 200
+    $lockoutUser = Invoke-Api POST "/api/admin/users" @{
+        fullName = "Lockout Test User"; email = "lockout.user@company.com"
+        role = "Employee"; departmentId = $department.Body.data.id
+        password = "Lockout@123"; isActive = $true; mfaRequired = $false; authProvider = "Local"
+    } $adminToken
+    Expect-Status "System admin creates lockout test user" $lockoutUser 201
+    foreach ($attempt in 1..5) {
+        Expect-Status "Invalid password attempt $attempt is rejected" (Invoke-Api POST "/api/auth/login" @{
+            email = "lockout.user@company.com"; password = "WrongPassword!"; tenantCode = "DEFAULT"
+        }) 401
+    }
+    Expect-Status "Locked account rejects the correct password" (Invoke-Api POST "/api/auth/login" @{
+        email = "lockout.user@company.com"; password = "Lockout@123"; tenantCode = "DEFAULT"
+    }) 401
+    Expect-Status "System admin disables lockout test user" (
+        Invoke-Api DELETE "/api/admin/users/$($lockoutUser.Body.data.id)" $null $adminToken
     ) 200
 
     $policyRule = Invoke-Api POST "/api/governance/policy-rules" @{
@@ -521,6 +643,34 @@ try {
         Invoke-Api DELETE "/api/governance/integrations/$($integration.Body.data.id)" $null $adminToken
     ) 200
 
+    $departmentPolicies = Invoke-Api GET "/api/policies/departments" $null $adminToken
+    $policy = $departmentPolicies.Body.data | Select-Object -First 1
+    $originalThreshold = [int]$policy.sensitivityThreshold
+    $newThreshold = if ($originalThreshold -ge 95) { 75 } else { $originalThreshold + 5 }
+    Expect-Status "Department policy update creates immutable snapshot" (
+        Invoke-Api PUT "/api/policies/departments/$($policy.id)" @{
+            sensitivityThreshold = $newThreshold
+            changeReason = "Automated snapshot regression"
+        } $adminToken
+    ) 200
+    $policyVersions = Invoke-Api GET "/api/policies/versions?policyId=$($policy.id)" $null $adminToken
+    Add-Result "Policy version history stores baseline and update" (
+        $policyVersions.Status -eq 200 -and $policyVersions.Body.data.Count -ge 2
+    ) "$($policyVersions.Body.data.Count)"
+    $baselineVersion = $policyVersions.Body.data |
+        Where-Object { $_.reason -eq "Baseline before policy update" } |
+        Select-Object -First 1
+    Expect-Status "Policy rolls back to selected snapshot" (
+        Invoke-Api POST "/api/policies/versions/$($baselineVersion.id)/rollback" $null $adminToken
+    ) 200
+    $rolledBackPolicies = Invoke-Api GET "/api/policies/departments" $null $adminToken
+    $rolledBackPolicy = $rolledBackPolicies.Body.data |
+        Where-Object { $_.id -eq $policy.id } |
+        Select-Object -First 1
+    Add-Result "Policy rollback restores snapshot values" (
+        [int]$rolledBackPolicy.sensitivityThreshold -eq $originalThreshold
+    ) "$($rolledBackPolicy.sensitivityThreshold)"
+
     $pending = Invoke-Api GET "/api/approvals/pending?pageSize=100" $null $adminToken
     Expect-Status "Pending approval queue" $pending 200
     Add-Result "Endpoint and agent approvals created" ($pending.Body.data.totalCount -ge 2) "$($pending.Body.data.totalCount)"
@@ -528,6 +678,11 @@ try {
     Expect-Status "Approval can be decided" (Invoke-Api POST "/api/approvals/$approvalId/action" @{
         action = "ApproveWithMasking"; note = "Automated API test"
     } $adminToken) 200
+    Expect-Status "Processed approval cannot be decided twice" (
+        Invoke-Api POST "/api/approvals/$approvalId/action" @{
+            action = "Approve"; note = "Duplicate decision"
+        } $adminToken
+    ) 404
     $history = Invoke-Api GET "/api/approvals/history?pageSize=100" $null $adminToken
     Add-Result "Approval history records decision" ($history.Body.data.totalCount -ge 1)
 
@@ -586,6 +741,169 @@ try {
     Expect-Status "Revoked endpoint key stops working" (Invoke-Api POST "/api/endpoints/devices/heartbeat" @{
         hostname = "TEST-ENDPOINT-01"; extensionActive = $true
     } "" $newEndpointHeaders) 401
+
+    $platformLogin = Invoke-Api POST "/api/auth/login" @{
+        tenantCode = "PLATFORM"; email = "platform@aiguard.com"; password = "Platform@123"
+    }
+    Expect-Status "Platform owner login" $platformLogin 200
+    $platformToken = $platformLogin.Body.data.accessToken
+    Expect-Status "Platform business dashboard" (
+        Invoke-Api GET "/api/platform/dashboard" $null $platformToken
+    ) 200
+    $plans = Invoke-Api GET "/api/platform/plans?activeOnly=true" $null $platformToken
+    Add-Result "Commercial plans are seeded" (
+        $plans.Status -eq 200 -and $plans.Body.data.Count -ge 3
+    ) "$($plans.Body.data.Count)"
+    $starterPlan = $plans.Body.data | Where-Object { $_.code -eq "STARTER" } | Select-Object -First 1
+
+    $trial = Invoke-Api POST "/api/platform/tenants/trial" @{
+        code = "TESTCO"; companyName = "Test Company"; legalName = "Test Company Ltd"
+        emailDomain = "testco.example"; ownerName = "Test Owner"; ownerEmail = "owner@testco.example"
+        ownerPassword = "Owner@123"; trialDays = 14; productPlanId = $starterPlan.id
+        industry = "Technology"; companySize = "25-50"
+    } $platformToken
+    Expect-Status "Trial tenant provisioning" $trial 201
+    $trialTenantId = $trial.Body.data.tenant.id
+    $trialOwnerUserId = $trial.Body.data.ownerUserId
+    $trialLicenseKey = $trial.Body.data.licenseKey
+    Add-Result "Trial provisioning returns one-time credentials" (
+        -not [string]::IsNullOrWhiteSpace($trialLicenseKey) -and
+        -not [string]::IsNullOrWhiteSpace($trial.Body.data.enrollmentToken)
+    )
+    Expect-Status "Trial license validates" (Invoke-Api POST "/api/licenses/validate" @{
+        tenantCode = "TESTCO"; licenseKey = $trialLicenseKey
+    }) 200
+
+    $ownerLogin = Invoke-Api POST "/api/auth/login" @{
+        tenantCode = "TESTCO"; email = "owner@testco.example"; password = "Owner@123"
+    }
+    Add-Result "Tenant owner is required to enroll MFA" (
+        $ownerLogin.Status -eq 200 -and $ownerLogin.Body.data.requiresMfa -eq $true -and
+        $ownerLogin.Body.data.mfaSetupRequired -eq $true
+    ) "$($ownerLogin.Status)"
+    $ownerMfa = Invoke-Api POST "/api/auth/mfa/verify" @{
+        tenantCode = "TESTCO"
+        challengeToken = $ownerLogin.Body.data.mfaChallengeToken
+        code = Get-TotpCode $ownerLogin.Body.data.mfaSetupSecret
+    }
+    Expect-Status "Tenant owner MFA verification" $ownerMfa 200
+    $ownerToken = $ownerMfa.Body.data.accessToken
+    Expect-Status "Tenant owner reads company profile" (
+        Invoke-Api GET "/api/business/tenant" $null $ownerToken
+    ) 200
+    Expect-Status "Tenant owner reads license entitlement" (
+        Invoke-Api GET "/api/business/entitlement" $null $ownerToken
+    ) 200
+    Expect-Status "Tenant owner cannot access platform console" (
+        Invoke-Api GET "/api/platform/dashboard" $null $ownerToken
+    ) 403
+    Expect-Status "Tenant owner creates employee within licensed seats" (Invoke-Api POST "/api/admin/users" @{
+        fullName = "Test Employee"; email = "employee@testco.example"; role = "Employee"
+        password = "Employee@123"; isActive = $true; mfaRequired = $false; authProvider = "Local"
+    } $ownerToken) 201
+    Expect-Status "Tenant owner cannot create platform administrator" (Invoke-Api POST "/api/admin/users" @{
+        fullName = "Invalid Platform Admin"; email = "invalid@testco.example"; role = "PlatformAdmin"
+        password = "Invalid@123"; isActive = $true; mfaRequired = $false; authProvider = "Local"
+    } $ownerToken) 401
+
+    $quotation = Invoke-Api POST "/api/platform/quotations" @{
+        tenantId = $trialTenantId; productPlanId = $starterPlan.id; billingCycle = "Yearly"
+        userQuantity = 10; deviceQuantity = 12; discountAmount = 100000; taxPercent = 10
+        terms = "Annual AIGuard subscription"
+    } $platformToken
+    Expect-Status "Quotation created" $quotation 201
+    $order = Invoke-Api POST "/api/platform/quotations/$($quotation.Body.data.id)/convert-to-order" $null $platformToken
+    Expect-Status "Quotation converted to order" $order 200
+    $payment = Invoke-Api POST "/api/platform/orders/$($order.Body.data.id)/payments" @{
+        amount = $order.Body.data.totalAmount; currency = "VND"; method = "BankTransfer"
+        transactionReference = "TESTCO-BANK-001"; receiptUrl = "https://receipt.example/testco"
+    } $platformToken
+    Expect-Status "Payment receipt recorded" $payment 201
+    $reconciled = Invoke-Api POST "/api/platform/payments/$($payment.Body.data.id)/reconcile" @{
+        approved = $true; note = "Bank transfer matched"
+    } $platformToken
+    Add-Result "Payment reconciliation marks order paid" (
+        $reconciled.Status -eq 200 -and $reconciled.Body.data.status -eq "Confirmed"
+    ) $reconciled.Body.data.status
+    $subscriptionsBeforeProvision = Invoke-Api GET "/api/platform/subscriptions?tenantId=$trialTenantId" $null $platformToken
+    $subscriptionCountBeforeProvision = $subscriptionsBeforeProvision.Body.data.Count
+    $provisioned = Invoke-Api POST "/api/platform/orders/$($order.Body.data.id)/provision" $null $platformToken
+    Expect-Status "Paid order provisions subscription and license" $provisioned 200
+    $subscriptionsAfterProvision = Invoke-Api GET "/api/platform/subscriptions?tenantId=$trialTenantId" $null $platformToken
+    Add-Result "Paid order upgrades existing trial subscription" (
+        $subscriptionsAfterProvision.Body.data.Count -eq $subscriptionCountBeforeProvision -and
+        $subscriptionsAfterProvision.Body.data[0].status -eq "Active"
+    ) "$($subscriptionsAfterProvision.Body.data.Count)"
+    $tenantAfterProvision = Invoke-Api GET "/api/platform/tenants/$trialTenantId" $null $platformToken
+    Add-Result "Paid upgrade keeps original TenantOwner account" (
+        $tenantAfterProvision.Body.data.ownerUserId -eq $trialOwnerUserId -and
+        $tenantAfterProvision.Body.data.status -eq "Paid"
+    ) "$($tenantAfterProvision.Body.data.status)"
+    Add-Result "Provisioning returns a new one-time license key" (
+        -not [string]::IsNullOrWhiteSpace($provisioned.Body.data.licenseKey)
+    )
+    Expect-Status "Paid license validates" (Invoke-Api POST "/api/licenses/validate" @{
+        tenantCode = "TESTCO"; licenseKey = $provisioned.Body.data.licenseKey
+    }) 200
+    $paidInvoices = Invoke-Api GET "/api/platform/invoices?tenantId=$trialTenantId" $null $platformToken
+    Expect-Status "Paid invoice generated" $paidInvoices 200
+    $paidInvoiceId = $paidInvoices.Body.data.items[0].id
+    $businessPdf = Invoke-Download "/api/platform/invoices/$paidInvoiceId/pdf" $platformToken $pdfReportPath
+    Add-Result "Invoice PDF can be downloaded" (
+        $businessPdf.Status -eq 200 -and
+        [Text.Encoding]::ASCII.GetString($businessPdf.Bytes[0..3]) -eq "%PDF"
+    ) "$($businessPdf.Bytes.Length) bytes"
+    $quotationPdf = Invoke-Download "/api/platform/quotations/$($quotation.Body.data.id)/pdf" $platformToken $pdfReportPath
+    Add-Result "Quotation PDF can be downloaded" (
+        $quotationPdf.Status -eq 200 -and
+        [Text.Encoding]::ASCII.GetString($quotationPdf.Bytes[0..3]) -eq "%PDF"
+    ) "$($quotationPdf.Bytes.Length) bytes"
+
+    $contract = Invoke-Api POST "/api/platform/contracts" @{
+        tenantId = $trialTenantId; quotationId = $quotation.Body.data.id
+        title = "AIGuard Annual Service Agreement"; terms = "Annual enterprise security service"
+        effectiveAt = [DateTime]::UtcNow.ToString("O"); expiresAt = [DateTime]::UtcNow.AddYears(1).ToString("O")
+    } $platformToken
+    Add-Result "Commercial contract created" ($contract.Status -eq 201) "$($contract.Status): $($contract.Body | ConvertTo-Json -Depth 8 -Compress)"
+    Expect-Status "Commercial contract signed" (Invoke-Api POST "/api/platform/contracts/$($contract.Body.data.id)/action" @{
+        status = "Signed"; signedByCustomer = "Test Owner"; signedByAiguard = "Platform Owner"
+    } $platformToken) 200
+    $contractPdf = Invoke-Download "/api/platform/contracts/$($contract.Body.data.id)/pdf" $platformToken $pdfReportPath
+    Add-Result "Contract PDF can be downloaded" (
+        $contractPdf.Status -eq 200 -and
+        [Text.Encoding]::ASCII.GetString($contractPdf.Bytes[0..3]) -eq "%PDF"
+    ) "$($contractPdf.Bytes.Length) bytes"
+    Expect-Status "Onboarding checklist updated" (Invoke-Api PUT "/api/platform/onboarding/$trialTenantId" @{
+        extensionInstalled = $true; firstUserAdded = $true; policyEnabled = $true
+        testPromptCompleted = $true; notes = "Automated onboarding complete"
+    } $platformToken) 200
+    $newEnrollment = Invoke-Api POST "/api/platform/onboarding/$trialTenantId/enrollment-token" $null $platformToken
+    Add-Result "Onboarding enrollment token can be regenerated" (
+        $newEnrollment.Status -eq 200 -and
+        -not [string]::IsNullOrWhiteSpace($newEnrollment.Body.data.enrollmentToken)
+    ) "$($newEnrollment.Status)"
+    $renewedLicense = Invoke-Api POST "/api/platform/licenses/$($provisioned.Body.data.id)/renew" @{
+        months = 12
+    } $platformToken
+    Add-Result "License can be renewed with a rotated key" (
+        $renewedLicense.Status -eq 200 -and
+        -not [string]::IsNullOrWhiteSpace($renewedLicense.Body.data.licenseKey)
+    ) "$($renewedLicense.Status)"
+    Expect-Status "Renewed license validates immediately" (Invoke-Api POST "/api/licenses/validate" @{
+        tenantCode = "TESTCO"; licenseKey = $renewedLicense.Body.data.licenseKey
+    }) 200
+
+    $ticket = Invoke-Api POST "/api/business/tickets" @{
+        subject = "Need deployment assistance"; category = "Deployment"; priority = "High"
+        message = "Please help verify endpoint rollout."
+    } $ownerToken
+    Expect-Status "Tenant support ticket created" $ticket 201
+    Expect-Status "Platform support queue receives ticket" (
+        Invoke-Api GET "/api/platform/tickets?tenantId=$trialTenantId" $null $platformToken
+    ) 200
+    Expect-Status "Platform support agent updates SLA ticket" (Invoke-Api PUT "/api/platform/tickets/$($ticket.Body.data.id)" @{
+        status = "InProgress"; priority = "High"; assignedTo = "support@aiguard.com"
+    } $platformToken) 200
 
     Expect-Status "OpenAPI document available" (Invoke-Api GET "/openapi/v1.json") 200
 }

@@ -9,7 +9,22 @@ const CONFIG_KEYS = [
   "offlineCriticalBlock",
   "enabled",
   "shadowAiPatterns",
-  "shadowPolicySyncedAt"
+  "shadowPolicySyncedAt",
+  "managedConfigApplied",
+  "managedLockSettings",
+  "lastEnrollmentError"
+];
+
+const MANAGED_KEYS = [
+  "apiBaseUrl",
+  "enrollmentToken",
+  "userEmail",
+  "departmentName",
+  "hostname",
+  "enabled",
+  "offlineCriticalBlock",
+  "autoEnroll",
+  "lockSettings"
 ];
 
 const LOCAL_AI_DOMAINS = [
@@ -24,6 +39,26 @@ const LOCAL_AI_DOMAINS = [
 const recentDiscoveries = new Map();
 
 chrome.runtime.onInstalled.addListener(async details => {
+  await bootstrapExtension(details.reason);
+});
+
+chrome.runtime.onStartup.addListener(async () => {
+  await bootstrapExtension("startup");
+});
+chrome.storage.onChanged.addListener((_changes, areaName) => {
+  if (areaName === "local") updateBadge();
+  if (areaName === "managed") bootstrapExtension("managed").catch(() => undefined);
+});
+chrome.alarms.onAlarm.addListener(alarm => {
+  if (alarm.name === "aiguard-shadow-policy") syncShadowPolicy().catch(() => undefined);
+  if (alarm.name === "aiguard-extension-heartbeat") sendExtensionHeartbeat().catch(() => undefined);
+});
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  const url = changeInfo.url || (changeInfo.status === "complete" ? tab.url : null);
+  if (url) discoverAiNavigation(tabId, url, tab.title || "").catch(() => undefined);
+});
+
+async function bootstrapExtension(reason) {
   const current = await chrome.storage.local.get(CONFIG_KEYS);
   const defaults = {};
 
@@ -36,28 +71,16 @@ chrome.runtime.onInstalled.addListener(async details => {
     await chrome.storage.local.set(defaults);
   }
 
+  await applyManagedConfiguration();
+  await autoEnrollFromManaged();
   await updateBadge();
   await ensureShadowDiscovery();
-  if (details.reason === "install") {
+
+  const status = await getStatus();
+  if (reason === "install" && !status.configured) {
     await chrome.runtime.openOptionsPage();
   }
-});
-
-chrome.runtime.onStartup.addListener(async () => {
-  await updateBadge();
-  await ensureShadowDiscovery();
-});
-chrome.storage.onChanged.addListener((_changes, areaName) => {
-  if (areaName === "local") updateBadge();
-});
-chrome.alarms.onAlarm.addListener(alarm => {
-  if (alarm.name === "aiguard-shadow-policy") syncShadowPolicy().catch(() => undefined);
-  if (alarm.name === "aiguard-extension-heartbeat") sendExtensionHeartbeat().catch(() => undefined);
-});
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  const url = changeInfo.url || (changeInfo.status === "complete" ? tab.url : null);
-  if (url) discoverAiNavigation(tabId, url, tab.title || "").catch(() => undefined);
-});
+}
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (!message || typeof message.type !== "string") return false;
@@ -88,6 +111,61 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 async function getConfig() {
   return chrome.storage.local.get(CONFIG_KEYS);
+}
+
+async function getManagedConfig() {
+  try {
+    return await chrome.storage.managed.get(MANAGED_KEYS);
+  } catch {
+    return {};
+  }
+}
+
+async function applyManagedConfiguration() {
+  const managed = await getManagedConfig();
+  const updates = {};
+
+  for (const key of ["apiBaseUrl", "userEmail", "departmentName", "hostname"]) {
+    if (typeof managed[key] === "string" && managed[key].trim()) {
+      updates[key] = key === "apiBaseUrl"
+        ? normalizeApiUrl(managed[key])
+        : managed[key].trim();
+    }
+  }
+  if (typeof managed.enabled === "boolean") updates.enabled = managed.enabled;
+  if (typeof managed.offlineCriticalBlock === "boolean") {
+    updates.offlineCriticalBlock = managed.offlineCriticalBlock;
+  }
+  if (typeof managed.lockSettings === "boolean") updates.managedLockSettings = managed.lockSettings;
+  updates.managedConfigApplied = Object.keys(managed).length > 0;
+
+  if (Object.keys(updates).length > 0) await chrome.storage.local.set(updates);
+  return managed;
+}
+
+async function autoEnrollFromManaged() {
+  const managed = await getManagedConfig();
+  const config = await getConfig();
+  if (config.endpointKey) return;
+  if (managed.autoEnroll === false) return;
+  if (!managed.enrollmentToken || !managed.apiBaseUrl || !managed.userEmail || !managed.departmentName) return;
+
+  try {
+    await enrollDevice({
+      body: {
+        apiBaseUrl: managed.apiBaseUrl,
+        hostname: managed.hostname || config.hostname || createDeviceName(),
+        userEmail: managed.userEmail,
+        departmentName: managed.departmentName,
+        enrollmentToken: managed.enrollmentToken
+      }
+    });
+    await chrome.storage.local.set({ lastEnrollmentError: "" });
+  } catch (error) {
+    await chrome.storage.local.set({
+      lastEnrollmentError: error instanceof Error ? error.message : String(error)
+    });
+  }
 }
 
 function normalizeApiUrl(value) {
@@ -156,12 +234,12 @@ async function handleApi(message) {
 async function enrollDevice(message) {
   const request = message.body || {};
   const apiBaseUrl = normalizeApiUrl(request.apiBaseUrl);
-  const hostname = String(request.hostname || "").trim();
+  const hostname = String(request.hostname || "").trim() || createDeviceName();
   const userEmail = String(request.userEmail || "").trim().toLowerCase();
   const departmentName = String(request.departmentName || "").trim();
   const enrollmentToken = String(request.enrollmentToken || "").trim();
 
-  if (!hostname || !userEmail || !departmentName || !enrollmentToken) {
+  if (!userEmail || !departmentName || !enrollmentToken) {
     throw new Error("Please complete all enrollment fields");
   }
 
@@ -227,6 +305,9 @@ async function getStatus() {
     departmentName: config.departmentName || "",
     policyVersion: config.policyVersion || "",
     offlineCriticalBlock: config.offlineCriticalBlock !== false,
+    managedConfigApplied: config.managedConfigApplied === true,
+    managedLockSettings: config.managedLockSettings === true,
+    lastEnrollmentError: config.lastEnrollmentError || "",
     version: chrome.runtime.getManifest().version
   };
 }

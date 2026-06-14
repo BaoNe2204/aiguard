@@ -4,6 +4,8 @@ import { LanguageProvider } from './contexts/LanguageContext';
 import { ProtectedRoute } from './components/layout/ProtectedRoute';
 import { AppLayout } from './components/layout/AppLayout';
 import { Login } from './pages/Login';
+import { Signup } from './pages/Signup';
+import { VerifySignup } from './pages/VerifySignup';
 import { Landing } from './pages/Landing';
 import { Dashboard } from './pages/Dashboard';
 import { Endpoints } from './pages/Endpoints';
@@ -21,15 +23,23 @@ import { Profile } from './pages/Profile';
 import { useAuth } from './contexts/AuthContext';
 import './App.css';
 
-const DASHBOARD_ROLES = ['DepartmentManager', 'SecurityAdmin', 'SystemAdmin', 'Auditor'];
-const SECURITY_ROLES = ['SecurityAdmin', 'SystemAdmin'];
-const APPROVAL_ROLES = ['DepartmentManager', 'SecurityAdmin', 'SystemAdmin'];
-const AUDIT_ROLES = ['SecurityAdmin', 'SystemAdmin', 'Auditor'];
-const GOVERNANCE_ROLES = ['DepartmentManager', 'SecurityAdmin', 'SystemAdmin', 'Auditor'];
+const DASHBOARD_ROLES = ['DepartmentManager', 'SecurityAdmin', 'TenantOwner', 'PlatformAdmin'];
+const SECURITY_ROLES = ['SecurityAdmin', 'TenantOwner', 'PlatformAdmin'];
+const BUSINESS_ROLES = ['TenantOwner', 'SecurityAdmin', 'PlatformAdmin'];
+const APPROVAL_ROLES = ['DepartmentManager', 'SecurityAdmin', 'TenantOwner', 'PlatformAdmin'];
+const AUDIT_ROLES = ['SecurityAdmin', 'TenantOwner', 'PlatformAdmin'];
+const GOVERNANCE_ROLES = ['DepartmentManager', 'SecurityAdmin', 'TenantOwner', 'PlatformAdmin'];
 
 const RoleHomeRedirect = () => {
   const { user } = useAuth();
-  return <Navigate to={user?.role === 'Employee' ? '/app/my-usage/logs' : '/app/dashboard'} replace />;
+  if (user?.role === 'Employee') return <Navigate to="/app/my-usage/logs" replace />;
+  if (user?.role === 'TenantOwner') {
+    return <Navigate to="/app/business/onboarding" replace />;
+  }
+  if (user?.role === 'PlatformAdmin') {
+    return <Navigate to="/app/business/operations" replace />;
+  }
+  return <Navigate to="/app/dashboard" replace />;
 };
 
 function App() {
@@ -40,6 +50,8 @@ function App() {
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
+          <Route path="/verify-signup" element={<VerifySignup />} />
           
           <Route path="/app" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
             <Route path="dashboard" element={<ProtectedRoute allowedRoles={DASHBOARD_ROLES}><Dashboard /></ProtectedRoute>} />
@@ -50,7 +62,7 @@ function App() {
             <Route path="endpoints/devices" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><Endpoints /></ProtectedRoute>} />
             <Route path="endpoints/events" element={<ProtectedRoute allowedRoles={DASHBOARD_ROLES}><Endpoints /></ProtectedRoute>} />
             <Route path="endpoints/ai-websites" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><Endpoints /></ProtectedRoute>} />
-            <Route path="endpoints/deployment" element={<ProtectedRoute allowedRoles={['SystemAdmin']}><Endpoints /></ProtectedRoute>} />
+            <Route path="endpoints/deployment" element={<ProtectedRoute allowedRoles={['TenantOwner']}><Endpoints /></ProtectedRoute>} />
             
             {/* Approvals subroutes */}
             <Route path="approvals/prompts" element={<ProtectedRoute allowedRoles={APPROVAL_ROLES}><Approvals /></ProtectedRoute>} />
@@ -79,23 +91,24 @@ function App() {
 
             {/* Security governance */}
             <Route path="governance/health" element={<ProtectedRoute allowedRoles={GOVERNANCE_ROLES}><Governance /></ProtectedRoute>} />
-            <Route path="governance/identity" element={<ProtectedRoute allowedRoles={['SystemAdmin']}><Governance /></ProtectedRoute>} />
+            <Route path="governance/identity" element={<ProtectedRoute allowedRoles={['TenantOwner']}><Governance /></ProtectedRoute>} />
             <Route path="governance/false-positives" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><Governance /></ProtectedRoute>} />
             <Route path="governance/incidents" element={<ProtectedRoute allowedRoles={GOVERNANCE_ROLES}><Governance /></ProtectedRoute>} />
             <Route path="governance/rules" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><Governance /></ProtectedRoute>} />
-            <Route path="governance/settings" element={<ProtectedRoute allowedRoles={['SystemAdmin']}><Governance /></ProtectedRoute>} />
+            <Route path="governance/settings" element={<ProtectedRoute allowedRoles={['TenantOwner']}><Governance /></ProtectedRoute>} />
 
             {/* Business packaging */}
-            <Route path="business/packages" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><BusinessPackaging /></ProtectedRoute>} />
-            <Route path="business/payment" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><PaymentConfirmation /></ProtectedRoute>} />
-            <Route path="business/orders" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><BusinessOperations /></ProtectedRoute>} />
-            <Route path="business/licenses" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><BusinessOperations /></ProtectedRoute>} />
-            <Route path="business/customers" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><BusinessOperations /></ProtectedRoute>} />
-            <Route path="business/invoices" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><BusinessOperations /></ProtectedRoute>} />
-            <Route path="business/onboarding" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><BusinessOperations /></ProtectedRoute>} />
-            <Route path="business/company" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><BusinessOperations /></ProtectedRoute>} />
-            <Route path="business/quotations" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><BusinessOperations /></ProtectedRoute>} />
-            <Route path="business/support" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><BusinessOperations /></ProtectedRoute>} />
+            <Route path="business/packages" element={<ProtectedRoute allowedRoles={BUSINESS_ROLES}><BusinessPackaging /></ProtectedRoute>} />
+            <Route path="business/payment" element={<ProtectedRoute allowedRoles={BUSINESS_ROLES}><PaymentConfirmation /></ProtectedRoute>} />
+            <Route path="business/operations" element={<ProtectedRoute allowedRoles={BUSINESS_ROLES}><BusinessOperations /></ProtectedRoute>} />
+            <Route path="business/orders" element={<ProtectedRoute allowedRoles={BUSINESS_ROLES}><BusinessOperations /></ProtectedRoute>} />
+            <Route path="business/licenses" element={<ProtectedRoute allowedRoles={BUSINESS_ROLES}><BusinessOperations /></ProtectedRoute>} />
+            <Route path="business/customers" element={<ProtectedRoute allowedRoles={BUSINESS_ROLES}><BusinessOperations /></ProtectedRoute>} />
+            <Route path="business/invoices" element={<ProtectedRoute allowedRoles={BUSINESS_ROLES}><BusinessOperations /></ProtectedRoute>} />
+            <Route path="business/onboarding" element={<ProtectedRoute allowedRoles={BUSINESS_ROLES}><BusinessOperations /></ProtectedRoute>} />
+            <Route path="business/company" element={<ProtectedRoute allowedRoles={BUSINESS_ROLES}><BusinessOperations /></ProtectedRoute>} />
+            <Route path="business/quotations" element={<ProtectedRoute allowedRoles={BUSINESS_ROLES}><BusinessOperations /></ProtectedRoute>} />
+            <Route path="business/support" element={<ProtectedRoute allowedRoles={BUSINESS_ROLES}><BusinessOperations /></ProtectedRoute>} />
             
             {/* My Usage portal subroutes */}
             <Route path="my-usage/logs" element={<MyUsage />} />

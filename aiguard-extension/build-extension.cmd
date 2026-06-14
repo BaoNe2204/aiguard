@@ -7,6 +7,7 @@ if not exist "%DIST%" mkdir "%DIST%"
 
 for %%F in (
   manifest.json
+  managed_schema.json
   background.js
   content.js
   options.html

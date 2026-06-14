@@ -133,7 +133,7 @@ public class EndpointEventService : IEndpointEventService
                 request.BusinessJustification);
             approvalId = approval.Id;
 
-            await _hubContext.Clients.All.SendAsync("NewApprovalRequest", new
+            var notification = new
             {
                 approvalId = approval.Id,
                 endpointEventId = ev.Id,
@@ -141,11 +141,18 @@ public class EndpointEventService : IEndpointEventService
                 ev.WebsiteAi,
                 ev.RiskScore,
                 ev.RiskLevel
-            });
+            };
+            await _hubContext.Clients.Group(NotificationGroups.Role(ev.TenantCode, "SecurityAdmin"))
+                .SendAsync("NewApprovalRequest", notification);
+            await _hubContext.Clients.Group(NotificationGroups.Role(ev.TenantCode, "TenantOwner"))
+                .SendAsync("NewApprovalRequest", notification);
+            if (ev.DepartmentId.HasValue)
+                await _hubContext.Clients.Group(NotificationGroups.Department(ev.TenantCode, ev.DepartmentId.Value))
+                    .SendAsync("NewApprovalRequest", notification);
         }
         else if (ev.Decision == "Block" || ev.RiskLevel == "Critical")
         {
-            await _hubContext.Clients.All.SendAsync("EmergencyAlert", new
+            var alert = new
             {
                 endpointEventId = ev.Id,
                 ev.UserEmail,
@@ -153,7 +160,11 @@ public class EndpointEventService : IEndpointEventService
                 ev.WebsiteAi,
                 ev.RiskScore,
                 ev.DataTypeMatched
-            });
+            };
+            await _hubContext.Clients.Group(NotificationGroups.Role(ev.TenantCode, "SecurityAdmin"))
+                .SendAsync("EmergencyAlert", alert);
+            await _hubContext.Clients.Group(NotificationGroups.Role(ev.TenantCode, "TenantOwner"))
+                .SendAsync("EmergencyAlert", alert);
         }
 
         var response = MapToResponse(ev);

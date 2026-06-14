@@ -8,7 +8,7 @@ namespace aiguard_api.Controllers;
 
 [ApiController]
 [Route("api/endpoints/ai-websites")]
-[Authorize(Roles = "SecurityAdmin,SystemAdmin")]
+[Authorize(Roles = "SecurityAdmin,TenantOwner")]
 public class AiWebsitesController : ControllerBase
 {
     private readonly IAiWebsiteService _websiteService;

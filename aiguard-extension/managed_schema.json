@@ -1,0 +1,51 @@
+{
+  "$schema": "http://json-schema.org/draft-03/schema#",
+  "type": "object",
+  "properties": {
+    "apiBaseUrl": {
+      "title": "AIGuard API Base URL",
+      "description": "Public URL of the AIGuard backend API, for example https://aiguard-api.company.com.",
+      "type": "string"
+    },
+    "enrollmentToken": {
+      "title": "Enrollment token",
+      "description": "One-time deployment token issued by AIGuard Control Tower.",
+      "type": "string"
+    },
+    "userEmail": {
+      "title": "Employee email",
+      "description": "Employee email. Enterprise deployment tools can template this value per user.",
+      "type": "string"
+    },
+    "departmentName": {
+      "title": "Department name",
+      "description": "Employee department, for example Dev, HR, Sales or Finance.",
+      "type": "string"
+    },
+    "hostname": {
+      "title": "Device name",
+      "description": "Optional device name. If omitted, the extension generates a browser device name.",
+      "type": "string"
+    },
+    "enabled": {
+      "title": "Protection enabled",
+      "description": "Enable or disable AIGuard protection.",
+      "type": "boolean"
+    },
+    "offlineCriticalBlock": {
+      "title": "Fail closed",
+      "description": "Block submission when the backend cannot verify a prompt or file.",
+      "type": "boolean"
+    },
+    "autoEnroll": {
+      "title": "Auto enroll",
+      "description": "Automatically enroll when API URL, token, employee email and department are available.",
+      "type": "boolean"
+    },
+    "lockSettings": {
+      "title": "Lock settings",
+      "description": "Indicates that configuration is controlled by enterprise policy.",
+      "type": "boolean"
+    }
+  }
+}

@@ -19,6 +19,7 @@ public class LoginResponse
     public bool MfaSetupRequired { get; set; }
     public string? MfaSetupSecret { get; set; }
     public string? MfaProvisioningUri { get; set; }
+    public List<string>? MfaRecoveryCodes { get; set; }
     public string? AccessToken { get; set; }
     public string? RefreshToken { get; set; }
     public DateTime? ExpiresAt { get; set; }
@@ -40,6 +41,28 @@ public class RefreshTokenRequest
 {
     [Required]
     public string RefreshToken { get; set; } = string.Empty;
+}
+
+public class LogoutRequest
+{
+    public string? RefreshToken { get; set; }
+    public bool AllSessions { get; set; }
+}
+
+public class RegenerateRecoveryCodesRequest
+{
+    [Required]
+    public string CurrentPassword { get; set; } = string.Empty;
+}
+
+public class SsoExchangeRequest
+{
+    [Required]
+    public string TenantCode { get; set; } = "DEFAULT";
+    [Required]
+    public string Provider { get; set; } = string.Empty;
+    [Required]
+    public string IdToken { get; set; } = string.Empty;
 }
 
 public class UserProfileResponse

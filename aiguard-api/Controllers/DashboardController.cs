@@ -8,7 +8,7 @@ namespace aiguard_api.Controllers;
 
 [ApiController]
 [Route("api/dashboard")]
-[Authorize(Roles = "DepartmentManager,SecurityAdmin,SystemAdmin,Auditor")]
+[Authorize(Roles = "DepartmentManager,SecurityAdmin,TenantOwner")]
 public class DashboardController : ControllerBase
 {
     private readonly IDashboardService _dashboardService;

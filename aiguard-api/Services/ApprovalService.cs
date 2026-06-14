@@ -61,6 +61,7 @@ public class ApprovalService : IApprovalService
     public async Task<ApprovalResponse?> ProcessApprovalAsync(Guid id, ApprovalActionRequest request, Guid approverId)
     {
         var approval = await _db.Approvals
+            .AsNoTracking()
             .Include(a => a.EndpointEvent)
             .Include(a => a.AgentActionLog)
             .Include(a => a.AssignedApprover)
@@ -69,27 +70,47 @@ public class ApprovalService : IApprovalService
         if (approval == null || approval.Status != "Pending") return null;
         if (approval.ExpiresAt <= DateTime.UtcNow)
         {
-            approval.Status = "Expired";
-            await _db.SaveChangesAsync();
+            await _db.Approvals.Where(a => a.Id == id && a.Status == "Pending")
+                .ExecuteUpdateAsync(x => x
+                    .SetProperty(a => a.Status, "Expired")
+                    .SetProperty(a => a.ConcurrencyToken, Guid.NewGuid()));
             return null;
         }
 
         if (request.Action is not ("Approve" or "Reject" or "ApproveWithMasking"))
             throw new ArgumentException("Action must be Approve, Reject, or ApproveWithMasking");
 
-        approval.Status = request.Action switch
+        var approver = await _db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == approverId)
+            ?? throw new UnauthorizedAccessException();
+        if (string.Equals(approval.RequestedByUserEmail, approver.Email, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("The requester cannot approve their own request.");
+        if (approval.AssignedApproverId.HasValue && approval.AssignedApproverId != approverId)
+            throw new InvalidOperationException("This request is assigned to another approver.");
+
+        var status = request.Action switch
         {
             "Approve" => "Approved",
             "Reject" => "Rejected",
             "ApproveWithMasking" => "ApprovedWithMasking",
             _ => approval.Status
         };
-        approval.ApproverNote = request.Note;
-        approval.AssignedApproverId = approverId;
-        approval.DecidedAt = DateTime.UtcNow;
+        var affected = await _db.Approvals
+            .Where(a => a.Id == id && a.Status == "Pending" && a.ConcurrencyToken == approval.ConcurrencyToken)
+            .ExecuteUpdateAsync(x => x
+                .SetProperty(a => a.Status, status)
+                .SetProperty(a => a.ApproverNote, request.Note)
+                .SetProperty(a => a.AssignedApproverId, approverId)
+                .SetProperty(a => a.DecidedAt, DateTime.UtcNow)
+                .SetProperty(a => a.ConcurrencyToken, Guid.NewGuid()));
+        if (affected == 0)
+            throw new InvalidOperationException("Approval was already processed by another approver.");
 
-        await _db.SaveChangesAsync();
-        return MapToResponse(approval);
+        var updated = await _db.Approvals
+            .Include(a => a.EndpointEvent)
+            .Include(a => a.AgentActionLog)
+            .Include(a => a.AssignedApprover)
+            .FirstAsync(a => a.Id == id);
+        return MapToResponse(updated);
     }
 
     public async Task<PagedResult<ApprovalResponse>> GetHistoryAsync(PagedQuery query)
@@ -161,6 +182,7 @@ public class ApprovalService : IApprovalService
         if (approval == null || approval.Status != "Pending") return null;
         approval.Status = "Revoked";
         approval.RevokedAt = DateTime.UtcNow;
+        approval.ConcurrencyToken = Guid.NewGuid();
         await _db.SaveChangesAsync();
         return MapToResponse(approval);
     }
@@ -202,6 +224,7 @@ public class ApprovalService : IApprovalService
             EndpointEventId = a.EndpointEventId,
             AgentActionLogId = a.AgentActionLogId,
             RequestedByUserEmail = a.RequestedByUserEmail,
+            AssignedApproverId = a.AssignedApproverId,
             AssignedApproverName = a.AssignedApprover?.FullName,
             Status = a.Status,
             Reason = a.Reason,
@@ -209,8 +232,9 @@ public class ApprovalService : IApprovalService
             ApproverNote = a.ApproverNote,
             CreatedAt = a.CreatedAt,
             ExpiresAt = a.ExpiresAt,
-            DecidedAt = a.DecidedAt
-            ,RevokedAt = a.RevokedAt
+            DecidedAt = a.DecidedAt,
+            RevokedAt = a.RevokedAt,
+            ConcurrencyToken = a.ConcurrencyToken
         };
 
         if (a.EndpointEvent != null)

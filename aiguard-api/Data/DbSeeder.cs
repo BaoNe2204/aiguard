@@ -1,6 +1,8 @@
 using aiguard_api.Models;
 using BCrypt.Net;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace aiguard_api.Data;
 
@@ -28,7 +30,7 @@ public static class DbSeeder
             FullName = "System Administrator",
             Email = "admin@aiguard.com",
             PasswordHash = BCrypt.Net.BCrypt.HashPassword("Admin@123"),
-            Role = "SystemAdmin",
+            Role = "TenantOwner",
             DepartmentId = deptEng.Id
         };
         var securityAdmin = new User
@@ -55,16 +57,7 @@ public static class DbSeeder
             Role = "Employee",
             DepartmentId = deptEng.Id
         };
-        var auditor = new User
-        {
-            FullName = "Auditor User",
-            Email = "auditor@company.com",
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword("Auditor@123"),
-            Role = "Auditor",
-            DepartmentId = deptFin.Id
-        };
-
-        db.Users.AddRange(adminUser, securityAdmin, hrManager, employee1, auditor);
+        db.Users.AddRange(adminUser, securityAdmin, hrManager, employee1);
         await db.SaveChangesAsync();
 
         // ── Security Policies ──
@@ -260,6 +253,177 @@ public static class DbSeeder
             }
         );
 
+        await db.SaveChangesAsync();
+        await SeedSaasAsync(db, configuration);
+    }
+
+    private static async Task SeedSaasAsync(AiguardDbContext db, IConfiguration configuration)
+    {
+        var starter = await db.ProductPlans.FirstOrDefaultAsync(x => x.Code == "STARTER");
+        if (starter == null)
+        {
+            starter = new ProductPlan
+            {
+                Code = "STARTER",
+                Name = "Starter",
+                Description = "DLP prompt, browser extension, basic policy and reports.",
+                MonthlyPrice = 149000,
+                YearlyPrice = 1490000,
+                IncludedUsers = 25,
+                IncludedDevices = 25,
+                MaxAgents = 2,
+                FeaturesJson = "[\"Prompt DLP\",\"Browser Extension\",\"Basic Reports\"]",
+                DisplayOrder = 1
+            };
+            db.ProductPlans.Add(starter);
+        }
+
+        var business = await db.ProductPlans.FirstOrDefaultAsync(x => x.Code == "BUSINESS");
+        if (business == null)
+        {
+            business = new ProductPlan
+            {
+                Code = "BUSINESS",
+                Name = "Business",
+                Description = "Advanced DLP, approvals, endpoint agent, SIEM and AI Agent controls.",
+                MonthlyPrice = 299000,
+                YearlyPrice = 2990000,
+                IncludedUsers = 100,
+                IncludedDevices = 120,
+                MaxAgents = 10,
+                FeaturesJson = "[\"Advanced DLP\",\"Approval Workflow\",\"Desktop Agent\",\"SIEM\",\"AI Agent Control\"]",
+                DisplayOrder = 2
+            };
+            db.ProductPlans.Add(business);
+        }
+
+        var enterprise = await db.ProductPlans.FirstOrDefaultAsync(x => x.Code == "ENTERPRISE");
+        if (enterprise == null)
+        {
+            enterprise = new ProductPlan
+            {
+                Code = "ENTERPRISE",
+                Name = "Enterprise",
+                Description = "Full platform with custom limits, blockchain anchoring and premium support.",
+                MonthlyPrice = 0,
+                YearlyPrice = 0,
+                IncludedUsers = 10000,
+                IncludedDevices = 10000,
+                MaxAgents = 1000,
+                FeaturesJson = "[\"Unlimited Policies\",\"Blockchain Audit\",\"SSO\",\"Premium SLA\",\"Custom Integrations\"]",
+                DisplayOrder = 3
+            };
+            db.ProductPlans.Add(enterprise);
+        }
+        await db.SaveChangesAsync();
+
+        var defaultTenant = await db.Tenants.IgnoreQueryFilters().FirstOrDefaultAsync(x => x.Code == "DEFAULT");
+        if (defaultTenant == null)
+        {
+            var owner = await db.Users.IgnoreQueryFilters().FirstOrDefaultAsync(x =>
+                x.TenantCode == "DEFAULT" && x.Email == "admin@aiguard.com");
+            defaultTenant = new Tenant
+            {
+                Code = "DEFAULT",
+                CompanyName = "AIGuard Demo Enterprise",
+                LegalName = "AIGuard Demo Enterprise",
+                EmailDomain = "company.com",
+                Status = "Paid",
+                OwnerName = owner?.FullName ?? "System Administrator",
+                OwnerEmail = owner?.Email ?? "admin@aiguard.com",
+                OwnerUserId = owner?.Id,
+                Industry = "Technology",
+                CompanySize = "Demo"
+            };
+            db.Tenants.Add(defaultTenant);
+            db.TenantSettings.Add(new TenantSettings
+            {
+                TenantId = defaultTenant.Id,
+                TenantCode = defaultTenant.Code,
+                PrimaryDomain = "company.com",
+                BankCode = "VCB",
+                BankAccountNumber = "0000000000",
+                BankAccountName = "AIGUARD DEMO"
+            });
+            db.CustomerContacts.Add(new CustomerContact
+            {
+                TenantId = defaultTenant.Id,
+                TenantCode = defaultTenant.Code,
+                FullName = defaultTenant.OwnerName,
+                Email = defaultTenant.OwnerEmail,
+                IsPrimary = true,
+                IsBillingContact = true
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var defaultSubscription = await db.Subscriptions.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(x => x.TenantCode == "DEFAULT" && x.Status == "Active");
+        if (defaultSubscription == null)
+        {
+            var now = DateTime.UtcNow;
+            defaultSubscription = new Subscription
+            {
+                TenantId = defaultTenant.Id,
+                TenantCode = defaultTenant.Code,
+                ProductPlanId = enterprise.Id,
+                Status = "Active",
+                BillingCycle = "Yearly",
+                UserLimit = enterprise.IncludedUsers,
+                DeviceLimit = enterprise.IncludedDevices,
+                AgentLimit = enterprise.MaxAgents,
+                StartsAt = now,
+                CurrentPeriodStartsAt = now,
+                CurrentPeriodEndsAt = now.AddYears(10),
+                AutoRenew = true
+            };
+            db.Subscriptions.Add(defaultSubscription);
+            db.TenantLicenses.Add(new TenantLicense
+            {
+                TenantId = defaultTenant.Id,
+                TenantCode = defaultTenant.Code,
+                SubscriptionId = defaultSubscription.Id,
+                KeyPrefix = "AIG-DEFAULT-DEMO",
+                KeyHash = Hash("AIG-DEFAULT-DEMO-LICENSE-NOT-FOR-PRODUCTION"),
+                UserLimit = defaultSubscription.UserLimit,
+                DeviceLimit = defaultSubscription.DeviceLimit,
+                AgentLimit = defaultSubscription.AgentLimit,
+                StartsAt = now,
+                ExpiresAt = now.AddYears(10)
+            });
+            db.TenantOnboardings.Add(new TenantOnboarding
+            {
+                TenantId = defaultTenant.Id,
+                TenantCode = defaultTenant.Code,
+                Status = "Completed",
+                AdminCreated = true,
+                EnrollmentTokenCreated = true,
+                ExtensionInstalled = true,
+                FirstUserAdded = true,
+                PolicyEnabled = true,
+                TestPromptCompleted = true,
+                CompletedAt = now
+            });
+        }
+
+        var platformEmail = configuration["BootstrapPlatformAdmin:Email"]?.Trim().ToLowerInvariant();
+        var platformPassword = configuration["BootstrapPlatformAdmin:Password"];
+        if (!string.IsNullOrWhiteSpace(platformEmail) &&
+            !string.IsNullOrWhiteSpace(platformPassword) &&
+            platformPassword.Length >= 12 &&
+            !await db.Users.IgnoreQueryFilters().AnyAsync(x =>
+                x.TenantCode == "PLATFORM" && x.Email == platformEmail))
+        {
+            db.Users.Add(new User
+            {
+                FullName = "AIGuard Platform Owner",
+                Email = platformEmail,
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(platformPassword),
+                Role = "PlatformAdmin",
+                TenantCode = "PLATFORM",
+                MfaRequired = false
+            });
+        }
         await db.SaveChangesAsync();
     }
 

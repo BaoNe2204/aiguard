@@ -11,7 +11,7 @@ namespace aiguard_api.Controllers;
 
 [ApiController]
 [Route("api/approvals")]
-[Authorize(Roles = "DepartmentManager,SecurityAdmin,SystemAdmin")]
+[Authorize(Roles = "DepartmentManager,SecurityAdmin,TenantOwner")]
 public class ApprovalsController : ControllerBase
 {
     private readonly IApprovalService _approvalService;
@@ -40,7 +40,8 @@ public class ApprovalsController : ControllerBase
         if (result == null) return NotFound(ApiResponse<object>.Fail("Approval not found or already processed"));
 
         // Send realtime notification to the requester
-        await _hubContext.Clients.All.SendAsync("ApprovalDecided", new
+        var tenant = User.FindFirstValue("tenantCode") ?? "DEFAULT";
+        await _hubContext.Clients.Group(NotificationGroups.User(tenant, result.RequestedByUserEmail)).SendAsync("ApprovalDecided", new
         {
             approvalId = result.Id,
             status = result.Status,
@@ -66,7 +67,11 @@ public class ApprovalsController : ControllerBase
         if (string.IsNullOrWhiteSpace(email)) return Unauthorized(ApiResponse<object>.Fail("Email claim is missing"));
         var result = await _approvalService.RevokeAsync(id, email);
         if (result == null) return NotFound(ApiResponse<object>.Fail("Approval not found or cannot be revoked"));
-        await _hubContext.Clients.All.SendAsync("ApprovalRevoked", new { approvalId = result.Id });
+        var tenant = User.FindFirstValue("tenantCode") ?? "DEFAULT";
+        await _hubContext.Clients.Group(NotificationGroups.Role(tenant, "DepartmentManager"))
+            .SendAsync("ApprovalRevoked", new { approvalId = result.Id });
+        await _hubContext.Clients.Group(NotificationGroups.Role(tenant, "SecurityAdmin"))
+            .SendAsync("ApprovalRevoked", new { approvalId = result.Id });
         return Ok(ApiResponse<ApprovalResponse>.Ok(result));
     }
 }

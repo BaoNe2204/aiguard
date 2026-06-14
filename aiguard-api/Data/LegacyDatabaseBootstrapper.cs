@@ -24,6 +24,18 @@ public static class LegacyDatabaseBootstrapper
         if (db.Database.ProviderName?.Contains("SqlServer", StringComparison.OrdinalIgnoreCase) != true)
             return;
 
+        try
+        {
+            if (!await db.Database.CanConnectAsync(cancellationToken))
+                return;
+        }
+        catch (Exception)
+        {
+            // If CanConnectAsync throws or fails, assume database doesn't exist or is unreachable.
+            // We can safely return and let MigrateAsync() handle the connection error / creation.
+            return;
+        }
+
         var connection = db.Database.GetDbConnection();
         if (connection.State != ConnectionState.Open)
             await connection.OpenAsync(cancellationToken);

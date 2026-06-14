@@ -22,6 +22,11 @@ public class AgentActionLog
 
     [MaxLength(128)]
     public string? RequestPayloadHash { get; set; }
+    [MaxLength(100)] public string? RequestId { get; set; }
+    public int RecordCount { get; set; }
+    public decimal EstimatedCost { get; set; }
+    public Guid? ParentAgentId { get; set; }
+    public int DelegationDepth { get; set; }
 
     public int RiskScore { get; set; }
 

@@ -6,8 +6,8 @@ interface AuthState {
   user: UserProfile | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<LoginResponse>;
-  verifyMfa: (challengeToken: string, code: string) => Promise<UserProfile>;
+  login: (tenantCode: string, email: string, password: string) => Promise<LoginResponse>;
+  verifyMfa: (tenantCode: string, challengeToken: string, code: string) => Promise<UserProfile>;
   logout: () => void;
 }
 
@@ -56,14 +56,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .finally(() => setIsLoading(false));
   }, []);
 
-  const login = useCallback(async (email: string, password: string) => {
-    const result = await authApi.login(email, password);
+  const login = useCallback(async (tenantCode: string, email: string, password: string) => {
+    const result = await authApi.login(email, password, tenantCode);
     if (result.user) setUser(result.user);
     return result;
   }, []);
 
-  const verifyMfa = useCallback(async (challengeToken: string, code: string) => {
-    const result = await authApi.verifyMfa(challengeToken, code);
+  const verifyMfa = useCallback(async (tenantCode: string, challengeToken: string, code: string) => {
+    const result = await authApi.verifyMfa(challengeToken, code, tenantCode);
     if (!result.user) throw new Error('MFA verified but profile was missing');
     setUser(result.user);
     return result.user;

@@ -11,7 +11,7 @@ namespace aiguard_api.Controllers;
 
 [ApiController]
 [Route("api/admin")]
-[Authorize(Roles = "SystemAdmin")]
+[Authorize(Roles = "TenantOwner")]
 public class IdentityAdminController : ControllerBase
 {
     private readonly IGovernanceService _governance;

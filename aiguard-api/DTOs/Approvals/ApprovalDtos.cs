@@ -10,6 +10,7 @@ public class ApprovalResponse
     public Guid? AgentActionLogId { get; set; }
     public string RequestedByUserEmail { get; set; } = string.Empty;
     public string? AssignedApproverName { get; set; }
+    public Guid? AssignedApproverId { get; set; }
     public string Status { get; set; } = string.Empty;
     public string? Reason { get; set; }
     public string? BusinessJustification { get; set; }
@@ -18,6 +19,7 @@ public class ApprovalResponse
     public DateTime ExpiresAt { get; set; }
     public DateTime? DecidedAt { get; set; }
     public DateTime? RevokedAt { get; set; }
+    public Guid ConcurrencyToken { get; set; }
 
     // Embedded detail
     public string? EventSummary { get; set; }

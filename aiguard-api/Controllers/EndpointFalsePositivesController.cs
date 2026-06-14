@@ -42,7 +42,10 @@ public class EndpointFalsePositivesController : ControllerBase
             $"{device.UserEmail} reported detector {result.DetectorName}.",
             "/app/governance/false-positives", recipientRole: "SecurityAdmin",
             departmentId: device.DepartmentId);
-        await _hub.Clients.All.SendAsync("FalsePositiveSubmitted", result);
+        await _hub.Clients.Group(NotificationGroups.Role(device.TenantCode, "SecurityAdmin"))
+            .SendAsync("FalsePositiveSubmitted", result);
+        await _hub.Clients.Group(NotificationGroups.Role(device.TenantCode, "TenantOwner"))
+            .SendAsync("FalsePositiveSubmitted", result);
         return StatusCode(StatusCodes.Status201Created, ApiResponse<FalsePositiveResponse>.Ok(result));
     }
 }

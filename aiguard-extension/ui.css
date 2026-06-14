@@ -14,7 +14,8 @@ body {
 }
 
 button,
-input {
+input,
+textarea {
   font: inherit;
 }
 
@@ -181,9 +182,9 @@ input {
   font-weight: 650;
 }
 
-.field input {
+.field input,
+.field textarea {
   width: 100%;
-  min-height: 43px;
   padding: 0 12px;
   color: #f4f4f5;
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -194,9 +195,27 @@ input {
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.field input:focus {
+.field input {
+  min-height: 43px;
+}
+
+.field textarea {
+  min-height: 94px;
+  padding-top: 11px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.field input:focus,
+.field textarea:focus {
   border-color: #6366f1;
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+
+.field input:disabled,
+.field textarea:disabled {
+  opacity: 0.68;
+  cursor: not-allowed;
 }
 
 .field-grid {
@@ -353,6 +372,13 @@ button:disabled {
   color: #fda4af;
   border-color: rgba(244, 63, 94, 0.28);
   background: rgba(244, 63, 94, 0.08);
+}
+
+.status-banner.info,
+.popup-result.info {
+  color: #bfdbfe;
+  border-color: rgba(59, 130, 246, 0.28);
+  background: rgba(59, 130, 246, 0.08);
 }
 
 .hidden {

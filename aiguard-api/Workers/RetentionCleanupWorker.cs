@@ -72,7 +72,9 @@ public class RetentionCleanupWorker : BackgroundService
 
             var deletedAudit = await db.AuditLogs.IgnoreQueryFilters()
                 .Where(x => x.TenantCode == tenant && x.CreatedAt < auditCutoff &&
-                    x.BlockchainBatchId != null)
+                    x.BlockchainBatch != null &&
+                    (x.BlockchainBatch.Status == "Anchored" ||
+                     x.BlockchainBatch.Status == "LocalAnchored"))
                 .ExecuteDeleteAsync(cancellationToken);
 
             _logger.LogInformation(
@@ -87,6 +89,9 @@ public class RetentionCleanupWorker : BackgroundService
             .Where(x => x.ExpiresAt < now || x.IsRevoked)
             .ExecuteDeleteAsync(cancellationToken);
         await db.PasswordResetTokens.IgnoreQueryFilters()
+            .Where(x => x.ExpiresAt < now || x.UsedAt != null)
+            .ExecuteDeleteAsync(cancellationToken);
+        await db.TenantSignupVerificationTokens.IgnoreQueryFilters()
             .Where(x => x.ExpiresAt < now || x.UsedAt != null)
             .ExecuteDeleteAsync(cancellationToken);
         await db.PolicyListEntries.IgnoreQueryFilters()

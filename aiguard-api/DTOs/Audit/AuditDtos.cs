@@ -26,6 +26,10 @@ public class BlockchainBatchResponse
     public string Status { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
     public DateTime? AnchoredAt { get; set; }
+    public DateTime? LastAttemptAt { get; set; }
+    public DateTime? NextRetryAt { get; set; }
+    public int RetryCount { get; set; }
+    public string? LastError { get; set; }
 }
 
 public class VerifyBatchResponse

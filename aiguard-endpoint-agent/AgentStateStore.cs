@@ -6,10 +6,14 @@ namespace AIGuard.EndpointAgent;
 
 public sealed class AgentStateStore
 {
-    private readonly string _directory = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "AIGuard");
-    private string StatePath => Path.Combine(_directory, "agent-state.json");
-    private string ConfigPath => Path.Combine(_directory, "agent-config.json");
+    private readonly string _directory =
+        Environment.GetEnvironmentVariable("AIGUARD_AGENT_HOME") is { Length: > 0 } configured
+            ? configured
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "AIGuard");
+
+    public string DirectoryPath => _directory;
+    public string StatePath => Path.Combine(_directory, "agent-state.json");
+    public string ConfigPath => Path.Combine(_directory, "agent-config.json");
 
     public AgentConfig LoadConfig()
     {
@@ -22,6 +26,12 @@ public sealed class AgentStateStore
         }
         return JsonSerializer.Deserialize<AgentConfig>(File.ReadAllText(ConfigPath), JsonOptions)
             ?? throw new InvalidOperationException("Invalid agent configuration.");
+    }
+
+    public void SaveConfig(AgentConfig config)
+    {
+        Directory.CreateDirectory(_directory);
+        File.WriteAllText(ConfigPath, JsonSerializer.Serialize(config, JsonOptions));
     }
 
     public AgentState? LoadState()
@@ -41,6 +51,11 @@ public sealed class AgentStateStore
             DataProtectionScope.LocalMachine);
         var stored = new StoredState(state.DeviceId, Convert.ToBase64String(protectedKey), state.PolicyVersion);
         File.WriteAllText(StatePath, JsonSerializer.Serialize(stored, JsonOptions));
+    }
+
+    public void ClearState()
+    {
+        if (File.Exists(StatePath)) File.Delete(StatePath);
     }
 
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true, WriteIndented = true };

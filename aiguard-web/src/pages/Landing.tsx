@@ -105,8 +105,8 @@ export const Landing: React.FC = () => {
           <Link to="/login" className="landing-login-link">
             {t('Sign in', 'Đăng nhập')}
           </Link>
-          <Link to="/login" className="landing-button landing-button-small">
-            {t('Open Control Tower', 'Mở Control Tower')}
+          <Link to="/signup" className="landing-button landing-button-small">
+            {t('Start Trial', 'Đăng ký dùng thử')}
           </Link>
         </div>
       </header>
@@ -132,9 +132,9 @@ export const Landing: React.FC = () => {
             </p>
 
             <div className="landing-hero-actions">
-              <Link to="/login" className="landing-button">
+              <Link to="/signup" className="landing-button">
                 <ShieldCheck size={18} />
-                {t('Explore the Control Tower', 'Trải nghiệm Control Tower')}
+                {t('Start a Business Trial', 'Đăng ký doanh nghiệp dùng thử')}
                 <ArrowRight size={17} />
               </Link>
               <button type="button" className="landing-button-secondary" onClick={() => scrollTo('how-it-works')}>
@@ -423,8 +423,8 @@ export const Landing: React.FC = () => {
           <div className="landing-cta-icon"><ShieldCheck size={34} /></div>
           <h2>{t('Let employees use AI without losing control of data.', 'Cho nhân viên sử dụng AI mà không mất quyền kiểm soát dữ liệu.')}</h2>
           <p>{t('Open the AIGuard Control Tower to test policies, review events, and manage AI Agents.', 'Mở AIGuard Control Tower để thử chính sách, xem sự kiện và quản lý AI Agent.')}</p>
-          <Link to="/login" className="landing-button landing-button-light">
-            {t('Enter Control Tower', 'Truy cập Control Tower')}
+          <Link to="/signup" className="landing-button landing-button-light">
+            {t('Register your company', 'Đăng ký doanh nghiệp')}
             <ArrowRight size={17} />
           </Link>
         </section>

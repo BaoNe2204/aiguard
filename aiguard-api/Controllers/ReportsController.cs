@@ -6,7 +6,7 @@ namespace aiguard_api.Controllers;
 
 [ApiController]
 [Route("api/reports")]
-[Authorize(Roles = "DepartmentManager,SecurityAdmin,SystemAdmin,Auditor")]
+[Authorize(Roles = "DepartmentManager,SecurityAdmin,TenantOwner")]
 public class ReportsController : ControllerBase
 {
     private readonly IReportExportService _reports;

@@ -8,7 +8,7 @@ namespace aiguard_api.Controllers;
 
 [ApiController]
 [Route("api/audit")]
-[Authorize(Roles = "SecurityAdmin,SystemAdmin,Auditor")]
+[Authorize(Roles = "SecurityAdmin,TenantOwner")]
 public class AuditController : ControllerBase
 {
     private readonly IAuditLogService _auditService;
