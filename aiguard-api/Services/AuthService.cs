@@ -61,6 +61,7 @@ public class AuthService : IAuthService
             .FirstOrDefaultAsync(u => u.Email == email && u.IsActive);
 
         var now = DateTime.UtcNow;
+        if (user == null) return null;
         if (user.LockoutEnd > now) return null;
         if (!BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
         {
@@ -317,7 +318,7 @@ public class AuthService : IAuthService
         await _db.SaveChangesAsync();
     }
 
-    private string GenerateJwtToken(User user)
+    private async Task<List<string>> ReplaceRecoveryCodesAsync(User user)
     {
         await _db.MfaRecoveryCodes.Where(x => x.UserId == user.Id).ExecuteDeleteAsync();
         var rawCodes = Enumerable.Range(0, 8)
@@ -330,6 +331,104 @@ public class AuthService : IAuthService
             TenantCode = user.TenantCode
         }));
         return rawCodes;
+    }
+
+    private async Task<LoginResponse> CreateMfaChallengeAsync(User user)
+    {
+        var rawChallengeToken = GenerateUrlSafeToken(48);
+        var isSetup = user.MfaRequired && !user.MfaEnabled;
+        string? setupSecret = null;
+        string? protectedSetupSecret = null;
+
+        if (isSetup)
+        {
+            setupSecret = TotpMfaService.GenerateSecret();
+            protectedSetupSecret = _mfaProtector.Protect(setupSecret);
+        }
+
+        _db.MfaLoginChallenges.Add(new MfaLoginChallenge
+        {
+            UserId = user.Id,
+            ChallengeTokenHash = HashToken(rawChallengeToken),
+            IsSetup = isSetup,
+            SetupSecretProtected = protectedSetupSecret,
+            ExpiresAt = DateTime.UtcNow.AddMinutes(
+                Math.Clamp(_config.GetValue("MfaSettings:ChallengeExpiryMinutes", 5), 1, 30))
+        });
+
+        await _db.SaveChangesAsync();
+
+        return new LoginResponse
+        {
+            RequiresMfa = true,
+            MfaChallengeToken = rawChallengeToken,
+            MfaSetupRequired = isSetup,
+            MfaSetupSecret = setupSecret,
+            MfaProvisioningUri = setupSecret == null
+                ? null
+                : TotpMfaService.GenerateProvisioningUri("AIGuard", user.Email, setupSecret),
+            User = MapToProfile(user)
+        };
+    }
+
+    private LoginResponse IssueTokens(User user)
+    {
+        var refreshToken = GenerateUrlSafeToken(64);
+        var refreshExpiry = DateTime.UtcNow.AddDays(_config.GetValue("JwtSettings:RefreshExpiryDays", 7));
+        var accessExpiry = DateTime.UtcNow.AddMinutes(_config.GetValue("JwtSettings:ExpiryMinutes", 60));
+
+        _db.RefreshSessions.Add(new RefreshSession
+        {
+            UserId = user.Id,
+            TokenHash = HashToken(refreshToken),
+            TenantCode = user.TenantCode,
+            ExpiresAt = refreshExpiry,
+            IpAddress = Truncate(_http.HttpContext?.Connection.RemoteIpAddress?.ToString(), 100),
+            UserAgent = Truncate(_http.HttpContext?.Request.Headers.UserAgent.ToString(), 500)
+        });
+
+        user.RefreshToken = refreshToken;
+        user.RefreshTokenExpiry = refreshExpiry;
+
+        return new LoginResponse
+        {
+            AccessToken = GenerateJwtToken(user),
+            RefreshToken = refreshToken,
+            ExpiresAt = accessExpiry,
+            User = MapToProfile(user)
+        };
+    }
+
+    private async Task<bool> VerifyMfaCodeAsync(MfaLoginChallenge challenge, string code)
+    {
+        var secretProtected = challenge.IsSetup
+            ? challenge.SetupSecretProtected
+            : challenge.User.MfaSecretProtected;
+
+        if (!string.IsNullOrWhiteSpace(secretProtected))
+        {
+            var secret = _mfaProtector.Unprotect(secretProtected);
+            if (TotpMfaService.VerifyCode(secret, code))
+                return true;
+        }
+
+        if (!challenge.IsSetup && challenge.User.MfaEnabled)
+        {
+            var normalizedCode = NormalizeRecoveryCode(code);
+            var codeHash = HashToken(normalizedCode);
+            var recoveryCode = await _db.MfaRecoveryCodes
+                .FirstOrDefaultAsync(x =>
+                    x.UserId == challenge.UserId &&
+                    x.CodeHash == codeHash &&
+                    x.UsedAt == null);
+            if (recoveryCode != null)
+            {
+                recoveryCode.UsedAt = DateTime.UtcNow;
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private async Task RegisterFailedLoginAsync(User user, DateTime now)

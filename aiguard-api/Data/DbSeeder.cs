@@ -467,4 +467,7 @@ public static class DbSeeder
 
         await db.SaveChangesAsync();
     }
+
+    private static string Hash(string value) =>
+        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
 }
