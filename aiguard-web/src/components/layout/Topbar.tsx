@@ -14,11 +14,11 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 const ROLE_STATUS: Record<string, string> = {
-  PlatformAdmin: 'SaaS operations đang hoạt động',
-  TenantOwner: 'Tenant workspace đã sẵn sàng',
-  SecurityAdmin: 'DLP protection đang hoạt động',
-  DepartmentManager: 'Duyệt yêu cầu phòng ban',
-  Employee: 'My Usage portal đang bảo vệ'
+  PlatformAdmin: 'Nền tảng SaaS đang hoạt động',
+  TenantOwner: 'Không gian doanh nghiệp đã sẵn sàng',
+  SecurityAdmin: 'Bảo vệ DLP đang hoạt động',
+  DepartmentManager: 'Đang theo dõi phê duyệt phòng ban',
+  Employee: 'Cổng My Usage đang bảo vệ'
 };
 
 export const Topbar: React.FC = () => {
@@ -92,17 +92,6 @@ export const Topbar: React.FC = () => {
                 <User size={16} />
                 Hồ sơ cá nhân
               </Link>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowProfileMenu(false);
-                  signOut();
-                }}
-                className="profile-menu-item danger"
-              >
-                <LogOut size={16} />
-                Đăng xuất
-              </button>
             </div>
           )}
         </div>

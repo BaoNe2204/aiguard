@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { Lock, Cpu, History, Plus, Search, Save, X, RotateCcw } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
+import { Plus, Save, X, RotateCcw } from 'lucide-react';
 import { DataTable } from '../components/ui/DataTable';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { policiesApi, type SecurityPolicyResponse, type PolicyVersionResponse, type WhitelistBlacklistResponse } from '../api/policies';
@@ -8,7 +8,6 @@ import { useLanguage } from '../contexts/LanguageContext';
 
 export const Policies: React.FC = () => {
   const location = useLocation();
-  const navigate = useNavigate();
   const { t, locale } = useLanguage();
   const activeTab = location.pathname.endsWith('/detectors') ? 'detectors'
     : location.pathname.endsWith('/whitelist-blacklist') ? 'whitelist'
@@ -130,23 +129,7 @@ export const Policies: React.FC = () => {
           <p className="subtitle">{t('Configure DLP triggers, detector scoring thresholds, and rollback policies', 'Cấu hình điều kiện DLP, ngưỡng điểm bộ phát hiện và khôi phục phiên bản chính sách')}</p>
         </div>
       </div>
-
-      <div className="tabs-container">
-        <button className={`tab-btn ${activeTab === 'departments' ? 'active' : ''}`} onClick={() => navigate('/app/policies/rules')}>
-          <Lock size={16} /> {t('Department Policies', 'Chính sách phòng ban')}
-        </button>
-        <button className={`tab-btn ${activeTab === 'detectors' ? 'active' : ''}`} onClick={() => navigate('/app/policies/detectors')}>
-          <Cpu size={16} /> {t('Detector Settings', 'Cấu hình bộ phát hiện')}
-        </button>
-        <button className={`tab-btn ${activeTab === 'whitelist' ? 'active' : ''}`} onClick={() => navigate('/app/policies/whitelist-blacklist')}>
-          <Search size={16} /> {t('Whitelist & Blacklist', 'Danh sách trắng và đen')}
-        </button>
-        <button className={`tab-btn ${activeTab === 'versions' ? 'active' : ''}`} onClick={() => navigate('/app/policies/versions')}>
-          <History size={16} /> {t('Policy Versions', 'Phiên bản chính sách')}
-        </button>
-      </div>
-
-      <div className="tab-content">
+<div className="tab-content">
         {activeTab === 'departments' && (
           policiesLoading ? <LoadingSpinner text={t('Loading policies...', 'Đang tải chính sách...')} /> : (
             <div className="departments-tab flex flex-col gap-6">

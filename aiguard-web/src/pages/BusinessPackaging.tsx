@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import {
-  Check, DollarSign, Layers, PackageCheck, Edit, Plus, Save, X
+  Check, DollarSign, Edit, Layers, PackageCheck, Plus, Save, X
 } from 'lucide-react';
 import { platformApi } from '../api/platform';
 import type { ProductPlanResponse } from '../api/platform';
