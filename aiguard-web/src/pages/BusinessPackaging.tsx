@@ -30,8 +30,8 @@ export const BusinessPackaging: React.FC = () => {
   const [selectedPlanId, setSelectedPlanId] = useState<string>('');
   const [users, setUsers] = useState(120);
   const [deployment, setDeployment] = useState<DeploymentModel>('saas');
-  const [agentAddon] = useState(true);
-  const [agentCount] = useState(8);
+  const agentAddon = true;
+  const agentCount = 8;
 
   const [loading, setLoading] = useState(false);
   const [editingPlan, setEditingPlan] = useState<ProductPlanResponse | null>(null);

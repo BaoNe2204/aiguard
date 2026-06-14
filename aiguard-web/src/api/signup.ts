@@ -8,6 +8,7 @@ export interface PublicTrialSignupRequest {
   emailDomain: string;
   ownerName: string;
   ownerEmail: string;
+  ownerPassword: string;
   ownerPhone?: string;
   industry?: string;
   companySize?: string;

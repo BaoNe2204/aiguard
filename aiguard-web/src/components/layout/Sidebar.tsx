@@ -47,6 +47,7 @@ const defaultOpenMenus: Record<string, boolean> = {
 
 export const Sidebar: React.FC = () => {
   const { user } = useAuth();
+
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>(defaultOpenMenus);
 
   const toggleMenu = (key: string) => {
@@ -206,6 +207,10 @@ export const Sidebar: React.FC = () => {
     }
   }, [user?.role]);
 
+
+  const roleLabel = ROLE_LABELS[user?.role || ''] || 'Người dùng';
+  const tenantLabel = localStorage.getItem('aiguard_tenant_code') || user?.departmentName || 'AIGuard Platform';
+
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
@@ -259,6 +264,6 @@ export const Sidebar: React.FC = () => {
           );
         })}
       </nav>
-    </aside>
+  </aside>
   );
 };

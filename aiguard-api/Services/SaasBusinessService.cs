@@ -304,10 +304,12 @@ public class SaasBusinessService : ISaasBusinessService
         {
             FullName = tenant.OwnerName,
             Email = tenant.OwnerEmail,
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(_security.GenerateSecret()),
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.OwnerPassword),
             Role = "TenantOwner",
-            IsActive = false,
-            MfaRequired = true,
+            IsActive = true,
+            MfaRequired = false,
+            EmailVerifiedAt = now,
+            PasswordChangedAt = now,
             TenantCode = code
         };
         _db.Users.Add(owner);
@@ -368,35 +370,18 @@ public class SaasBusinessService : ISaasBusinessService
             EnrollmentTokenId = enrollment.Id
         });
 
-        var verificationToken = _security.GenerateSecret();
-        _db.TenantSignupVerificationTokens.Add(new TenantSignupVerificationToken
-        {
-            TenantId = tenant.Id,
-            UserId = owner.Id,
-            TenantCode = code,
-            TokenHash = Hash(verificationToken),
-            ExpiresAt = now.AddHours(48)
-        });
-
         await _db.SaveChangesAsync();
         await transaction.CommitAsync();
-
-        await _emailSender.SendSignupVerificationAsync(
-            owner.Email,
-            code,
-            owner.FullName,
-            SignupVerificationUrl(verificationToken),
-            now.AddHours(48));
 
         return new PublicTrialSignupResponse
         {
             TenantCode = code,
             CompanyName = tenant.CompanyName,
             OwnerEmail = tenant.OwnerEmail,
-            Status = "PendingEmailVerification",
+            Status = "TrialActive",
             TrialEndsAt = expires,
-            VerificationToken = verificationToken,
-            Message = "Tenant trial created. Verify the owner email and set the first password before signing in."
+            VerificationToken = null,
+            Message = "Tenant trial created. You can sign in immediately with the owner email and password."
         };
     }
 

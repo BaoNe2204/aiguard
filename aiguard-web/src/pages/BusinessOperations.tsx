@@ -1,15 +1,8 @@
-import React, { useEffect, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import {
-  BadgeCheck,
-  Building2,
-  ClipboardList,
-  DollarSign,
-  Headphones,
-  KeyRound,
-  Plus,
-  ReceiptText,
-  Users
+  BadgeCheck, Building2, ClipboardList, DollarSign, FileSignature, Headphones,
+  KeyRound, PackageCheck, Plus, ReceiptText, Rocket, Settings, Users
 } from 'lucide-react';
 import { platformApi } from '../api/platform';
 import type {
@@ -171,12 +164,38 @@ export const BusinessOperations: React.FC = () => {
 
       {loading && <div className="p-8 text-center text-gray-500">Đang tải dữ liệu...</div>}
 
-      {!loading && activeView === 'dashboard' && dashboard && <DashboardView dashboard={dashboard} />}
-      {!loading && activeView === 'orders' && <OrdersView orders={orders} onReload={loadData} />}
-      {!loading && activeView === 'licenses' && <LicensesView licenses={licenses} onReload={loadData} />}
-      {!loading && activeView === 'customers' && <CustomersView customers={customers} onReload={loadData} />}
-      {!loading && activeView === 'invoices' && <InvoicesView invoices={invoices} onReload={loadData} />}
-      {!loading && activeView === 'support' && <SupportView tickets={tickets} onReload={loadData} />}
+      {!loading && activeView === 'dashboard' && dashboard && (
+        <section className="bizops-metrics">
+          <MetricCard icon={<Building2 />} label="Tổng khách hàng" value={String(dashboard.totalTenants)} tone="blue" />
+          <MetricCard icon={<Users />} label="Đang Trial" value={String(dashboard.trialTenants)} tone="amber" />
+          <MetricCard icon={<BadgeCheck />} label="Đã trả phí" value={String(dashboard.paidTenants)} tone="purple" />
+          <MetricCard icon={<KeyRound />} label="License Active" value={String(dashboard.activeSubscriptions)} tone="green" />
+          <MetricCard icon={<ClipboardList />} label="Đơn hàng chờ duyệt" value={String(dashboard.pendingOrders)} tone="blue" />
+          <MetricCard icon={<ReceiptText />} label="Thanh toán chờ xử lý" value={String(dashboard.pendingPayments)} tone="amber" />
+          <MetricCard icon={<Headphones />} label="Ticket đang mở" value={String(dashboard.openTickets)} tone="red" />
+          <MetricCard icon={<DollarSign size={18} />} label="Doanh thu ghi nhận" value={formatVnd(dashboard.recognizedRevenue)} tone="green" />
+        </section>
+      )}
+
+      {!loading && activeView === 'orders' && (
+        <OrdersView orders={orders} onReload={loadData} />
+      )}
+
+      {!loading && activeView === 'licenses' && (
+        <LicensesView licenses={licenses} onReload={loadData} />
+      )}
+
+      {!loading && activeView === 'customers' && (
+        <CustomersView customers={customers} onReload={loadData} />
+      )}
+
+      {!loading && activeView === 'invoices' && (
+        <InvoicesView invoices={invoices} onReload={loadData} />
+      )}
+
+      {!loading && activeView === 'support' && (
+        <SupportView tickets={tickets} onReload={loadData} />
+      )}
 
       {!loading && activeView === 'onboarding' && (
         <EmptyState message="Vui lòng chọn khách hàng trong mục Khách hàng / Tenant CRM ở sidebar để xem Onboarding Checklist." />
@@ -274,7 +293,7 @@ const OrdersView: React.FC<{ orders: OrderResponse[]; onReload: () => void }> = 
   );
 };
 
-const LicensesView: React.FC<{ licenses: LicenseResponse[]; onReload: () => void }> = ({ licenses, onReload }) => {
+const LicensesView: React.FC<{ licenses: LicenseResponse[], onReload: () => void }> = ({ licenses, onReload }) => {
   const toggleLock = async (id: string, currentStatus: string) => {
     await platformApi.updateLicenseStatus(id, currentStatus === 'Active' ? 'Suspended' : 'Active');
     await onReload();
