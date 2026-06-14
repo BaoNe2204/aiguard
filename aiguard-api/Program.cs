@@ -172,7 +172,7 @@ using (var scope = app.Services.CreateScope())
             db, app.Logger, app.Lifetime.ApplicationStopping);
         await db.Database.MigrateAsync();
     }
-    await DbSeeder.SeedAsync(db);
+    await DbSeeder.SeedAsync(db, app.Configuration);
 }
 
 app.Run();

@@ -2,6 +2,7 @@ bin/
 obj/
 dist/
 build/
+aiguard-api/codex-build-check/
 .vs/
 
 .env

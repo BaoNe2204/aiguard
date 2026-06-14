@@ -6,8 +6,10 @@ namespace aiguard_api.Data;
 
 public static class DbSeeder
 {
-    public static async Task SeedAsync(AiguardDbContext db)
+    public static async Task SeedAsync(AiguardDbContext db, IConfiguration configuration)
     {
+        await EnsurePlatformAdminAsync(db, configuration);
+
         if (db.Departments.Any()) return; // Already seeded
 
         // ── Departments ──
@@ -257,6 +259,47 @@ public static class DbSeeder
                 PolicyVersion = "p-20260601"
             }
         );
+
+        await db.SaveChangesAsync();
+    }
+
+    private static async Task EnsurePlatformAdminAsync(AiguardDbContext db, IConfiguration configuration)
+    {
+        var platformEmail = configuration["BootstrapPlatformAdmin:Email"]?.Trim().ToLowerInvariant();
+        var platformPassword = configuration["BootstrapPlatformAdmin:Password"];
+        if (string.IsNullOrWhiteSpace(platformEmail) ||
+            string.IsNullOrWhiteSpace(platformPassword) ||
+            platformPassword.Length < 12)
+        {
+            return;
+        }
+
+        var platformUser = await db.Users.IgnoreQueryFilters().FirstOrDefaultAsync(x =>
+            x.TenantCode == "PLATFORM" && x.Email == platformEmail);
+        if (platformUser == null)
+        {
+            db.Users.Add(new User
+            {
+                FullName = "AIGuard Platform Owner",
+                Email = platformEmail,
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(platformPassword),
+                Role = "PlatformAdmin",
+                TenantCode = "PLATFORM",
+                IsActive = true,
+                MfaRequired = false
+            });
+        }
+        else
+        {
+            platformUser.Role = "PlatformAdmin";
+            platformUser.TenantCode = "PLATFORM";
+            platformUser.IsActive = true;
+            platformUser.MfaRequired = false;
+            if (!BCrypt.Net.BCrypt.Verify(platformPassword, platformUser.PasswordHash))
+            {
+                platformUser.PasswordHash = BCrypt.Net.BCrypt.HashPassword(platformPassword);
+            }
+        }
 
         await db.SaveChangesAsync();
     }

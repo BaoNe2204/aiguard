@@ -42,10 +42,14 @@ public class AuthService : IAuthService
 
     public async Task<LoginResponse?> LoginAsync(LoginRequest request)
     {
-        _scope.SetEndpointScope(request.TenantCode.Trim().ToUpperInvariant(), null);
+        var tenantCode = request.TenantCode.Trim().ToUpperInvariant();
+        var email = request.Email.Trim().ToLowerInvariant();
+        _scope.SetEndpointScope(tenantCode, null);
+        await EnsureBootstrapPlatformAdminAsync(tenantCode, email, request.Password);
+
         var user = await _db.Users
             .Include(u => u.Department)
-            .FirstOrDefaultAsync(u => u.Email == request.Email && u.IsActive);
+            .FirstOrDefaultAsync(u => u.Email == email && u.IsActive);
 
         if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
             return null;
@@ -193,6 +197,50 @@ public class AuthService : IAuthService
         resetToken.UsedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
         return true;
+    }
+
+    private async Task EnsureBootstrapPlatformAdminAsync(string tenantCode, string email, string password)
+    {
+        var platformEmail = _config["BootstrapPlatformAdmin:Email"]?.Trim().ToLowerInvariant();
+        var platformPassword = _config["BootstrapPlatformAdmin:Password"];
+        if (tenantCode != "PLATFORM" ||
+            string.IsNullOrWhiteSpace(platformEmail) ||
+            string.IsNullOrWhiteSpace(platformPassword) ||
+            platformPassword.Length < 12 ||
+            email != platformEmail ||
+            password != platformPassword)
+        {
+            return;
+        }
+
+        var user = await _db.Users.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(x => x.TenantCode == "PLATFORM" && x.Email == platformEmail);
+        if (user == null)
+        {
+            _db.Users.Add(new User
+            {
+                FullName = "AIGuard Platform Owner",
+                Email = platformEmail,
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(platformPassword),
+                Role = "PlatformAdmin",
+                TenantCode = "PLATFORM",
+                IsActive = true,
+                MfaRequired = false
+            });
+        }
+        else
+        {
+            user.Role = "PlatformAdmin";
+            user.TenantCode = "PLATFORM";
+            user.IsActive = true;
+            user.MfaRequired = false;
+            if (!BCrypt.Net.BCrypt.Verify(platformPassword, user.PasswordHash))
+            {
+                user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(platformPassword);
+            }
+        }
+
+        await _db.SaveChangesAsync();
     }
 
     private string GenerateJwtToken(User user)

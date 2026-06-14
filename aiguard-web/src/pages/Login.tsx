@@ -24,7 +24,10 @@ export const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   const goToHome = (role: string) => {
-    navigate(role === 'Employee' ? '/app/my-usage/logs' : '/app/dashboard');
+    if (role === 'Employee') navigate('/app/my-usage/logs');
+    else if (role === 'PlatformAdmin') navigate('/app/business/operations');
+    else if (role === 'TenantOwner') navigate('/app/business/onboarding');
+    else navigate('/app/dashboard');
   };
 
   const handleLogin = async (event: React.FormEvent) => {
