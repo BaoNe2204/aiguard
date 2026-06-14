@@ -208,9 +208,6 @@ export const Sidebar: React.FC = () => {
   }, [user?.role]);
 
 
-  const roleLabel = ROLE_LABELS[user?.role || ''] || 'Người dùng';
-  const tenantLabel = localStorage.getItem('aiguard_tenant_code') || user?.departmentName || 'AIGuard Platform';
-
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
