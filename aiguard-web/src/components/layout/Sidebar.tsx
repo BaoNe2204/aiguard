@@ -15,7 +15,6 @@ import {
   Laptop,
   LayoutDashboard,
   Lock,
-  LogOut,
   PackageCheck,
   ReceiptText,
   Rocket,
@@ -55,7 +54,7 @@ const defaultOpenMenus: Record<string, boolean> = {
 };
 
 export const Sidebar: React.FC = () => {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
 
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>(defaultOpenMenus);
 
@@ -213,9 +212,6 @@ export const Sidebar: React.FC = () => {
   }, [user?.role]);
 
 
-  const userInitials = user?.fullName
-    ? user.fullName.split(' ').map(name => name[0]).join('').substring(0, 2).toUpperCase()
-    : 'AG';
   const roleLabel = ROLE_LABELS[user?.role || ''] || 'Người dùng';
   const tenantLabel = localStorage.getItem('aiguard_tenant_code') || user?.departmentName || 'AIGuard Platform';
 
@@ -278,21 +274,6 @@ export const Sidebar: React.FC = () => {
           );
         })}
       </nav>
-
-      <div className="sidebar-footer">
-        <div className="user-profile">
-          <div className="user-avatar">{userInitials}</div>
-          <div className="user-info">
-
-            <span className="user-name">{user?.fullName || 'AIGuard User'}</span>
-            <span className="user-role">{roleLabel}</span>
-          </div>
-        </div>
-        <button className="btn-logout" onClick={logout} title="Đăng xuất">
-
-          <LogOut size={18} />
-        </button>
-      </div>
-    </aside>
+  </aside>
   );
 };

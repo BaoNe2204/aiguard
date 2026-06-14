@@ -59,6 +59,7 @@ public class PublicTrialSignupRequest
     [Required, MaxLength(255)] public string EmailDomain { get; set; } = string.Empty;
     [Required] public string OwnerName { get; set; } = string.Empty;
     [Required, EmailAddress] public string OwnerEmail { get; set; } = string.Empty;
+    [Required, MinLength(8)] public string OwnerPassword { get; set; } = string.Empty;
     public string? OwnerPhone { get; set; }
     public string? Industry { get; set; }
     public string? CompanySize { get; set; }

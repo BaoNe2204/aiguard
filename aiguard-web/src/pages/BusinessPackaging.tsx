@@ -1,9 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
 import {
-  BarChart3, Briefcase, CalendarClock, Check, CheckCircle2, ClipboardList,
-  CreditCard, Crown, DollarSign, FileText, Layers, PackageCheck, PlayCircle,
-  Rocket, ServerCog, ShieldCheck, Sparkles, Target, Users, Edit, Plus, Save, X
+  Check, DollarSign, Layers, PackageCheck, Edit, Plus, Save, X
 } from 'lucide-react';
 import { platformApi } from '../api/platform';
 import type { ProductPlanResponse } from '../api/platform';
@@ -33,8 +30,8 @@ export const BusinessPackaging: React.FC = () => {
   const [selectedPlanId, setSelectedPlanId] = useState<string>('');
   const [users, setUsers] = useState(120);
   const [deployment, setDeployment] = useState<DeploymentModel>('saas');
-  const [agentAddon, setAgentAddon] = useState(true);
-  const [agentCount, setAgentCount] = useState(8);
+  const agentAddon = true;
+  const agentCount = 8;
 
   const [loading, setLoading] = useState(false);
   const [editingPlan, setEditingPlan] = useState<ProductPlanResponse | null>(null);

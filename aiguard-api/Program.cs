@@ -9,6 +9,7 @@ using aiguard_api.Services;
 using aiguard_api.Workers;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Data.SqlClient;
 using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -27,7 +28,13 @@ builder.Services.AddDbContext<AiguardDbContext>(options =>
     if (builder.Environment.IsEnvironment("Testing"))
         options.UseSqlite(connectionString);
     else
-        options.UseSqlServer(connectionString);
+    {
+        var sqlConnection = new SqlConnectionStringBuilder(connectionString)
+        {
+            MultipleActiveResultSets = false
+        };
+        options.UseSqlServer(sqlConnection.ConnectionString);
+    }
 });
 
 // ── Authentication (JWT) ──

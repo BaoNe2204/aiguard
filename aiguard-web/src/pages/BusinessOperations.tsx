@@ -1,9 +1,8 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
-  AlertCircle, BadgeCheck, Building2, CalendarClock, CheckCircle2, ClipboardCheck, ClipboardList,
-  Clock, Copy, DollarSign, Download, FileSignature, FileText, Headphones, KeyRound, Lock, PackageCheck, Plus,
-  ReceiptText, RefreshCw, Rocket, Search, Settings, TicketCheck, Unlock, Upload, Users, XCircle
+  BadgeCheck, Building2, ClipboardList, DollarSign, FileSignature, Headphones,
+  KeyRound, PackageCheck, Plus, ReceiptText, Rocket, Settings, Users
 } from 'lucide-react';
 import { platformApi } from '../api/platform';
 import type { BusinessDashboardResponse, OrderResponse, LicenseResponse, TenantResponse, InvoiceResponse, TicketResponse } from '../api/platform';
@@ -109,7 +108,6 @@ export const BusinessOperations: React.FC = () => {
   const [customers, setCustomers] = useState<TenantResponse[]>([]);
   const [tickets, setTickets] = useState<TicketResponse[]>([]);
   const [invoices, setInvoices] = useState<InvoiceResponse[]>([]);
-  const [copiedValue, setCopiedValue] = useState('');
 
   const loadData = async () => {
     setLoading(true);
@@ -143,14 +141,6 @@ export const BusinessOperations: React.FC = () => {
   useEffect(() => {
     loadData();
   }, [activeView]);
-
-  const copyText = (value: string) => {
-    if (!navigator.clipboard) return;
-    navigator.clipboard.writeText(value).then(() => {
-      setCopiedValue(value);
-      window.setTimeout(() => setCopiedValue(''), 1300);
-    });
-  };
 
   return (
     <div className="bizops-page">
@@ -194,7 +184,7 @@ export const BusinessOperations: React.FC = () => {
       )}
 
       {!loading && activeView === 'licenses' && (
-        <LicensesView licenses={licenses} copiedValue={copiedValue} onCopy={copyText} onReload={loadData} />
+        <LicensesView licenses={licenses} onReload={loadData} />
       )}
 
       {!loading && activeView === 'customers' && (
@@ -303,7 +293,7 @@ const OrdersView: React.FC<{ orders: OrderResponse[], onReload: () => void }> = 
   );
 };
 
-const LicensesView: React.FC<{ licenses: LicenseResponse[], copiedValue: string, onCopy: (v: string) => void, onReload: () => void }> = ({ licenses, copiedValue, onCopy, onReload }) => {
+const LicensesView: React.FC<{ licenses: LicenseResponse[], onReload: () => void }> = ({ licenses, onReload }) => {
   const toggleLock = async (id: string, currentStatus: string) => {
     try {
       const nextStatus = currentStatus === 'Active' ? 'Suspended' : 'Active';

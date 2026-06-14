@@ -12,6 +12,8 @@ export const Signup: React.FC = () => {
     emailDomain: '',
     ownerName: '',
     ownerEmail: '',
+    ownerPassword: '',
+    confirmPassword: '',
     ownerPhone: '',
     companySize: '10-50',
     productPlanCode: 'STARTER',
@@ -27,10 +29,27 @@ export const Signup: React.FC = () => {
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError('');
+    if (form.ownerPassword !== form.confirmPassword) {
+      setError('Mật khẩu xác nhận không khớp');
+      return;
+    }
+    if (form.ownerPassword.length < 8) {
+      setError('Mật khẩu phải có ít nhất 8 ký tự');
+      return;
+    }
     setLoading(true);
     try {
       const response = await signupApi.registerTrial({
-        ...form,
+        companyName: form.companyName,
+        legalName: form.legalName,
+        taxCode: form.taxCode,
+        emailDomain: form.emailDomain,
+        ownerName: form.ownerName,
+        ownerEmail: form.ownerEmail,
+        ownerPassword: form.ownerPassword,
+        ownerPhone: form.ownerPhone,
+        companySize: form.companySize,
+        productPlanCode: form.productPlanCode,
         trialDays: Number(form.trialDays),
       });
       setResult(response);
@@ -101,6 +120,12 @@ export const Signup: React.FC = () => {
                 <label>Email người đại diện
                   <input required type="email" value={form.ownerEmail} onChange={e => update('ownerEmail', e.target.value)} placeholder="owner@company.com" />
                 </label>
+                <label>Mật khẩu tài khoản chủ
+                  <input required minLength={8} type="password" value={form.ownerPassword} onChange={e => update('ownerPassword', e.target.value)} placeholder="Tối thiểu 8 ký tự" />
+                </label>
+                <label>Nhập lại mật khẩu
+                  <input required minLength={8} type="password" value={form.confirmPassword} onChange={e => update('confirmPassword', e.target.value)} />
+                </label>
                 <label>Số điện thoại
                   <input value={form.ownerPhone} onChange={e => update('ownerPhone', e.target.value)} />
                 </label>
@@ -129,22 +154,17 @@ export const Signup: React.FC = () => {
                 <Building2 size={34} />
                 <h2>Tenant đã được tạo</h2>
                 <p>
-                  Tenant <strong>{result?.tenantCode}</strong> đã ở trạng thái chờ xác minh email.
-                  Sau khi xác minh, người đại diện sẽ đăng nhập bằng vai trò TenantOwner.
+                  Tenant <strong>{result?.tenantCode}</strong> đã được kích hoạt.
+                  Người đại diện có thể đăng nhập ngay bằng email và mật khẩu vừa tạo.
                 </p>
                 <div className="signup-result-box">
                   <span>Công ty: <strong>{result?.companyName}</strong></span>
                   <span>Tài khoản chủ: <strong>{result?.ownerEmail}</strong></span>
                   <span>Trial đến: <strong>{result?.trialEndsAt ? new Date(result.trialEndsAt).toLocaleDateString('vi-VN') : ''}</strong></span>
                 </div>
-                {result?.verificationToken ? (
-                  <Link className="btn-primary" to={`/verify-signup?token=${encodeURIComponent(result.verificationToken)}`}>
-                    Xác minh email và đặt mật khẩu
-                  </Link>
-                ) : (
-                  <p className="signup-note">Liên kết xác minh đã được gửi đến email người đại diện.</p>
-                )}
-                <Link to="/login" className="btn-secondary">Về trang đăng nhập</Link>
+                <Link className="btn-primary" to={`/login?tenant=${encodeURIComponent(result.tenantCode)}`}>
+                  Đăng nhập ngay
+                </Link>
               </div>
             )}
           </div>

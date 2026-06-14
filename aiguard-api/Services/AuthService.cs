@@ -51,8 +51,8 @@ public class AuthService : IAuthService
 
     public async Task<LoginResponse?> LoginAsync(LoginRequest request)
     {
-        var tenantCode = request.TenantCode.Trim().ToUpperInvariant();
         var email = request.Email.Trim().ToLowerInvariant();
+        var tenantCode = await ResolveLoginTenantAsync(request.TenantCode, email);
         _scope.SetEndpointScope(tenantCode, null);
         await EnsureBootstrapPlatformAdminAsync(tenantCode, email, request.Password);
 
@@ -450,6 +450,26 @@ public class AuthService : IAuthService
             .Select(x => x.Status)
             .FirstOrDefaultAsync();
         return status is not ("Suspended" or "Expired" or "Cancelled");
+    }
+
+    private async Task<string> ResolveLoginTenantAsync(string? requestedTenantCode, string email)
+    {
+        var platformEmail = _config["BootstrapPlatformAdmin:Email"]?.Trim().ToLowerInvariant();
+        if (string.Equals(email, platformEmail, StringComparison.OrdinalIgnoreCase))
+            return "PLATFORM";
+
+        var normalizedTenant = NormalizeTenant(requestedTenantCode ?? "DEFAULT");
+        if (normalizedTenant != "DEFAULT")
+            return normalizedTenant;
+
+        var matchingTenants = await _db.Users.IgnoreQueryFilters()
+            .Where(x => x.Email == email && x.IsActive)
+            .Select(x => x.TenantCode)
+            .Distinct()
+            .Take(2)
+            .ToListAsync();
+
+        return matchingTenants.Count == 1 ? matchingTenants[0] : normalizedTenant;
     }
 
     private string GenerateJwtToken(User user)

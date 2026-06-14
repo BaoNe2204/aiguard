@@ -871,6 +871,26 @@ input:checked + .slider:before {
   margin-bottom: 32px;
 }
 
+.login-brand-link {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  color: inherit;
+  text-decoration: none;
+  border-radius: 18px;
+  outline: none;
+  transition: var(--transition-smooth);
+}
+
+.login-brand-link:hover,
+.login-brand-link:focus-visible {
+  transform: translateY(-2px);
+}
+
+.login-brand-link:focus-visible {
+  box-shadow: 0 0 0 3px var(--color-primary-glow);
+}
+
 .login-logo {
   display: inline-flex;
   padding: 12px;
@@ -879,6 +899,14 @@ input:checked + .slider:before {
   border: 1px solid rgba(99, 102, 241, 0.15);
   margin-bottom: 16px;
   filter: drop-shadow(0 0 12px rgba(99, 102, 241, 0.3));
+  transition: var(--transition-smooth);
+}
+
+.login-brand-link:hover .login-logo,
+.login-brand-link:focus-visible .login-logo {
+  background: rgba(99, 102, 241, 0.16);
+  border-color: rgba(99, 102, 241, 0.35);
+  filter: drop-shadow(0 0 18px rgba(99, 102, 241, 0.45));
 }
 
 .login-card-header h1 {
