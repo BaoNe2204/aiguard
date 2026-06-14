@@ -18,7 +18,7 @@ export const Login: React.FC = () => {
   const [searchParams] = useSearchParams();
   const { login, verifyMfa } = useAuth();
   const { t } = useLanguage();
-  const [tenantCode, setTenantCode] = useState(
+  const [tenantCode] = useState(
     searchParams.get('tenant') ||
     localStorage.getItem('aiguard_tenant_code') ||
     'DEFAULT'

@@ -15,7 +15,6 @@ import {
   Laptop,
   LayoutDashboard,
   Lock,
-  LogOut,
   PackageCheck,
   ReceiptText,
   Rocket,
@@ -35,14 +34,6 @@ interface SidebarItem {
   subItems?: { title: string; path: string }[];
 }
 
-const ROLE_LABELS: Record<string, string> = {
-  PlatformAdmin: 'Quản trị nền tảng',
-  TenantOwner: 'Chủ doanh nghiệp',
-  SecurityAdmin: 'Quản trị bảo mật',
-  DepartmentManager: 'Trưởng phòng ban',
-  Employee: 'Nhân viên'
-};
-
 const defaultOpenMenus: Record<string, boolean> = {
   business: true,
   endpoints: true,
@@ -55,15 +46,12 @@ const defaultOpenMenus: Record<string, boolean> = {
 };
 
 export const Sidebar: React.FC = () => {
-  const { user, logout } = useAuth();
-
+  const { user } = useAuth();
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>(defaultOpenMenus);
-
 
   const toggleMenu = (key: string) => {
     setOpenMenus((previous) => ({ ...previous, [key]: !previous[key] }));
   };
-
 
   const menuItems = useMemo<SidebarItem[]>(() => {
     switch (user?.role) {
@@ -97,11 +85,14 @@ export const Sidebar: React.FC = () => {
           {
             key: 'governance',
             title: 'Quản trị doanh nghiệp',
-            description: 'Người dùng và thiết lập',
+            description: 'Người dùng, sự cố và tích hợp',
             icon: <Settings size={18} />,
             subItems: [
-              { title: 'Người dùng & phòng ban', path: '/app/governance/identity' },
               { title: 'Sức khỏe hệ thống', path: '/app/governance/health' },
+              { title: 'Người dùng & phòng ban', path: '/app/governance/identity' },
+              { title: 'Chặn nhầm', path: '/app/governance/false-positives' },
+              { title: 'Sự cố', path: '/app/governance/incidents' },
+              { title: 'Policy Rule Builder', path: '/app/governance/rules' },
               { title: 'Lưu trữ & SIEM', path: '/app/governance/settings' }
             ]
           },
@@ -117,9 +108,11 @@ export const Sidebar: React.FC = () => {
             description: 'Máy trạm, log và website AI',
             icon: <Laptop size={18} />,
             subItems: [
+              { title: 'Tổng quan thiết bị', path: '/app/endpoints' },
               { title: 'Thiết bị', path: '/app/endpoints/devices' },
+              { title: 'Website AI', path: '/app/endpoints/ai-websites' },
               { title: 'Nhật ký DLP', path: '/app/endpoints/events' },
-              { title: 'Website AI', path: '/app/endpoints/ai-websites' }
+              { title: 'Triển khai thiết bị', path: '/app/endpoints/deployment' }
             ]
           },
           {
@@ -169,7 +162,7 @@ export const Sidebar: React.FC = () => {
               { title: 'Sức khỏe hệ thống', path: '/app/governance/health' },
               { title: 'Chặn nhầm', path: '/app/governance/false-positives' },
               { title: 'Sự cố', path: '/app/governance/incidents' },
-              { title: 'Policy Builder', path: '/app/governance/rules' }
+              { title: 'Policy Rule Builder', path: '/app/governance/rules' }
             ]
           },
           {
@@ -179,7 +172,8 @@ export const Sidebar: React.FC = () => {
             icon: <History size={18} />,
             subItems: [
               { title: 'Nhật ký kiểm toán', path: '/app/audit/logs' },
-              { title: 'Lô neo Blockchain', path: '/app/blockchain/batches' }
+              { title: 'Lô neo Blockchain', path: '/app/blockchain/batches' },
+              { title: 'Worker kiểm toán', path: '/app/audit/worker' }
             ]
           }
         ];
@@ -212,13 +206,6 @@ export const Sidebar: React.FC = () => {
     }
   }, [user?.role]);
 
-
-  const userInitials = user?.fullName
-    ? user.fullName.split(' ').map(name => name[0]).join('').substring(0, 2).toUpperCase()
-    : 'AG';
-  const roleLabel = ROLE_LABELS[user?.role || ''] || 'Người dùng';
-  const tenantLabel = localStorage.getItem('aiguard_tenant_code') || user?.departmentName || 'AIGuard Platform';
-
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
@@ -227,12 +214,6 @@ export const Sidebar: React.FC = () => {
           <span className="logo-text">AIGuard</span>
         </div>
         <span className="logo-subtitle">Control Tower</span>
-      </div>
-
-      <div className="sidebar-role-card">
-        <span className="role-eyebrow">Không gian làm việc</span>
-        <strong>{roleLabel}</strong>
-        <small>{tenantLabel}</small>
       </div>
 
       <nav className="sidebar-nav" aria-label="Điều hướng chính">
@@ -278,21 +259,6 @@ export const Sidebar: React.FC = () => {
           );
         })}
       </nav>
-
-      <div className="sidebar-footer">
-        <div className="user-profile">
-          <div className="user-avatar">{userInitials}</div>
-          <div className="user-info">
-
-            <span className="user-name">{user?.fullName || 'AIGuard User'}</span>
-            <span className="user-role">{roleLabel}</span>
-          </div>
-        </div>
-        <button className="btn-logout" onClick={logout} title="Đăng xuất">
-
-          <LogOut size={18} />
-        </button>
-      </div>
     </aside>
   );
 };

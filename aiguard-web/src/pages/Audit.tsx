@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { History, Database, Activity, RefreshCw, CheckCircle, XCircle } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
+import { RefreshCw, CheckCircle, XCircle } from 'lucide-react';
 import { DataTable } from '../components/ui/DataTable';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { Pagination } from '../components/ui/Pagination';
@@ -9,7 +9,6 @@ import { useLanguage } from '../contexts/LanguageContext';
 
 export const Audit: React.FC = () => {
   const location = useLocation();
-  const navigate = useNavigate();
   const { t, locale } = useLanguage();
   const activeTab = location.pathname.endsWith('/batches') ? 'blockchain'
     : location.pathname.endsWith('/worker') ? 'worker'
@@ -77,20 +76,7 @@ export const Audit: React.FC = () => {
           <p className="subtitle">{t('Verify database integrity using EVM smart contracts anchor batches', 'Xác minh tính toàn vẹn dữ liệu bằng các lô hash neo trên hợp đồng thông minh EVM')}</p>
         </div>
       </div>
-
-      <div className="tabs-container">
-        <button className={`tab-btn ${activeTab === 'auditLogs' ? 'active' : ''}`} onClick={() => navigate('/app/audit/logs')}>
-          <History size={16} /> {t('System Audit Logs', 'Nhật ký kiểm toán')}
-        </button>
-        <button className={`tab-btn ${activeTab === 'blockchain' ? 'active' : ''}`} onClick={() => navigate('/app/blockchain/batches')}>
-          <Database size={16} /> {t('Blockchain Batches', 'Lô neo Blockchain')}
-        </button>
-        <button className={`tab-btn ${activeTab === 'worker' ? 'active' : ''}`} onClick={() => navigate('/app/audit/worker')}>
-          <Activity size={16} /> {t('Anchor Monitor', 'Giám sát tiến trình neo')}
-        </button>
-      </div>
-
-      <div className="tab-content">
+<div className="tab-content">
         {activeTab === 'auditLogs' && (
           <div className="audit-tab card glass">
             {logsLoading ? <LoadingSpinner text={t('Loading audit logs...', 'Đang tải nhật ký kiểm toán...')} /> : (

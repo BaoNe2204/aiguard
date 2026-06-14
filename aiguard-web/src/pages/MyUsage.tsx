@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { History, User, CheckCircle, ShieldAlert } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
+import { ShieldAlert } from 'lucide-react';
 import { DataTable } from '../components/ui/DataTable';
 import { DecisionBadge } from '../components/ui/DecisionBadge';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
@@ -13,7 +13,6 @@ import { useLanguage } from '../contexts/LanguageContext';
 
 export const MyUsage: React.FC = () => {
   const location = useLocation();
-  const navigate = useNavigate();
   const { t, locale } = useLanguage();
   const activeTab = location.pathname.endsWith('/approvals') ? 'approvals'
     : location.pathname.endsWith('/summary') ? 'summary'
@@ -62,20 +61,7 @@ export const MyUsage: React.FC = () => {
           <p className="subtitle">{t('Track your checked prompts, pending approvals, and security behavior rating', 'Theo dõi prompt đã kiểm tra, yêu cầu phê duyệt và điểm hành vi an toàn')}</p>
         </div>
       </div>
-
-      <div className="tabs-container">
-        <button className={`tab-btn ${activeTab === 'logs' ? 'active' : ''}`} onClick={() => navigate('/app/my-usage/logs')}>
-          <History size={16} /> {t('Personal Prompt Logs', 'Nhật ký prompt cá nhân')}
-        </button>
-        <button className={`tab-btn ${activeTab === 'approvals' ? 'active' : ''}`} onClick={() => navigate('/app/my-usage/approvals')}>
-          <CheckCircle size={16} /> {t('My Approval Status', 'Trạng thái phê duyệt')}
-        </button>
-        <button className={`tab-btn ${activeTab === 'summary' ? 'active' : ''}`} onClick={() => navigate('/app/my-usage/summary')}>
-          <User size={16} /> {t('Security Habit Rating', 'Đánh giá thói quen an toàn')}
-        </button>
-      </div>
-
-      <div className="tab-content">
+<div className="tab-content">
         {activeTab === 'logs' && (
           <div className="logs-tab card glass">
             {logsLoading ? <LoadingSpinner text={t('Loading your logs...', 'Đang tải nhật ký của bạn...')} /> : (

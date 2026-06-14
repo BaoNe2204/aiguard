@@ -2343,13 +2343,14 @@ input:checked + .slider:before {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 22px;
+  justify-content: flex-start;
+  gap: 14px;
+  padding: 24px;
   border: 1px solid rgba(148, 163, 184, 0.2);
   border-radius: 22px;
   background: rgba(2, 6, 23, 0.38);
   text-align: center;
+  overflow: hidden;
 }
 
 .payment-status-pill {
@@ -2365,11 +2366,11 @@ input:checked + .slider:before {
 }
 
 .payment-qr-frame {
-  width: 245px;
-  height: 245px;
+  width: min(245px, 100%);
+  min-height: 300px;
   display: grid;
   place-items: center;
-  padding: 12px;
+  padding: 10px;
   border-radius: 22px;
   background: #fff;
   box-shadow: 0 22px 60px rgba(0, 0, 0, 0.36);
@@ -2377,13 +2378,18 @@ input:checked + .slider:before {
 
 .payment-qr-frame img {
   width: 100%;
-  height: 100%;
+  height: auto;
+  max-height: 280px;
   object-fit: contain;
   border-radius: 14px;
 }
 
 .payment-qr-panel strong {
-  font-size: 18px;
+  display: block;
+  margin-top: 2px;
+  color: #f8fafc;
+  font-size: 16px;
+  line-height: 1.35;
 }
 
 .payment-qr-caption {
@@ -4566,5 +4572,311 @@ select:focus {
   .modal-footer {
     padding-left: 16px;
     padding-right: 16px;
+  }
+}
+
+/* App typography polish */
+body {
+  font-family: 'Be Vietnam Pro', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  line-height: 1.55;
+  letter-spacing: 0;
+  text-rendering: optimizeLegibility;
+}
+
+.content-outlet {
+  color: #e5edf7;
+}
+
+.page-header {
+  margin-bottom: 22px;
+}
+
+.page-header h1,
+.bizops-header h1,
+.governance-page .page-header h1,
+.business-page-header h1,
+.payment-page-header h1 {
+  margin: 0;
+  color: #f8fafc;
+  font-size: 28px;
+  font-weight: 850;
+  line-height: 1.22;
+  letter-spacing: 0;
+}
+
+.page-header .subtitle,
+.subtitle,
+.workspace-description,
+.workspace-copy p,
+.business-page-header p,
+.payment-page-header p {
+  margin-top: 6px;
+  max-width: 820px;
+  color: #a9b8ca;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.6;
+}
+
+.workspace-banner {
+  margin-bottom: 26px;
+  padding: 22px 24px;
+}
+
+.workspace-banner-simple {
+  max-width: 100%;
+}
+
+.workspace-copy > span,
+.workspace-eyebrow {
+  display: inline-block;
+  margin-bottom: 8px;
+  color: #7dd3fc;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.workspace-copy h1,
+.workspace-title {
+  margin: 0;
+  color: #f8fafc;
+  font-size: 27px;
+  font-weight: 850;
+  line-height: 1.22;
+  letter-spacing: 0;
+}
+
+.card,
+.glass,
+.bizops-panel,
+.governance-section,
+.business-section,
+.business-plan-card,
+.business-deploy-card,
+.deployment-tab > div,
+.overview-tab,
+.devices-tab,
+.websites-tab,
+.events-tab,
+.list-tab,
+.permissions-tab,
+.monitor-tab,
+.injection-tab,
+.audit-tab,
+.blockchain-tab,
+.logs-tab,
+.approvals-tab {
+  color: #dbe6f3;
+}
+
+.card h2,
+.glass h2,
+.bizops-panel-title h2,
+.governance-section h2,
+.business-section h2,
+.business-plan-card h3,
+.business-deploy-card h3,
+.deployment-tab h2,
+.devices-tab h2,
+.websites-tab h2,
+.events-tab h2,
+.list-tab h2,
+.permissions-tab h2,
+.audit-tab h2,
+.blockchain-tab h2 {
+  margin: 0;
+  color: #f8fafc;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.35;
+  letter-spacing: 0;
+}
+
+.card h3,
+.glass h3,
+.bizops-inline-form h3,
+.business-calculator h3,
+.receipt-preview h3,
+.quotation-preview h3 {
+  margin: 0 0 10px;
+  color: #f8fafc;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.35;
+  letter-spacing: 0;
+}
+
+.card p,
+.glass p,
+.governance-help,
+.bizops-muted,
+.business-section p,
+.business-plan-card p,
+.business-deploy-card p,
+.deployment-tab p,
+.devices-tab p,
+.websites-tab p,
+.events-tab p,
+.list-tab p,
+.permissions-tab p,
+.audit-tab p,
+.blockchain-tab p {
+  color: #a9b8ca;
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.58;
+}
+
+.deployment-tab .card,
+.deployment-tab > div,
+.governance-section,
+.bizops-panel,
+.business-section {
+  padding: 24px;
+}
+
+.deployment-tab .card > div,
+.download-card,
+.token-box,
+.governance-list-item,
+.bizops-crm-card,
+.business-plan-card {
+  border-radius: 8px;
+}
+
+.download-card strong,
+.token-box strong,
+.bizops-crm-card strong,
+.governance-list-item strong,
+.business-summary-strip strong,
+.business-kpi-grid strong {
+  color: #f8fafc;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.download-card small,
+.token-box small,
+.bizops-crm-card small,
+.governance-list-item small,
+.business-summary-strip span,
+.business-kpi-grid span {
+  color: #9fb0c4;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.btn-primary,
+.btn-secondary,
+.btn-danger,
+.btn-action,
+.table-action,
+.bizops-actions button,
+.row-actions button,
+.download-card button,
+.token-box button {
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+.data-table,
+.business-table,
+.bizops-table,
+.governance-table {
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.data-table th,
+.business-table th,
+.bizops-table th,
+.governance-table th {
+  color: #9eabbc;
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.data-table td,
+.business-table td,
+.bizops-table td,
+.governance-table td {
+  color: #d8e2ef;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.data-table td strong,
+.business-table td strong,
+.bizops-table td strong,
+.governance-table td strong {
+  color: #f8fafc;
+  font-size: 13.5px;
+  font-weight: 750;
+}
+
+code,
+pre,
+.token-box code,
+.bizops-table code,
+.demo-flow-card code,
+.mfa-setup-box code,
+.deployment-tab pre,
+.deployment-tab code {
+  font-family: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  letter-spacing: 0;
+}
+
+.deployment-tab pre,
+.deployment-tab code,
+.token-box code {
+  color: #8fffd0;
+}
+
+.nav-text {
+  font-size: 14px;
+  font-weight: 750;
+  line-height: 1.3;
+}
+
+.nav-description {
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+
+.topbar-search input,
+input,
+textarea,
+select {
+  font-size: 13.5px;
+}
+
+@media (max-width: 820px) {
+  .page-header h1,
+  .bizops-header h1,
+  .governance-page .page-header h1,
+  .business-page-header h1,
+  .payment-page-header h1,
+  .workspace-copy h1,
+  .workspace-title {
+    font-size: 24px;
+  }
+
+  .deployment-tab .card,
+  .deployment-tab > div,
+  .governance-section,
+  .bizops-panel,
+  .business-section {
+    padding: 18px;
   }
 }

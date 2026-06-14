@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { Cpu, Lock, History, AlertTriangle, Play, Plus, X, ShieldCheck, Bug, KeyRound, Gauge, Power } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
+import { Play, Plus, X, ShieldCheck, Bug, KeyRound, Gauge, Power } from 'lucide-react';
 import { DataTable } from '../components/ui/DataTable';
 import { RiskBadge } from '../components/ui/RiskBadge';
 import { DecisionBadge } from '../components/ui/DecisionBadge';
@@ -11,7 +11,6 @@ import { useLanguage } from '../contexts/LanguageContext';
 
 export const Agents: React.FC = () => {
   const location = useLocation();
-  const navigate = useNavigate();
   const { t, locale } = useLanguage();
   const activeTab = location.pathname.endsWith('/permissions') ? 'permissions'
     : location.pathname.endsWith('/monitor') ? 'monitor'
@@ -165,32 +164,7 @@ export const Agents: React.FC = () => {
           <p className="subtitle">{t('Manage credentials, intercept tool-calls, and audit prompt injection attacks', 'Quản lý quyền, kiểm tra tool-call và kiểm toán các cuộc tấn công prompt injection')}</p>
         </div>
       </div>
-
-      <div className="tabs-container">
-        <button className={`tab-btn ${activeTab === 'list' ? 'active' : ''}`} onClick={() => navigate('/app/agents')}>
-          <Cpu size={16} /> {t('Agent Registry', 'Danh sách Agent')}
-        </button>
-        <button className={`tab-btn ${activeTab === 'permissions' ? 'active' : ''}`} onClick={() => navigate('/app/agents/permissions')}>
-          <Lock size={16} /> {t('Tool Permissions', 'Quyền công cụ')}
-        </button>
-        <button className={`tab-btn ${activeTab === 'monitor' ? 'active' : ''}`} onClick={() => navigate('/app/agents/monitor')}>
-          <History size={16} /> {t('Tool-call Monitor', 'Giám sát tool-call')}
-        </button>
-        <button className={`tab-btn ${activeTab === 'injection' ? 'active' : ''}`} onClick={() => navigate('/app/agents/prompt-injection')}>
-          <AlertTriangle size={16} /> {t('Prompt Injection', 'Prompt Injection')}
-        </button>
-        <button className={`tab-btn ${activeTab === 'simulation' ? 'active' : ''}`} onClick={() => navigate('/app/agents/simulation')}>
-          <Play size={16} /> {t('Policy Simulation', 'Mô phỏng chính sách')}
-        </button>
-        <button className={`tab-btn ${activeTab === 'runtime' ? 'active' : ''}`} onClick={() => navigate('/app/agents/runtime')}>
-          <ShieldCheck size={16} /> Runtime Controls
-        </button>
-        <button className={`tab-btn ${activeTab === 'redteam' ? 'active' : ''}`} onClick={() => navigate('/app/agents/red-team')}>
-          <Bug size={16} /> Red-team Tests
-        </button>
-      </div>
-
-      <div className="tab-content">
+<div className="tab-content">
         {activeTab === 'list' && (
           <div className="list-tab card glass">
             <div className="card-header">
@@ -402,10 +376,10 @@ export const Agents: React.FC = () => {
         {activeTab === 'runtime' && (
           <div className="governance-stack">
             <div className="governance-metric-grid">
-              <div className="governance-metric-card ok"><div><strong>{agents.filter(agent => agent.isEnabled).length}</strong><span>Agent dang bat</span></div><b>Enabled</b></div>
-              <div className="governance-metric-card warn"><div><strong>{agents.reduce((sum, agent) => sum + agent.toolCallsToday, 0)}</strong><span>Tool-call hom nay</span></div><b>Quota</b></div>
-              <div className="governance-metric-card"><div><strong>Vault-ready</strong><span>UI quan ly identity/credential rieng cho Agent. Can backend vault de cap secret that.</span></div><b>Config</b></div>
-              <div className="governance-metric-card danger"><div><strong>Kill switch</strong><span>Tat Agent bang API update isEnabled=false.</span></div><b>Live</b></div>
+              <div className="governance-metric-card ok"><div><strong>{agents.filter(agent => agent.isEnabled).length}</strong><span>Agent đang bật</span></div><b>Enabled</b></div>
+              <div className="governance-metric-card warn"><div><strong>{agents.reduce((sum, agent) => sum + agent.toolCallsToday, 0)}</strong><span>Tool-call hôm nay</span></div><b>Quota</b></div>
+              <div className="governance-metric-card"><div><strong>Vault-ready</strong><span>UI quản lý identity/credential riêng cho Agent. Cần backend vault để cấp secret thật.</span></div><b>Config</b></div>
+              <div className="governance-metric-card danger"><div><strong>Kill switch</strong><span>Tắt Agent bằng API update isEnabled=false.</span></div><b>Live</b></div>
             </div>
             <div className="card glass governance-section">
               <h2><ShieldCheck size={18} /> Runtime controls</h2>
@@ -428,10 +402,10 @@ export const Agents: React.FC = () => {
             <div className="card glass governance-section">
               <h2><KeyRound size={18} /> Credential & quota blueprint</h2>
               <div className="governance-metric-grid">
-                <div className="governance-metric-card"><div><strong>Credential vault</strong><span>Chua co backend vault that. Frontend da co khu vuc quan ly va can API issue/rotate secret rieng cho Agent.</span></div><b>Pending BE</b></div>
-                <div className="governance-metric-card"><div><strong>Cost limit</strong><span>Can backend luu daily token/cost budget. Hien co risk theo recordCount trong simulation.</span></div><b>Partial</b></div>
-                <div className="governance-metric-card ok"><div><strong>External block</strong><span>Simulation/tool-call check da co recipient ngoai cong ty va export risk.</span></div><b>Live</b></div>
-                <div className="governance-metric-card warn"><div><strong>Agent-to-Agent</strong><span>Can runtime event schema de phat hien Agent goi Agent khac.</span></div><b>Pending BE</b></div>
+                <div className="governance-metric-card"><div><strong>Credential vault</strong><span>Chưa có backend vault thật. Frontend đã có khu vực quản lý và cần API issue/rotate secret riêng cho Agent.</span></div><b>Pending BE</b></div>
+                <div className="governance-metric-card"><div><strong>Cost limit</strong><span>Cần backend lưu daily token/cost budget. Hiện có risk theo recordCount trong simulation.</span></div><b>Partial</b></div>
+                <div className="governance-metric-card ok"><div><strong>External block</strong><span>Simulation/tool-call check đã có recipient ngoài công ty và export risk.</span></div><b>Live</b></div>
+                <div className="governance-metric-card warn"><div><strong>Agent-to-Agent</strong><span>Cần runtime event schema để phát hiện Agent gọi Agent khác.</span></div><b>Pending BE</b></div>
               </div>
             </div>
           </div>
@@ -468,7 +442,7 @@ export const Agents: React.FC = () => {
                   <p className="text-zinc-300 bg-zinc-900 p-3 rounded border border-zinc-700">{redTeamResult.reason}</p>
                 </div>
               ) : (
-                <p className="text-zinc-500 text-center py-12">Chay test de kiem tra guardrail prompt injection dinh ky.</p>
+                <p className="text-zinc-500 text-center py-12">Chạy test để kiểm tra guardrail prompt injection định kỳ.</p>
               )}
             </div>
           </div>
