@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { Laptop, Shield, Link, History, Download, RefreshCw, Plus, Search, Copy, X, AlertTriangle } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
+import { Download, RefreshCw, Plus, Search, Copy, X, AlertTriangle } from 'lucide-react';
 import { DataTable } from '../components/ui/DataTable';
 import { RiskBadge } from '../components/ui/RiskBadge';
 import { DecisionBadge } from '../components/ui/DecisionBadge';
@@ -21,7 +21,6 @@ type TabType = 'overview' | 'devices' | 'websites' | 'events' | 'deployment';
 
 export const Endpoints: React.FC = () => {
   const location = useLocation();
-  const navigate = useNavigate();
   const { t, locale } = useLanguage();
   const activeTab: TabType = location.pathname.endsWith('/devices') ? 'devices'
     : location.pathname.endsWith('/events') ? 'events'
@@ -248,25 +247,7 @@ export const Endpoints: React.FC = () => {
       )}
 
       {/* Tabs */}
-      <div className="tabs-container">
-        <button className={`tab-btn ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => navigate('/app/endpoints')}>
-          <Shield size={16} /> {t('Overview', 'Tổng quan')}
-        </button>
-        <button className={`tab-btn ${activeTab === 'devices' ? 'active' : ''}`} onClick={() => navigate('/app/endpoints/devices')}>
-          <Laptop size={16} /> {t('Protected Devices', 'Thiết bị được bảo vệ')}
-        </button>
-        <button className={`tab-btn ${activeTab === 'websites' ? 'active' : ''}`} onClick={() => navigate('/app/endpoints/ai-websites')}>
-          <Link size={16} /> {t('AI Websites', 'Website AI')}
-        </button>
-        <button className={`tab-btn ${activeTab === 'events' ? 'active' : ''}`} onClick={() => navigate('/app/endpoints/events')}>
-          <History size={16} /> {t('Endpoint Events', 'Sự kiện thiết bị')}
-        </button>
-        <button className={`tab-btn ${activeTab === 'deployment' ? 'active' : ''}`} onClick={() => navigate('/app/endpoints/deployment')}>
-          <Download size={16} /> {t('Deployment', 'Triển khai')}
-        </button>
-      </div>
-
-      {/* Tab Contents */}
+{/* Tab Contents */}
       <div className="tab-content">
         {activeTab === 'overview' && (
           overviewLoading ? <LoadingSpinner text={t('Loading overview...', 'Đang tải tổng quan...')} /> : (

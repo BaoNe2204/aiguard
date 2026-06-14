@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { User, Cpu, History, Check, X, Eye } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
+import { Check, X, Eye } from 'lucide-react';
 import { DataTable } from '../components/ui/DataTable';
 import { RiskBadge } from '../components/ui/RiskBadge';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
@@ -10,7 +10,6 @@ import { useLanguage } from '../contexts/LanguageContext';
 
 export const Approvals: React.FC = () => {
   const location = useLocation();
-  const navigate = useNavigate();
   const { t, locale } = useLanguage();
   const activeTab = location.pathname.endsWith('/agents') ? 'agents'
     : location.pathname.endsWith('/history') ? 'history'
@@ -95,20 +94,7 @@ export const Approvals: React.FC = () => {
           <p className="subtitle">{t('Review and authorize sensitive prompts and AI Agent actions', 'Xem xét và phê duyệt prompt nhạy cảm cùng hành động của AI Agent')}</p>
         </div>
       </div>
-
-      <div className="tabs-container">
-        <button className={`tab-btn ${activeTab === 'prompts' ? 'active' : ''}`} onClick={() => navigate('/app/approvals/prompts')}>
-          <User size={16} /> {t('Prompt Approvals', 'Duyệt prompt')} ({promptsTotalCount})
-        </button>
-        <button className={`tab-btn ${activeTab === 'agents' ? 'active' : ''}`} onClick={() => navigate('/app/approvals/agents')}>
-          <Cpu size={16} /> {t('Agent Approvals', 'Duyệt Agent')} ({agentsTotalCount})
-        </button>
-        <button className={`tab-btn ${activeTab === 'history' ? 'active' : ''}`} onClick={() => navigate('/app/approvals/history')}>
-          <History size={16} /> {t('History', 'Lịch sử')}
-        </button>
-      </div>
-
-      <div className="tab-content">
+<div className="tab-content">
         {activeTab === 'prompts' && (
           <div className="prompts-tab card glass">
             {promptsLoading ? <LoadingSpinner text={t('Loading pending prompts...', 'Đang tải prompt chờ duyệt...')} /> : (

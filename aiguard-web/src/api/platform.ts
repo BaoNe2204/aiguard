@@ -1,5 +1,5 @@
 import { apiRequest, buildQuery } from './client';
-import type { ApiResponse, PagedResult } from './client';
+import type { PagedResult } from './client';
 
 export interface BusinessDashboardResponse {
   totalTenants: number;
