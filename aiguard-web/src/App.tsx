@@ -26,6 +26,7 @@ import './App.css';
 const DASHBOARD_ROLES = ['DepartmentManager', 'SecurityAdmin', 'TenantOwner', 'PlatformAdmin'];
 const SECURITY_ROLES = ['SecurityAdmin', 'TenantOwner', 'PlatformAdmin'];
 const BUSINESS_ROLES = ['TenantOwner', 'SecurityAdmin', 'PlatformAdmin'];
+const PACKAGE_ROLES = ['TenantOwner', 'PlatformAdmin'];
 const APPROVAL_ROLES = ['DepartmentManager', 'SecurityAdmin', 'TenantOwner', 'PlatformAdmin'];
 const AUDIT_ROLES = ['SecurityAdmin', 'TenantOwner', 'PlatformAdmin'];
 const GOVERNANCE_ROLES = ['DepartmentManager', 'SecurityAdmin', 'TenantOwner', 'PlatformAdmin'];
@@ -98,8 +99,8 @@ function App() {
             <Route path="governance/settings" element={<ProtectedRoute allowedRoles={['TenantOwner']}><Governance /></ProtectedRoute>} />
 
             {/* Business packaging */}
-            <Route path="business/packages" element={<ProtectedRoute allowedRoles={BUSINESS_ROLES}><BusinessPackaging /></ProtectedRoute>} />
-            <Route path="business/payment" element={<ProtectedRoute allowedRoles={BUSINESS_ROLES}><PaymentConfirmation /></ProtectedRoute>} />
+            <Route path="business/packages" element={<ProtectedRoute allowedRoles={PACKAGE_ROLES}><BusinessPackaging /></ProtectedRoute>} />
+            <Route path="business/payment" element={<ProtectedRoute allowedRoles={PACKAGE_ROLES}><PaymentConfirmation /></ProtectedRoute>} />
             <Route path="business/operations" element={<ProtectedRoute allowedRoles={BUSINESS_ROLES}><BusinessOperations /></ProtectedRoute>} />
             <Route path="business/orders" element={<ProtectedRoute allowedRoles={BUSINESS_ROLES}><BusinessOperations /></ProtectedRoute>} />
             <Route path="business/licenses" element={<ProtectedRoute allowedRoles={BUSINESS_ROLES}><BusinessOperations /></ProtectedRoute>} />

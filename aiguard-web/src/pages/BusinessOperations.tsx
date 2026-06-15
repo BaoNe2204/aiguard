@@ -1,9 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import React, { useCallback, useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
-  BadgeCheck, Building2, ClipboardList, DollarSign, FileSignature, Headphones,
-  KeyRound, PackageCheck, Plus, ReceiptText, Rocket, Settings, Users
+  BadgeCheck, Building2, ClipboardList, DollarSign, Headphones,
+  KeyRound, Plus, ReceiptText, RefreshCw, Save, Settings, Users, X
 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import {
+  businessApi,
+  type ContactRequest,
+  type ContactResponse,
+  type TenantSettingsRequest,
+  type TenantSettingsResponse
+} from '../api/business';
 import { platformApi } from '../api/platform';
 import type {
   BusinessDashboardResponse,
@@ -112,18 +120,26 @@ function ticketStatusPill(status: string) {
 
 export const BusinessOperations: React.FC = () => {
   const location = useLocation();
+  const { user } = useAuth();
   const activeView = getActiveView(location.pathname);
   const view = businessViews[activeView];
+  const canUseCompanySettings = user?.role === 'TenantOwner' || user?.role === 'SecurityAdmin';
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
   const [dashboard, setDashboard] = useState<BusinessDashboardResponse | null>(null);
   const [orders, setOrders] = useState<OrderResponse[]>([]);
   const [licenses, setLicenses] = useState<LicenseResponse[]>([]);
   const [customers, setCustomers] = useState<TenantResponse[]>([]);
   const [tickets, setTickets] = useState<TicketResponse[]>([]);
   const [invoices, setInvoices] = useState<InvoiceResponse[]>([]);
+  const [tenant, setTenant] = useState<TenantResponse | null>(null);
+  const [settings, setSettings] = useState<TenantSettingsResponse | null>(null);
+  const [contacts, setContacts] = useState<ContactResponse[]>([]);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
+    setError('');
     try {
       if (activeView === 'dashboard') {
         setDashboard(await platformApi.getDashboard());
@@ -141,17 +157,26 @@ export const BusinessOperations: React.FC = () => {
       } else if (activeView === 'support') {
         const res = await platformApi.getTickets({ page: 1, pageSize: 100 });
         setTickets(res.items);
+      } else if (activeView === 'company' && canUseCompanySettings) {
+        const [tenantResult, settingsResult, contactsResult] = await Promise.all([
+          businessApi.getTenant(),
+          businessApi.getSettings(),
+          businessApi.getContacts()
+        ]);
+        setTenant(tenantResult);
+        setSettings(settingsResult);
+        setContacts(contactsResult);
       }
-    } catch (error) {
-      console.error(error);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Không thể tải dữ liệu.');
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeView, canUseCompanySettings]);
 
   useEffect(() => {
-    loadData();
-  }, [activeView]);
+    void loadData();
+  }, [loadData]);
 
   return (
     <div className="bizops-page">
@@ -162,19 +187,13 @@ export const BusinessOperations: React.FC = () => {
         </div>
       </div>
 
+      {error && <div className="governance-alert error">{error}</div>}
+      {message && <div className="governance-alert success">{message}</div>}
+
       {loading && <div className="p-8 text-center text-gray-500">Đang tải dữ liệu...</div>}
 
       {!loading && activeView === 'dashboard' && dashboard && (
-        <section className="bizops-metrics">
-          <MetricCard icon={<Building2 />} label="Tổng khách hàng" value={String(dashboard.totalTenants)} tone="blue" />
-          <MetricCard icon={<Users />} label="Đang Trial" value={String(dashboard.trialTenants)} tone="amber" />
-          <MetricCard icon={<BadgeCheck />} label="Đã trả phí" value={String(dashboard.paidTenants)} tone="purple" />
-          <MetricCard icon={<KeyRound />} label="License Active" value={String(dashboard.activeSubscriptions)} tone="green" />
-          <MetricCard icon={<ClipboardList />} label="Đơn hàng chờ duyệt" value={String(dashboard.pendingOrders)} tone="blue" />
-          <MetricCard icon={<ReceiptText />} label="Thanh toán chờ xử lý" value={String(dashboard.pendingPayments)} tone="amber" />
-          <MetricCard icon={<Headphones />} label="Ticket đang mở" value={String(dashboard.openTickets)} tone="red" />
-          <MetricCard icon={<DollarSign size={18} />} label="Doanh thu ghi nhận" value={formatVnd(dashboard.recognizedRevenue)} tone="green" />
-        </section>
+        <DashboardView dashboard={dashboard} />
       )}
 
       {!loading && activeView === 'orders' && (
@@ -200,7 +219,21 @@ export const BusinessOperations: React.FC = () => {
       {!loading && activeView === 'onboarding' && (
         <EmptyState message="Vui lòng chọn khách hàng trong mục Khách hàng / Tenant CRM ở sidebar để xem Onboarding Checklist." />
       )}
-      {!loading && activeView === 'company' && <EmptyState message="Chức năng cấu hình công ty hiện đang bảo trì." />}
+      {!loading && activeView === 'company' && (
+        canUseCompanySettings ? (
+          <CompanySettingsView
+            tenant={tenant}
+            settings={settings}
+            contacts={contacts}
+            canEdit={user?.role === 'TenantOwner'}
+            onReload={loadData}
+            onError={setError}
+            onMessage={setMessage}
+          />
+        ) : (
+          <EmptyState message="PlatformAdmin vui lòng chọn một tenant trong CRM để cấu hình công ty." />
+        )
+      )}
       {!loading && activeView === 'quotations' && <EmptyState message="Chức năng hợp đồng / báo giá đang được nâng cấp." />}
     </div>
   );
@@ -232,6 +265,316 @@ const DashboardView: React.FC<{ dashboard: BusinessDashboardResponse }> = ({ das
     <MetricCard icon={<DollarSign size={18} />} label="Doanh thu ghi nhận" value={formatVnd(dashboard.recognizedRevenue)} tone="green" />
   </section>
 );
+
+const defaultSettingsForm: TenantSettingsRequest = {
+  logoUrl: '',
+  primaryDomain: '',
+  defaultRetentionDays: 365,
+  timeZone: 'Asia/Ho_Chi_Minh',
+  locale: 'vi-VN',
+  bankCode: '',
+  bankAccountNumber: '',
+  bankAccountName: '',
+  paymentWebhookUrl: '',
+  billingAddress: ''
+};
+
+const blankContactForm: ContactRequest = {
+  fullName: '',
+  email: '',
+  phone: '',
+  jobTitle: '',
+  isPrimary: false,
+  isBillingContact: false
+};
+
+function settingsToForm(settings: TenantSettingsResponse | null): TenantSettingsRequest {
+  if (!settings) return defaultSettingsForm;
+  return {
+    logoUrl: settings.logoUrl ?? '',
+    primaryDomain: settings.primaryDomain ?? '',
+    defaultRetentionDays: settings.defaultRetentionDays,
+    timeZone: settings.timeZone || 'Asia/Ho_Chi_Minh',
+    locale: settings.locale || 'vi-VN',
+    bankCode: settings.bankCode ?? '',
+    bankAccountNumber: settings.bankAccountNumber ?? '',
+    bankAccountName: settings.bankAccountName ?? '',
+    paymentWebhookUrl: settings.paymentWebhookUrl ?? '',
+    billingAddress: settings.billingAddress ?? ''
+  };
+}
+
+function formatDate(value?: string | null) {
+  return value ? new Date(value).toLocaleDateString('vi-VN') : '-';
+}
+
+function companyInitials(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(part => part[0]?.toUpperCase())
+    .join('') || 'AG';
+}
+
+const CompanySettingsView: React.FC<{
+  tenant: TenantResponse | null;
+  settings: TenantSettingsResponse | null;
+  contacts: ContactResponse[];
+  canEdit: boolean;
+  onReload: () => Promise<void> | void;
+  onError: (message: string) => void;
+  onMessage: (message: string) => void;
+}> = ({ tenant, settings, contacts, canEdit, onReload, onError, onMessage }) => {
+  const [form, setForm] = useState<TenantSettingsRequest>(() => settingsToForm(settings));
+  const [contactForm, setContactForm] = useState<ContactRequest>(blankContactForm);
+  const [saving, setSaving] = useState(false);
+  const [creatingContact, setCreatingContact] = useState(false);
+  const [contactModalOpen, setContactModalOpen] = useState(false);
+
+  useEffect(() => {
+    setForm(settingsToForm(settings));
+  }, [settings]);
+
+  if (!tenant || !settings) {
+    return <EmptyState message="Không tải được hồ sơ tenant. Vui lòng bấm tải lại hoặc đăng nhập lại." />;
+  }
+
+  const setField = <K extends keyof TenantSettingsRequest>(key: K, value: TenantSettingsRequest[K]) => {
+    setForm(previous => ({ ...previous, [key]: value }));
+  };
+
+  const reportError = (caught: unknown, fallback: string) => {
+    onMessage('');
+    onError(caught instanceof Error ? caught.message : fallback);
+  };
+
+  const handleSaveSettings = async () => {
+    if (!canEdit) return;
+    setSaving(true);
+    onError('');
+    onMessage('');
+    try {
+      await businessApi.updateSettings({
+        ...form,
+        defaultRetentionDays: Number(form.defaultRetentionDays) || 365
+      });
+      onMessage('Đã lưu cấu hình công ty.');
+      await onReload();
+    } catch (caught) {
+      reportError(caught, 'Không thể lưu cấu hình công ty.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCreateContact = async () => {
+    if (!canEdit) return;
+    setCreatingContact(true);
+    onError('');
+    onMessage('');
+    try {
+      await businessApi.createContact(contactForm);
+      setContactForm(blankContactForm);
+      setContactModalOpen(false);
+      onMessage('Đã thêm người liên hệ.');
+      await onReload();
+    } catch (caught) {
+      reportError(caught, 'Không thể thêm người liên hệ.');
+    } finally {
+      setCreatingContact(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="company-settings-grid">
+        <section className="card glass bizops-side-card">
+          <div className="company-logo-box">
+            {settings.logoUrl ? (
+              <img className="company-logo-image" src={settings.logoUrl} alt={tenant.companyName} />
+            ) : (
+              <div className="company-logo-preview">{companyInitials(tenant.companyName)}</div>
+            )}
+            <strong>{tenant.companyName}</strong>
+            <span>{tenant.code} · {tenant.currentPlan || 'Chưa có gói'}</span>
+          </div>
+
+          <div className="company-summary-list">
+            <div><span>Tên pháp lý</span><strong>{tenant.legalName || tenant.companyName}</strong></div>
+            <div><span>Mã số thuế</span><strong>{tenant.taxCode || '-'}</strong></div>
+            <div><span>Domain đăng ký</span><strong>{tenant.emailDomain || settings.primaryDomain || '-'}</strong></div>
+            <div><span>Chủ sở hữu</span><strong>{tenant.ownerName}</strong></div>
+            <div><span>Email owner</span><strong>{tenant.ownerEmail}</strong></div>
+            <div><span>Trạng thái</span><strong>{tenant.status}</strong></div>
+            <div><span>Trial hết hạn</span><strong>{formatDate(tenant.trialEndsAt)}</strong></div>
+            <div><span>Cập nhật cấu hình</span><strong>{formatDate(settings.updatedAt)}</strong></div>
+          </div>
+        </section>
+
+        <section className="card glass bizops-panel">
+          <div className="bizops-panel-title">
+            <div><Settings size={18} /><h2>Thiết lập công ty</h2></div>
+            <button className="btn-secondary" type="button" onClick={() => void onReload()}>
+              <RefreshCw size={14} /> Tải lại
+            </button>
+          </div>
+          {!canEdit && <p className="bizops-muted">Bạn đang ở chế độ xem. Chỉ TenantOwner được phép thay đổi cấu hình.</p>}
+
+          <form className="bizops-form-grid" onSubmit={event => {
+            event.preventDefault();
+            void handleSaveSettings();
+          }}>
+            <label>
+              Logo URL
+              <input value={form.logoUrl ?? ''} disabled={!canEdit} onChange={event => setField('logoUrl', event.target.value)} placeholder="https://..." />
+            </label>
+            <label>
+              Domain chính
+              <input value={form.primaryDomain ?? ''} disabled={!canEdit} onChange={event => setField('primaryDomain', event.target.value)} placeholder="company.com" />
+            </label>
+            <label>
+              Retention mặc định (ngày)
+              <input type="number" min={1} max={3650} value={form.defaultRetentionDays} disabled={!canEdit} onChange={event => setField('defaultRetentionDays', Number(event.target.value))} />
+            </label>
+            <label>
+              Múi giờ
+              <select value={form.timeZone} disabled={!canEdit} onChange={event => setField('timeZone', event.target.value)}>
+                <option value="Asia/Ho_Chi_Minh">Asia/Ho_Chi_Minh</option>
+                <option value="Asia/Bangkok">Asia/Bangkok</option>
+                <option value="Asia/Singapore">Asia/Singapore</option>
+                <option value="UTC">UTC</option>
+              </select>
+            </label>
+            <label>
+              Locale
+              <select value={form.locale} disabled={!canEdit} onChange={event => setField('locale', event.target.value)}>
+                <option value="vi-VN">vi-VN</option>
+                <option value="en-US">en-US</option>
+              </select>
+            </label>
+            <label>
+              Mã ngân hàng
+              <input value={form.bankCode ?? ''} disabled={!canEdit} onChange={event => setField('bankCode', event.target.value)} placeholder="VCB, TCB, BIDV..." />
+            </label>
+            <label>
+              Số tài khoản
+              <input value={form.bankAccountNumber ?? ''} disabled={!canEdit} onChange={event => setField('bankAccountNumber', event.target.value)} />
+            </label>
+            <label>
+              Tên tài khoản
+              <input value={form.bankAccountName ?? ''} disabled={!canEdit} onChange={event => setField('bankAccountName', event.target.value)} />
+            </label>
+            <label className="wide">
+              Webhook thanh toán
+              <input value={form.paymentWebhookUrl ?? ''} disabled={!canEdit} onChange={event => setField('paymentWebhookUrl', event.target.value)} placeholder="https://billing.company.com/webhook" />
+            </label>
+            <label className="wide">
+              Địa chỉ xuất hóa đơn
+              <textarea value={form.billingAddress ?? ''} disabled={!canEdit} onChange={event => setField('billingAddress', event.target.value)} />
+            </label>
+            <div className="bizops-actions company-form-actions">
+              <button className="btn-primary" type="submit" disabled={!canEdit || saving}>
+                <Save size={14} /> {saving ? 'Đang lưu...' : 'Lưu cấu hình'}
+              </button>
+            </div>
+          </form>
+        </section>
+      </div>
+
+      <section className="card glass bizops-panel">
+        <div className="bizops-panel-title">
+          <div><Users size={18} /><h2>Người liên hệ</h2></div>
+          {canEdit && (
+            <button className="btn-primary" type="button" onClick={() => setContactModalOpen(true)}>
+              <Plus size={14} /> Thêm người liên hệ
+            </button>
+          )}
+        </div>
+
+        <div className="company-contact-grid">
+          {contacts.map(contact => (
+            <div className="company-contact-card" key={contact.id}>
+              <div>
+                <strong>{contact.fullName}</strong>
+                <span>{contact.jobTitle || 'Chưa có chức danh'}</span>
+              </div>
+              <p>{contact.email}</p>
+              <p>{contact.phone || '-'}</p>
+              <div className="bizops-actions">
+                {contact.isPrimary && <span className="bizops-status active">Liên hệ chính</span>}
+                {contact.isBillingContact && <span className="bizops-status waiting">Thanh toán</span>}
+              </div>
+            </div>
+          ))}
+          {contacts.length === 0 && <div className="company-contact-empty">Chưa có người liên hệ.</div>}
+        </div>
+      </section>
+
+      {canEdit && contactModalOpen && (
+        <div className="modal-overlay">
+          <div className="modal-card contact-modal-card glass">
+            <div className="modal-header contact-modal-header">
+              <div className="contact-modal-title">
+                <span><Users size={18} /></span>
+                <div>
+                  <h2>Thêm người liên hệ</h2>
+                  <p>Thông tin này dùng cho vận hành, hóa đơn và các thông báo quan trọng.</p>
+                </div>
+              </div>
+              <button className="modal-close" type="button" onClick={() => setContactModalOpen(false)} aria-label="Đóng">
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={event => {
+              event.preventDefault();
+              void handleCreateContact();
+            }}>
+              <div className="modal-body contact-modal-body">
+                <label className="contact-field">
+                  Họ tên
+                  <input required value={contactForm.fullName} onChange={event => setContactForm({ ...contactForm, fullName: event.target.value })} placeholder="VD: Nguyễn Văn A" />
+                </label>
+                <label className="contact-field">
+                  Email
+                  <input required type="email" value={contactForm.email} onChange={event => setContactForm({ ...contactForm, email: event.target.value })} placeholder="name@company.com" />
+                </label>
+                <label className="contact-field">
+                  Điện thoại
+                  <input value={contactForm.phone ?? ''} onChange={event => setContactForm({ ...contactForm, phone: event.target.value })} placeholder="090..." />
+                </label>
+                <label className="contact-field">
+                  Chức danh
+                  <input value={contactForm.jobTitle ?? ''} onChange={event => setContactForm({ ...contactForm, jobTitle: event.target.value })} placeholder="VD: Kế toán, IT Manager" />
+                </label>
+                <div className="contact-role-options">
+                  <label className="contact-role-card">
+                    <input type="checkbox" checked={contactForm.isPrimary} onChange={event => setContactForm({ ...contactForm, isPrimary: event.target.checked })} />
+                    <span>Liên hệ chính</span>
+                    <small>Nhận thông báo vận hành tenant.</small>
+                  </label>
+                  <label className="contact-role-card">
+                    <input type="checkbox" checked={contactForm.isBillingContact} onChange={event => setContactForm({ ...contactForm, isBillingContact: event.target.checked })} />
+                    <span>Liên hệ thanh toán</span>
+                    <small>Nhận hóa đơn và xác nhận chuyển khoản.</small>
+                  </label>
+                </div>
+              </div>
+              <div className="modal-footer contact-modal-footer">
+                <button className="btn-secondary" type="button" onClick={() => setContactModalOpen(false)} disabled={creatingContact}>
+                  Hủy
+                </button>
+                <button className="btn-primary" type="submit" disabled={creatingContact}>
+                  <Plus size={14} /> {creatingContact ? 'Đang thêm...' : 'Thêm liên hệ'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
 
 const OrdersView: React.FC<{ orders: OrderResponse[]; onReload: () => void }> = ({ orders, onReload }) => {
   const handleProvision = async (id: string) => {

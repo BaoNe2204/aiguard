@@ -11,11 +11,6 @@ const workspaceCopy: Record<string, {
     title: 'Điều hành khách hàng, gói bán và license',
     description: 'Theo dõi hoạt động thương mại, xử lý đơn hàng, hỗ trợ tenant và kiểm soát license từ một nơi.'
   },
-  TenantOwner: {
-    eyebrow: 'Doanh nghiệp khách hàng',
-    title: 'Mua gói, thanh toán và cấu hình tenant',
-    description: 'Quản lý onboarding, license, thông tin công ty và các thiết lập vận hành cho doanh nghiệp.'
-  },
   SecurityAdmin: {
     eyebrow: 'Trung tâm bảo mật',
     title: 'Kiểm soát DLP, policy và AI Agent',
@@ -35,6 +30,8 @@ const workspaceCopy: Record<string, {
 
 export const RoleWorkspaceBanner: React.FC = () => {
   const { user } = useAuth();
+  if (user?.role === 'TenantOwner') return null;
+
   const copy = workspaceCopy[user?.role || 'Employee'] || workspaceCopy.Employee;
 
   return (

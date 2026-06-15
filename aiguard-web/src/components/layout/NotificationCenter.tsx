@@ -6,6 +6,8 @@ import { API_BASE, getToken } from '../../api/client';
 import { governanceApi, type NotificationItem } from '../../api/governance';
 
 const realtimeEvents = [
+  'Connected',
+  'GroupJoined',
   'NewApprovalRequest',
   'ApprovalDecided',
   'ApprovalRevoked',
@@ -46,10 +48,12 @@ export const NotificationCenter: React.FC = () => {
   }, [load]);
 
   useEffect(() => {
+    let disposed = false;
+    let started = false;
     const connection = new signalR.HubConnectionBuilder()
       .withUrl(notificationHubUrl(), { accessTokenFactory: () => getToken() || '' })
       .withAutomaticReconnect()
-      .configureLogging(signalR.LogLevel.Warning)
+      .configureLogging(signalR.LogLevel.None)
       .build();
 
     const receive = (eventName: string, payload: unknown) => {
@@ -64,10 +68,16 @@ export const NotificationCenter: React.FC = () => {
     realtimeEvents.forEach(eventName => {
       connection.on(eventName, payload => receive(eventName, payload));
     });
-    void connection.start().catch(() => undefined);
+    void connection.start()
+      .then(() => {
+        started = true;
+        if (disposed) void connection.stop();
+      })
+      .catch(() => undefined);
     return () => {
+      disposed = true;
       realtimeEvents.forEach(eventName => connection.off(eventName));
-      void connection.stop();
+      if (started) void connection.stop();
     };
   }, [load]);
 

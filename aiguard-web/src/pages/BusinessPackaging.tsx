@@ -1,11 +1,12 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
-  Check, DollarSign, Edit, Layers, PackageCheck, Plus, Save, X
+  Check, Edit, Layers, PackageCheck, Plus, Save, X
 } from 'lucide-react';
+import { businessApi } from '../api/business';
 import { platformApi } from '../api/platform';
+import { useAuth } from '../contexts/AuthContext';
 import type { ProductPlanResponse } from '../api/platform';
-
-type DeploymentModel = 'saas' | 'private-cloud' | 'on-premise';
 
 const featureRows = [
   ['Browser Extension', true, true, true, true, false],
@@ -26,14 +27,16 @@ const featureRows = [
 ] as const;
 
 export const BusinessPackaging: React.FC = () => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const isPlatformAdmin = user?.role === 'PlatformAdmin';
+  const canBuyPlan = user?.role === 'TenantOwner';
   const [plans, setPlans] = useState<ProductPlanResponse[]>([]);
   const [selectedPlanId, setSelectedPlanId] = useState<string>('');
-  const [users, setUsers] = useState(120);
-  const [deployment, setDeployment] = useState<DeploymentModel>('saas');
-  const agentAddon = true;
-  const agentCount = 8;
+
 
   const [loading, setLoading] = useState(false);
+  const [buying, setBuying] = useState(false);
   const [editingPlan, setEditingPlan] = useState<ProductPlanResponse | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   
@@ -55,7 +58,7 @@ export const BusinessPackaging: React.FC = () => {
   const loadPlans = async () => {
     setLoading(true);
     try {
-      const res = await platformApi.getPlans();
+      const res = isPlatformAdmin ? await platformApi.getPlans() : await businessApi.getPlans();
       const sorted = res.sort((a, b) => a.displayOrder - b.displayOrder);
       setPlans(sorted);
       if (sorted.length > 0 && !selectedPlanId) {
@@ -70,10 +73,10 @@ export const BusinessPackaging: React.FC = () => {
 
   useEffect(() => {
     loadPlans();
-  }, []);
+  }, [isPlatformAdmin]);
 
   const handleSaveEdit = async () => {
-    if (!editingPlan) return;
+    if (!editingPlan || !isPlatformAdmin) return;
     try {
       await platformApi.updatePlan(editingPlan.id, editingPlan);
       alert('Cập nhật gói thành công!');
@@ -85,6 +88,7 @@ export const BusinessPackaging: React.FC = () => {
   };
 
   const handleCreate = async () => {
+    if (!isPlatformAdmin) return;
     try {
       await platformApi.createPlan(newPlan);
       alert('Tạo gói thành công!');
@@ -96,30 +100,55 @@ export const BusinessPackaging: React.FC = () => {
   };
 
   const plan = plans.find(p => p.id === selectedPlanId) ?? plans[0];
-  
-  const quote = useMemo(() => {
-    if (!plan) return { base: 0, addon: 0, monthly: 0, annual: 0 };
-    const base = plan.monthlyPrice * users;
-    const addon = agentAddon ? agentCount * 250000 : 0;
-    const multiplier = deployment === 'saas' ? 1 : deployment === 'private-cloud' ? 1.35 : 1.75;
-    const monthly = Math.round((base + addon) * multiplier);
-    const annual = monthly * 12;
-    return { base, addon, monthly, annual };
-  }, [agentAddon, agentCount, deployment, plan, users]);
+
+  const handleBuyPlan = async (targetPlan = plan) => {
+    if (!targetPlan || !canBuyPlan) return;
+    setBuying(true);
+    try {
+      const tenant = await businessApi.getTenant();
+      const order = await businessApi.createOrder({
+        tenantId: tenant.id,
+        productPlanId: targetPlan.id,
+        billingCycle: 'Monthly',
+        userQuantity: targetPlan.includedUsers,
+        deviceQuantity: targetPlan.includedDevices,
+        discountAmount: 0,
+        taxPercent: 10,
+        notes: `TenantOwner selected ${targetPlan.name} from package page.`
+      });
+      navigate('/app/business/payment', {
+        state: {
+          order,
+          plan: targetPlan,
+          purchaseMonths: 1
+        }
+      });
+    } catch (e: any) {
+      alert('Lỗi: ' + (e?.message || e));
+    } finally {
+      setBuying(false);
+    }
+  };
+
+
 
   return (
     <div className="business-page">
       <div className="page-header business-page-header">
         <div>
           <h1>Đóng gói & Bảng giá</h1>
-          <p className="subtitle">Quản lý các gói dịch vụ (Trial, Starter, Professional, Enterprise) và bộ tính giá.</p>
+          <p className="subtitle">
+            {isPlatformAdmin
+              ? 'Quản lý gói dịch vụ, giá bán và cách hiển thị bảng so sánh cho khách hàng.'
+              : 'So sánh nhanh các gói, ước tính chi phí và tạo đơn mua trong một luồng gọn hơn.'}
+          </p>
         </div>
-        <div className="business-header-actions">
+        {isPlatformAdmin && <div className="business-header-actions">
           <button className="btn-primary" onClick={() => setShowAddForm(true)}><Plus size={15} /> Tạo gói mới</button>
-        </div>
+        </div>}
       </div>
 
-      {showAddForm && (
+      {isPlatformAdmin && showAddForm && (
         <section className="card glass business-section p-6 mb-8">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-bold flex items-center gap-2"><Plus size={18}/> Thêm gói dịch vụ mới</h2>
@@ -143,45 +172,74 @@ export const BusinessPackaging: React.FC = () => {
       {loading ? (
         <div className="p-8 text-center">Đang tải cấu hình gói...</div>
       ) : (
-        <section className="business-section">
-          <div className="section-title">
-            <PackageCheck size={18} />
-            <h2>Cấu hình các gói dịch vụ (Plans)</h2>
+        <section className="business-section pricing-showcase">
+          <div className="section-title pricing-section-title">
+            <div>
+              <PackageCheck size={18} />
+              <h2>{isPlatformAdmin ? 'Danh mục gói dịch vụ' : 'Chọn gói phù hợp'}</h2>
+            </div>
+            <span>{plans.length} gói đang hiển thị</span>
           </div>
           <div className="business-plan-grid">
             {plans.map(item => (
-              <div key={item.id} className={`business-plan-card card glass ${selectedPlanId === item.id ? 'active' : ''} relative`}>
-                <button 
-                  onClick={() => setEditingPlan(item)} 
-                  className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors"
-                  title="Sửa cấu hình gói"
-                >
-                  <Edit size={14} />
-                </button>
+              <div key={item.id} className={`business-plan-card pricing-plan-card card glass ${selectedPlanId === item.id ? 'active' : ''} relative`}>
+                {isPlatformAdmin && (
+                  <button
+                    onClick={() => setEditingPlan(item)}
+                    className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors"
+                    title="Sửa cấu hình gói"
+                  >
+                    <Edit size={14} />
+                  </button>
+                )}
 
-                <div className="cursor-pointer" onClick={() => setSelectedPlanId(item.id)}>
+                <div className="cursor-pointer plan-card-body" onClick={() => setSelectedPlanId(item.id)}>
                   <div className="plan-badge-row">
                     <span className="plan-badge">{item.code}</span>
+                    {isRecommendedPlan(item) && <span className="plan-badge recommended">Phổ biến</span>}
                     {!item.isActive && <span className="plan-badge !bg-red-500/20 !text-red-300 border-red-500/30">Đã tắt</span>}
                   </div>
                   <div className="plan-head">
                     <span>{item.name}</span>
-                    <b>{item.monthlyPrice > 0 ? `${formatVnd(item.monthlyPrice)}/user/tháng` : 'Miễn phí'}</b>
+                  </div>
+                  <div className="plan-price">
+                    <strong>{item.monthlyPrice > 0 ? formatVnd(item.monthlyPrice * item.includedUsers) : 'Miễn phí'}</strong>
+                    <span>{item.monthlyPrice > 0 ? '/ tháng' : 'Dùng thử sản phẩm'}</span>
                   </div>
                   <p>{item.description || 'Chưa có mô tả'}</p>
-                  <small>Tối đa: {item.includedUsers} users · {item.includedDevices} devices</small>
+                  <div className="plan-metrics">
+                    <span>{item.includedUsers} users</span>
+                    <span>{item.includedDevices} devices</span>
+                    <span>{item.maxAgents} agents</span>
+                  </div>
                   <ul>
                     {item.features?.slice(0, 5).map(feature => <li key={feature}><Check size={13} /> {feature}</li>)}
                   </ul>
+                  {canBuyPlan && (
+                    <button
+                      className={selectedPlanId === item.id ? 'btn-primary business-buy-button' : 'btn-secondary business-buy-button'}
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setSelectedPlanId(item.id);
+                        void handleBuyPlan(item);
+                      }}
+                      disabled={buying}
+                    >
+                      {buying && selectedPlanId === item.id ? 'Đang tạo đơn...' : 'Mua gói'}
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
             {plans.length === 0 && <div className="text-gray-400 p-4">Chưa có gói dịch vụ nào. Hãy tạo mới.</div>}
           </div>
+
+
         </section>
       )}
 
-      {editingPlan && (
+      {isPlatformAdmin && editingPlan && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="bg-[#1e2128] border border-white/10 p-6 rounded-xl shadow-2xl w-[600px] max-w-full">
             <div className="flex justify-between items-center mb-6">
@@ -215,34 +273,13 @@ export const BusinessPackaging: React.FC = () => {
         </div>
       )}
 
-      {plan && (
-        <section className="business-grid">
-          <div className="card glass business-calculator">
-            <div className="section-title">
-              <DollarSign size={18} />
-              <h2>Bộ tính báo giá: {plan.name}</h2>
-            </div>
-            <label>Số người dùng<input type="number" min={1} value={users} onChange={e => setUsers(Number(e.target.value))} /></label>
-            <label>
-              Mô hình triển khai
-              <select value={deployment} onChange={e => setDeployment(e.target.value as DeploymentModel)}>
-                <option value="saas">Cloud SaaS</option>
-                <option value="private-cloud">Private Cloud (+35%)</option>
-                <option value="on-premise">On-premise (+75%)</option>
-              </select>
-            </label>
-            <div className="quote-box">
-              <div><span>Ước tính mỗi tháng</span><strong>{formatVnd(quote.monthly)}</strong></div>
-              <div><span>Ước tính mỗi năm</span><strong>{formatVnd(quote.annual)}</strong></div>
-            </div>
+      <section className="business-section card glass pricing-compare-section">
+        <div className="section-title pricing-section-title">
+          <div>
+            <Layers size={18} />
+            <h2>So sánh tính năng</h2>
           </div>
-        </section>
-      )}
-
-      <section className="business-section card glass">
-        <div className="section-title">
-          <Layers size={18} />
-          <h2>Bảng so sánh tính năng (Tài liệu Sales)</h2>
+          <span>Dễ nhìn để tư vấn khách hàng</span>
         </div>
         <div className="business-table-wrap">
           <table className="business-table">
@@ -275,9 +312,14 @@ function formatVnd(value: number) {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(value);
 }
 
+function isRecommendedPlan(plan: ProductPlanResponse) {
+  const text = `${plan.code} ${plan.name}`.toLowerCase();
+  return text.includes('pro') || text.includes('professional') || text.includes('enterprise');
+}
+
 function renderFeature(value: boolean | string) {
-  if (value === true) return <span className="feature-yes">Có</span>;
-  if (value === false) return <span className="feature-no">Chưa gồm</span>;
+  if (value === true) return <span className="feature-yes"><Check size={13} /> Có</span>;
+  if (value === false) return <span className="feature-no">-</span>;
   return <span className="feature-partial">{value}</span>;
 }
 

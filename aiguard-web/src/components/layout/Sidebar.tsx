@@ -76,7 +76,6 @@ export const Sidebar: React.FC = () => {
             subItems: [
               { title: 'Onboarding', path: '/app/business/onboarding' },
               { title: 'Gói dịch vụ', path: '/app/business/packages' },
-              { title: 'Xác nhận thanh toán', path: '/app/business/payment' },
               { title: 'Đơn hàng', path: '/app/business/orders' },
               { title: 'License', path: '/app/business/licenses' },
               { title: 'Cấu hình công ty', path: '/app/business/company' },
@@ -97,7 +96,18 @@ export const Sidebar: React.FC = () => {
               { title: 'Lưu trữ & SIEM', path: '/app/governance/settings' }
             ]
           },
-          { key: 'deployment', title: 'Triển khai thiết bị', description: 'Token cài đặt agent', icon: <Rocket size={18} />, path: '/app/endpoints/deployment' },
+          {
+            key: 'endpoints',
+            title: 'Bảo vệ thiết bị',
+            description: 'Trạng thái hoạt động thiết bị',
+            icon: <Laptop size={18} />,
+            subItems: [
+              { title: 'Thiết bị đã triển khai', path: '/app/endpoints/devices' },
+              { title: 'Website AI theo dõi', path: '/app/endpoints/ai-websites' },
+              { title: 'Theo dõi Agent / DLP', path: '/app/endpoints/events' },
+              { title: 'Cài đặt Agent', path: '/app/endpoints/deployment' }
+            ]
+          },
           { key: 'profile', title: 'Hồ sơ tài khoản', description: 'Bảo mật đăng nhập', icon: <User size={18} />, path: '/app/profile' }
         ];
       case 'SecurityAdmin':
@@ -110,10 +120,10 @@ export const Sidebar: React.FC = () => {
             icon: <Laptop size={18} />,
             subItems: [
               { title: 'Tổng quan thiết bị', path: '/app/endpoints' },
-              { title: 'Thiết bị', path: '/app/endpoints/devices' },
+              { title: 'Thiết bị đã triển khai', path: '/app/endpoints/devices' },
               { title: 'Website AI', path: '/app/endpoints/ai-websites' },
-              { title: 'Nhật ký DLP', path: '/app/endpoints/events' },
-              { title: 'Triển khai thiết bị', path: '/app/endpoints/deployment' }
+              { title: 'Theo dõi Agent / DLP', path: '/app/endpoints/events' },
+              { title: 'Cài đặt Agent', path: '/app/endpoints/deployment' }
             ]
           },
           {
@@ -207,7 +217,6 @@ export const Sidebar: React.FC = () => {
     }
   }, [user?.role]);
 
-
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
@@ -261,6 +270,6 @@ export const Sidebar: React.FC = () => {
           );
         })}
       </nav>
-  </aside>
+    </aside>
   );
 };

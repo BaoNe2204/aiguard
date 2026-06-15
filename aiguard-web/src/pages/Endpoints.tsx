@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useLocation } from 'react-router-dom';
-import { Download, RefreshCw, Plus, Search, Copy, X, AlertTriangle } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
+import { Activity, Download, MonitorCheck, RefreshCw, Plus, Search, Copy, X, AlertTriangle, WifiOff } from 'lucide-react';
 import { DataTable } from '../components/ui/DataTable';
 import { RiskBadge } from '../components/ui/RiskBadge';
 import { DecisionBadge } from '../components/ui/DecisionBadge';
@@ -18,6 +18,21 @@ import {
 import { useLanguage } from '../contexts/LanguageContext';
 
 type TabType = 'overview' | 'devices' | 'websites' | 'events' | 'deployment';
+
+
+
+function isDeviceOnline(lastSeen?: string | null) {
+  if (!lastSeen) return false;
+  return Date.now() - new Date(lastSeen).getTime() <= 5 * 60 * 1000;
+}
+
+function formatDeviceSeen(value: string, locale: string) {
+  const seen = new Date(value);
+  const diffMinutes = Math.max(0, Math.round((Date.now() - seen.getTime()) / 60000));
+  if (diffMinutes < 1) return 'Vừa xong';
+  if (diffMinutes < 60) return `${diffMinutes} phút trước`;
+  return seen.toLocaleString(locale);
+}
 
 export const Endpoints: React.FC = () => {
   const location = useLocation();
@@ -60,7 +75,7 @@ export const Endpoints: React.FC = () => {
 
   // ── Overview stats (reuse from devices) ──
   const [overviewLoading, setOverviewLoading] = useState(false);
-  const [overviewStats, setOverviewStats] = useState({ total: 0, active: 0, synced: 0 });
+  const [overviewStats, setOverviewStats] = useState({ total: 0, active: 0, offline: 0, extensionActive: 0 });
 
   const [error, setError] = useState('');
 
@@ -132,9 +147,16 @@ export const Endpoints: React.FC = () => {
   const fetchOverview = useCallback(async () => {
     setOverviewLoading(true);
     try {
-      const result = await endpointsApi.getDevices({ page: 1, pageSize: 1 });
+      const result = await endpointsApi.getDevices({ page: 1, pageSize: 100 });
       const wsResult = await endpointsApi.getAiWebsites();
-      setOverviewStats({ total: result.totalCount, active: result.totalCount, synced: result.totalCount });
+      const active = result.items.filter(device => isDeviceOnline(device.lastSeen)).length;
+      const extensionActive = result.items.filter(device => device.extensionActive).length;
+      setOverviewStats({
+        total: result.totalCount,
+        active,
+        offline: Math.max(result.totalCount - active, 0),
+        extensionActive
+      });
       setWebsites(wsResult);
     } catch (err: any) {
       setError(err.message);
@@ -229,14 +251,28 @@ export const Endpoints: React.FC = () => {
     }
   };
 
+  const deviceStats = {
+    total: devicesTotalCount || devices.length,
+    online: devices.filter(device => isDeviceOnline(device.lastSeen)).length,
+    offline: devices.filter(device => !isDeviceOnline(device.lastSeen)).length,
+    extensionActive: devices.filter(device => device.extensionActive).length
+  };
+
   return (
     <div className="endpoints-page">
-      <div className="page-header">
+      <div className="endpoint-hero glass">
         <div>
+          <span className="endpoint-eyebrow">{t('Endpoint Protection', 'Bảo vệ thiết bị')}</span>
           <h1>{t('Endpoint Protection Console', 'Bảng điều khiển bảo vệ thiết bị')}</h1>
-          <p className="subtitle">{t('Manage and monitor browser extensions and Windows agents installed on company devices', 'Quản lý và giám sát tiện ích trình duyệt cùng Windows Agent trên thiết bị công ty')}</p>
+          <p>{t('Track where the agent is deployed, which devices are still online, and whether browser protection is active.', 'Theo dõi agent đã cài trên thiết bị nào, máy nào còn hoạt động và tiện ích trình duyệt có đang bật hay không.')}</p>
+        </div>
+        <div className="endpoint-hero-stats">
+          <div><strong>{overviewStats.total || deviceStats.total}</strong><span>{t('Deployed', 'Đã triển khai')}</span></div>
+          <div><strong>{overviewStats.active || deviceStats.online}</strong><span>{t('Online', 'Đang hoạt động')}</span></div>
         </div>
       </div>
+
+
 
       {error && (
         <div className="card glass p-3 mb-4 flex items-center gap-2 border border-rose-500/20 bg-rose-500/5">
@@ -254,6 +290,9 @@ export const Endpoints: React.FC = () => {
             <div className="overview-tab">
               <div className="kpi-grid">
                 <div className="kpi-card glass"><span className="kpi-title">{t('Protected Devices', 'Thiết bị được bảo vệ')}</span><span className="kpi-value">{overviewStats.total}</span><span className="kpi-desc">{t('Registered hostnames', 'Máy đã đăng ký')}</span></div>
+                <div className="kpi-card glass"><span className="kpi-title">{t('Online agents', 'Agent đang hoạt động')}</span><span className="kpi-value">{overviewStats.active}</span><span className="kpi-desc">{t('Heartbeat within 5 minutes', 'Heartbeat trong 5 phút')}</span></div>
+                <div className="kpi-card glass"><span className="kpi-title">{t('Offline devices', 'Thiết bị offline')}</span><span className="kpi-value">{overviewStats.offline}</span><span className="kpi-desc">{t('Need attention', 'Cần kiểm tra')}</span></div>
+                <div className="kpi-card glass"><span className="kpi-title">{t('Extension active', 'Extension đang bật')}</span><span className="kpi-value">{overviewStats.extensionActive}</span><span className="kpi-desc">{t('Browser protection', 'Bảo vệ trình duyệt')}</span></div>
                 <div className="kpi-card glass"><span className="kpi-title">{t('AI Websites Monitored', 'Website AI được giám sát')}</span><span className="kpi-value">{websites.length}</span><span className="kpi-desc">{t('Controlled AI platforms', 'Nền tảng AI được kiểm soát')}</span></div>
               </div>
               {websites.length > 0 && (
@@ -275,14 +314,27 @@ export const Endpoints: React.FC = () => {
 
         {activeTab === 'devices' && (
           <div className="devices-tab card glass">
-            <div className="card-header">
-              <h2>{t('Registered Endpoint Devices', 'Thiết bị đầu cuối đã đăng ký')}</h2>
-              <div className="flex gap-2">
+            <div className="endpoint-section-head">
+              <div>
+                <span className="endpoint-eyebrow">{t('Deployment inventory', 'Kiểm kê triển khai')}</span>
+                <h2>{t('Deployed endpoint devices', 'Thiết bị đã triển khai agent')}</h2>
+                <p>{t('Review which hostnames have installed protection and whether they are still active.', 'Xem máy nào đã cài agent bảo vệ và máy nào còn đang hoạt động.')}</p>
+              </div>
+              <div className="endpoint-search-actions">
                 <div className="input-with-icon">
                   <Search size={14} className="input-icon" />
-                  <input type="text" placeholder={t('Search devices...', 'Tìm thiết bị...')} className="text-sm px-2 py-1" value={devicesSearch} onChange={e => { setDevicesSearch(e.target.value); setDevicesPage(1); }} />
+                  <input type="text" placeholder={t('Search devices...', 'Tìm thiết bị...')} value={devicesSearch} onChange={e => { setDevicesSearch(e.target.value); setDevicesPage(1); }} />
                 </div>
+                <button className="btn-secondary" type="button" onClick={() => void fetchDevices()}>
+                  <RefreshCw size={14} /> {t('Refresh', 'Tải lại')}
+                </button>
               </div>
+            </div>
+            <div className="deployed-device-kpis">
+              <div><MonitorCheck size={18} /><strong>{deviceStats.total}</strong><span>{t('Installed devices', 'Thiết bị đã cài')}</span></div>
+              <div className="ok"><Activity size={18} /><strong>{deviceStats.online}</strong><span>{t('Online now', 'Đang hoạt động')}</span></div>
+              <div className="warn"><WifiOff size={18} /><strong>{deviceStats.offline}</strong><span>{t('Offline/stale', 'Offline hoặc mất heartbeat')}</span></div>
+              <div><MonitorCheck size={18} /><strong>{deviceStats.extensionActive}</strong><span>{t('Extension active', 'Extension đang bật')}</span></div>
             </div>
             {devicesLoading ? <LoadingSpinner text={t('Loading devices...', 'Đang tải thiết bị...')} /> : (
               <>
@@ -292,6 +344,12 @@ export const Endpoints: React.FC = () => {
                     { header: t('Hostname', 'Tên máy'), accessor: 'hostname' },
                     { header: t('User Email', 'Email người dùng'), accessor: 'userEmail' },
                     { header: t('Department', 'Phòng ban'), accessor: 'departmentName' },
+                    { header: t('Activity', 'Hoạt động'), accessor: (item) => (
+                      <span className={`device-live-pill ${isDeviceOnline(item.lastSeen) ? 'online' : 'offline'}`}>
+                        {isDeviceOnline(item.lastSeen) ? <Activity size={13} /> : <WifiOff size={13} />}
+                        {isDeviceOnline(item.lastSeen) ? t('Online', 'Đang hoạt động') : t('Offline', 'Không hoạt động')}
+                      </span>
+                    ), width: '145px' },
                     { header: t('Agent Ver', 'Phiên bản Agent'), accessor: (item) => item.agentVersion || '—', width: '110px' },
                     { header: t('Extension', 'Tiện ích'), accessor: (item) => (
                       <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-semibold rounded-md ${item.extensionActive ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}`}>
@@ -299,6 +357,7 @@ export const Endpoints: React.FC = () => {
                       </span>
                     ), width: '100px' },
                     { header: t('Policy', 'Chính sách'), accessor: 'policyVersion', width: '110px' },
+                    { header: t('Last seen', 'Lần cuối hoạt động'), accessor: (item) => formatDeviceSeen(item.lastSeen, locale), width: '165px' },
                     { header: t('Health', 'Sức khỏe'), accessor: (item) => <RiskBadge level={item.riskStatus === 'Safe' ? 'Low' : item.riskStatus === 'Warning' ? 'Medium' : 'Critical'} />, width: '90px' },
                     { header: t('Actions', 'Thao tác'), accessor: (item) => (
                       <div className="flex gap-1">
