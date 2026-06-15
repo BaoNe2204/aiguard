@@ -334,16 +334,16 @@ const PlatformDashboardView: React.FC<{ dashboard: BusinessDashboardResponse }> 
   const otherPct = Math.max(0, 100 - trialPct - paidPct);
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 platform-dashboard">
       {/* Summary metric cards */}
-      <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <section className="grid grid-cols-2 md:grid-cols-4 gap-4 platform-metric-grid">
         <MetricCard icon={<Building2 />} label="Tổng khách hàng" value={String(dashboard.totalTenants)} tone="blue" />
         <MetricCard icon={<Users />} label="Đang Trial" value={String(dashboard.trialTenants)} tone="amber" />
         <MetricCard icon={<BadgeCheck />} label="Đã trả phí" value={String(dashboard.paidTenants)} tone="green" />
         <MetricCard icon={<DollarSign size={18} />} label="Doanh thu tháng" value={formatVnd(dashboard.recognizedRevenue)} tone="green" />
       </section>
 
-      <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <section className="grid grid-cols-2 md:grid-cols-4 gap-4 platform-metric-grid">
         <MetricCard icon={<KeyRound />} label="License hoạt động" value={String(dashboard.activeSubscriptions)} tone="purple" />
         <MetricCard icon={<ClipboardList />} label="Đơn chờ duyệt" value={String(dashboard.pendingOrders)} tone="blue" />
         <MetricCard icon={<ReceiptText />} label="Thanh toán chờ" value={String(dashboard.pendingPayments)} tone="amber" />
@@ -351,8 +351,8 @@ const PlatformDashboardView: React.FC<{ dashboard: BusinessDashboardResponse }> 
       </section>
 
       {/* Distribution overview */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="card glass p-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 platform-insight-grid">
+        <div className="card glass p-5 platform-insight-card">
           <h3 className="text-sm font-semibold text-gray-300 mb-4 flex items-center gap-2">
             <Building2 size={14} /> Phân bổ Tenant
           </h3>
@@ -387,11 +387,11 @@ const PlatformDashboardView: React.FC<{ dashboard: BusinessDashboardResponse }> 
           </div>
         </div>
 
-        <div className="card glass p-5">
+        <div className="card glass p-5 platform-insight-card">
           <h3 className="text-sm font-semibold text-gray-300 mb-4 flex items-center gap-2">
             <Shield size={14} /> Tổng quan hệ thống
           </h3>
-          <div className="grid grid-cols-2 gap-4 text-sm">
+          <div className="grid grid-cols-2 gap-4 text-sm platform-system-grid">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-indigo-500/20 flex items-center justify-center">
                 <KeyRound size={14} className="text-indigo-400" />
@@ -433,20 +433,20 @@ const PlatformDashboardView: React.FC<{ dashboard: BusinessDashboardResponse }> 
       </div>
 
       {/* Quick actions */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <button className="card glass p-4 flex flex-col items-center gap-2 hover:bg-white/5 transition-colors text-center" onClick={() => window.location.href = '/app/business/customers'}>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 platform-quick-actions">
+        <button className="card glass p-4 flex flex-col items-center gap-2 hover:bg-white/5 transition-colors text-center platform-quick-action" onClick={() => window.location.href = '/app/business/customers'}>
           <Building2 size={20} className="text-blue-400" />
           <span className="text-xs text-gray-300">Quản lý Khách hàng</span>
         </button>
-        <button className="card glass p-4 flex flex-col items-center gap-2 hover:bg-white/5 transition-colors text-center" onClick={() => window.location.href = '/app/business/orders'}>
+        <button className="card glass p-4 flex flex-col items-center gap-2 hover:bg-white/5 transition-colors text-center platform-quick-action" onClick={() => window.location.href = '/app/business/orders'}>
           <ClipboardList size={20} className="text-indigo-400" />
           <span className="text-xs text-gray-300">Xử lý Đơn hàng</span>
         </button>
-        <button className="card glass p-4 flex flex-col items-center gap-2 hover:bg-white/5 transition-colors text-center" onClick={() => window.location.href = '/app/business/packages'}>
+        <button className="card glass p-4 flex flex-col items-center gap-2 hover:bg-white/5 transition-colors text-center platform-quick-action" onClick={() => window.location.href = '/app/business/packages'}>
           <PackageCheck size={20} className="text-emerald-400" />
           <span className="text-xs text-gray-300">Quản lý Gói dịch vụ</span>
         </button>
-        <button className="card glass p-4 flex flex-col items-center gap-2 hover:bg-white/5 transition-colors text-center" onClick={() => window.location.href = '/app/business/support'}>
+        <button className="card glass p-4 flex flex-col items-center gap-2 hover:bg-white/5 transition-colors text-center platform-quick-action" onClick={() => window.location.href = '/app/business/support'}>
           <Headphones size={20} className="text-amber-400" />
           <span className="text-xs text-gray-300">Xem Ticket hỗ trợ</span>
         </button>
@@ -584,7 +584,7 @@ const TenantOwnerDashboardView: React.FC<{
 
 const MetricCard: React.FC<{ icon: React.ReactNode; label: string; value: string; tone: string }> =
   ({ icon, label, value, tone }) => (
-    <div className={`bizops-metric card glass ${tone}`}>
+    <div className={`bizops-metric card glass platform-metric-card ${tone}`}>
       <span>{icon}</span>
       <div><strong>{value}</strong><small>{label}</small></div>
     </div>
