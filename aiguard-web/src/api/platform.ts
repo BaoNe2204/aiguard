@@ -161,6 +161,54 @@ export interface TicketResponse {
   updatedAt: string;
 }
 
+export interface EnrollmentTokenResponse {
+  tokenId: string;
+  tenantCode: string;
+  enrollmentToken: string;
+  expiresAt: string;
+  installCommand: string;
+}
+
+export interface OnboardingResponse {
+  id: string;
+  tenantId: string;
+  tenantCode: string;
+  status: string;
+  adminCreated: boolean;
+  enrollmentTokenCreated: boolean;
+  extensionInstalled: boolean;
+  firstUserAdded: boolean;
+  policyEnabled: boolean;
+  testPromptCompleted: boolean;
+  notes?: string;
+  startedAt: string;
+  updatedAt: string;
+  completedAt?: string;
+}
+
+export interface OnboardingListResponse {
+  items: OnboardingResponse[];
+  total: number;
+}
+
+export interface PaymentResponse {
+  id: string;
+  paymentNumber: string;
+  orderId: string;
+  orderNumber: string;
+  tenantId: string;
+  tenantCode?: string;
+  amount: number;
+  currency: string;
+  method: string;
+  status: string;
+  transactionReference?: string;
+  receiptUrl?: string;
+  reconciliationNote?: string;
+  createdAt: string;
+  reconciledAt?: string;
+}
+
 export const platformApi = {
   getDashboard: () => 
     apiRequest<BusinessDashboardResponse>('/platform/dashboard'),
@@ -212,4 +260,22 @@ export const platformApi = {
     
   updateTicket: (id: string, data: { status?: string; priority?: string; assignedTo?: string }) => 
     apiRequest<TicketResponse>(`/platform/tickets/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+
+  getPayments: (params?: { page?: number; pageSize?: number; status?: string; tenantId?: string }) =>
+    apiRequest<PagedResult<PaymentResponse>>(`/platform/payments${buildQuery(params || {})}`),
+
+  reconcilePayment: (id: string, data: { approved: boolean; note?: string }) =>
+    apiRequest<PaymentResponse>(`/platform/payments/${id}/reconcile`, {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+
+  getOnboarding: (tenantId: string) => 
+    apiRequest<OnboardingResponse>(`/platform/onboarding/${tenantId}`),
+    
+  updateOnboarding: (tenantId: string, data: { extensionInstalled?: boolean; firstUserAdded?: boolean; policyEnabled?: boolean; testPromptCompleted?: boolean; notes?: string }) => 
+    apiRequest<OnboardingResponse>(`/platform/onboarding/${tenantId}`, { method: 'PUT', body: JSON.stringify(data) }),
+
+  regenerateEnrollmentToken: (tenantId: string) =>
+    apiRequest<EnrollmentTokenResponse>(`/platform/onboarding/${tenantId}/enrollment-token`, { method: 'POST' }),
 };

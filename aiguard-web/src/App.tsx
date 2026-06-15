@@ -103,7 +103,8 @@ function App() {
             <Route path="business/payment" element={<ProtectedRoute allowedRoles={PACKAGE_ROLES}><PaymentConfirmation /></ProtectedRoute>} />
             <Route path="business/operations" element={<ProtectedRoute allowedRoles={BUSINESS_ROLES}><BusinessOperations /></ProtectedRoute>} />
             <Route path="business/orders" element={<ProtectedRoute allowedRoles={BUSINESS_ROLES}><BusinessOperations /></ProtectedRoute>} />
-            <Route path="business/licenses" element={<ProtectedRoute allowedRoles={BUSINESS_ROLES}><BusinessOperations /></ProtectedRoute>} />
+            <Route path="business/payments" element={<ProtectedRoute allowedRoles={['TenantOwner', 'PlatformAdmin']}><BusinessOperations /></ProtectedRoute>} />
+            <Route path="business/licenses" element={<ProtectedRoute allowedRoles={['PlatformAdmin', 'TenantOwner']}><BusinessOperations /></ProtectedRoute>} />
             <Route path="business/customers" element={<ProtectedRoute allowedRoles={BUSINESS_ROLES}><BusinessOperations /></ProtectedRoute>} />
             <Route path="business/invoices" element={<ProtectedRoute allowedRoles={BUSINESS_ROLES}><BusinessOperations /></ProtectedRoute>} />
             <Route path="business/onboarding" element={<ProtectedRoute allowedRoles={BUSINESS_ROLES}><BusinessOperations /></ProtectedRoute>} />
@@ -112,9 +113,12 @@ function App() {
             <Route path="business/support" element={<ProtectedRoute allowedRoles={BUSINESS_ROLES}><BusinessOperations /></ProtectedRoute>} />
             
             {/* My Usage portal subroutes */}
+            <Route path="my-usage" element={<MyUsage />} />
+            <Route path="my-usage/overview" element={<MyUsage />} />
             <Route path="my-usage/logs" element={<MyUsage />} />
             <Route path="my-usage/approvals" element={<MyUsage />} />
             <Route path="my-usage/summary" element={<MyUsage />} />
+            <Route path="my-usage/notifications" element={<MyUsage />} />
 
             {/* Fallbacks */}
             <Route path="forbidden" element={<Forbidden />} />

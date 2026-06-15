@@ -9,7 +9,7 @@ namespace aiguard_api.Controllers;
 
 [ApiController]
 [Route("api/policies")]
-[Authorize(Roles = "SecurityAdmin,TenantOwner")]
+[Authorize(Roles = "SecurityAdmin,TenantOwner,PlatformAdmin")]
 public class PoliciesController : ControllerBase
 {
     private readonly IPolicyService _policyService;

@@ -248,6 +248,7 @@ const IdentityTab = ({
     departmentId: '', mfaRequired: false, authProvider: 'Local'
   });
   const [departmentForm, setDepartmentForm] = useState({ name: '', code: '' });
+  const safeRoles = ['Employee', 'DepartmentManager', 'SecurityAdmin'];
 
   const importUsers = async (file: File) => {
     const form = new FormData();
@@ -281,7 +282,7 @@ const IdentityTab = ({
           <input required type="email" placeholder="Email" value={userForm.email} onChange={e => setUserForm({ ...userForm, email: e.target.value })} />
           <input required type="password" placeholder="Mật khẩu tạm" value={userForm.password} onChange={e => setUserForm({ ...userForm, password: e.target.value })} />
           <select value={userForm.role} onChange={e => setUserForm({ ...userForm, role: e.target.value })}>
-            {['Employee', 'DepartmentManager', 'SecurityAdmin', 'TenantOwner', 'PlatformAdmin'].map(role => <option key={role}>{role}</option>)}
+            {safeRoles.map(role => <option key={role}>{role}</option>)}
           </select>
           <select value={userForm.departmentId} onChange={e => setUserForm({ ...userForm, departmentId: e.target.value })}>
             <option value="">Không gán phòng ban</option>

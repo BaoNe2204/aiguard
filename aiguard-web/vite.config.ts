@@ -7,7 +7,7 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 5174,
-    strictPort: true,
+    strictPort: false,
     allowedHosts: [
       'nttu-demo.io.vn',
       'localhost',

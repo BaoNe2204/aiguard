@@ -8,7 +8,7 @@ namespace aiguard_api.Controllers;
 
 [ApiController]
 [Route("api/endpoints/deployment")]
-[Authorize(Roles = "TenantOwner")]
+[Authorize(Roles = "TenantOwner,PlatformAdmin")]
 public class DeploymentController : ControllerBase
 {
     private readonly IDeploymentService _deploymentService;

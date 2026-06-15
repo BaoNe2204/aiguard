@@ -17,7 +17,6 @@ import {
   Lock,
   PackageCheck,
   ReceiptText,
-  Rocket,
   Settings,
   Shield,
   User,
@@ -60,8 +59,10 @@ export const Sidebar: React.FC = () => {
         return [
           { key: 'platform_dashboard', title: 'Tổng quan SaaS', description: 'Sức khỏe nền tảng', icon: <LayoutDashboard size={18} />, path: '/app/business/operations' },
           { key: 'platform_customers', title: 'Khách hàng', description: 'Tenant và chủ sở hữu', icon: <Building2 size={18} />, path: '/app/business/customers' },
+          { key: 'platform_onboarding', title: 'Trial / Onboarding', description: 'Checklist triển khai khách hàng', icon: <CheckSquare size={18} />, path: '/app/business/onboarding' },
           { key: 'platform_packages', title: 'Gói bán', description: 'Plan, giá và giới hạn', icon: <PackageCheck size={18} />, path: '/app/business/packages' },
-          { key: 'platform_orders', title: 'Đơn hàng', description: 'Duyệt và cấp license', icon: <ClipboardList size={18} />, path: '/app/business/orders' },
+          { key: 'platform_orders', title: 'Đơn hàng', description: 'Tất cả đơn hàng hệ thống', icon: <ClipboardList size={18} />, path: '/app/business/orders' },
+          { key: 'platform_payments', title: 'Thanh toán', description: 'Lịch sử giao dịch toàn nền tảng', icon: <ReceiptText size={18} />, path: '/app/business/payments' },
           { key: 'platform_licenses', title: 'License', description: 'Khóa, gia hạn, giới hạn', icon: <KeyRound size={18} />, path: '/app/business/licenses' },
           { key: 'platform_invoices', title: 'Hóa đơn', description: 'Thanh toán và biên lai', icon: <ReceiptText size={18} />, path: '/app/business/invoices' },
           { key: 'platform_support', title: 'Hỗ trợ', description: 'Ticket triển khai', icon: <Headphones size={18} />, path: '/app/business/support' }
@@ -77,6 +78,7 @@ export const Sidebar: React.FC = () => {
               { title: 'Onboarding', path: '/app/business/onboarding' },
               { title: 'Gói dịch vụ', path: '/app/business/packages' },
               { title: 'Đơn hàng', path: '/app/business/orders' },
+              { title: 'Lịch sử thanh toán', path: '/app/business/payments' },
               { title: 'License', path: '/app/business/licenses' },
               { title: 'Cấu hình công ty', path: '/app/business/company' },
               { title: 'Hỗ trợ', path: '/app/business/support' }
@@ -106,6 +108,15 @@ export const Sidebar: React.FC = () => {
               { title: 'Website AI theo dõi', path: '/app/endpoints/ai-websites' },
               { title: 'Theo dõi Agent / DLP', path: '/app/endpoints/events' },
               { title: 'Cài đặt Agent', path: '/app/endpoints/deployment' }
+            ]
+          },
+          {
+            key: 'audit',
+            title: 'Kiểm toán',
+            description: 'Audit log',
+            icon: <History size={18} />,
+            subItems: [
+              { title: 'Nhật ký kiểm toán', path: '/app/audit/logs' }
             ]
           },
           { key: 'profile', title: 'Hồ sơ tài khoản', description: 'Bảo mật đăng nhập', icon: <User size={18} />, path: '/app/profile' }
@@ -179,12 +190,10 @@ export const Sidebar: React.FC = () => {
           {
             key: 'audit',
             title: 'Kiểm toán',
-            description: 'Audit log và blockchain',
+            description: 'Audit log',
             icon: <History size={18} />,
             subItems: [
-              { title: 'Nhật ký kiểm toán', path: '/app/audit/logs' },
-              { title: 'Lô neo Blockchain', path: '/app/blockchain/batches' },
-              { title: 'Worker kiểm toán', path: '/app/audit/worker' }
+              { title: 'Nhật ký kiểm toán', path: '/app/audit/logs' }
             ]
           }
         ];

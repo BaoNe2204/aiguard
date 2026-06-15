@@ -11,7 +11,7 @@ namespace aiguard_api.Controllers;
 
 [ApiController]
 [Route("api/approvals")]
-[Authorize(Roles = "DepartmentManager,SecurityAdmin,TenantOwner")]
+[Authorize(Roles = "DepartmentManager,SecurityAdmin,TenantOwner,PlatformAdmin")]
 public class ApprovalsController : ControllerBase
 {
     private readonly IApprovalService _approvalService;

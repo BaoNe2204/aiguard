@@ -8,7 +8,7 @@ namespace aiguard_api.Controllers;
 
 [ApiController]
 [Route("api/endpoints/devices")]
-[Authorize(Roles = "SecurityAdmin,TenantOwner")]
+[Authorize(Roles = "SecurityAdmin,TenantOwner,PlatformAdmin")]
 public class DevicesController : ControllerBase
 {
     private readonly IDeviceService _deviceService;

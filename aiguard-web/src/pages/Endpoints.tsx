@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { Activity, Download, MonitorCheck, RefreshCw, Plus, Search, Copy, X, AlertTriangle, WifiOff } from 'lucide-react';
 import { DataTable } from '../components/ui/DataTable';
 import { RiskBadge } from '../components/ui/RiskBadge';

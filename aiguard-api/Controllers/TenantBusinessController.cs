@@ -9,20 +9,23 @@ namespace aiguard_api.Controllers;
 
 [ApiController]
 [Route("api/business")]
-[Authorize(Roles = "TenantOwner,SecurityAdmin")]
+[Authorize(Roles = "TenantOwner,SecurityAdmin,PlatformAdmin")]
 public class TenantBusinessController : ControllerBase
 {
     private readonly ISaasBusinessService _business;
     private readonly ILicenseEntitlementService _entitlements;
     private readonly IBusinessDocumentService _documents;
+    private readonly IDataScopeContext _scope;
     public TenantBusinessController(
         ISaasBusinessService business,
         ILicenseEntitlementService entitlements,
-        IBusinessDocumentService documents)
+        IBusinessDocumentService documents,
+        IDataScopeContext scope)
     {
         _business = business;
         _entitlements = entitlements;
         _documents = documents;
+        _scope = scope;
     }
 
     [HttpGet("tenant")]
@@ -54,6 +57,20 @@ public class TenantBusinessController : ControllerBase
         StatusCode(StatusCodes.Status201Created,
             ApiResponse<ContactResponse>.Ok(await _business.CreateContactAsync(null, request)));
 
+    [HttpPut("contacts/{id:guid}")]
+    [Authorize(Roles = "TenantOwner")]
+    public async Task<IActionResult> UpdateContact(Guid id, [FromBody] ContactRequest request) =>
+        await _business.UpdateContactAsync(id, null, request) is { } result
+            ? Ok(ApiResponse<ContactResponse>.Ok(result))
+            : NotFound(ApiResponse<object>.Fail("Contact not found."));
+
+    [HttpDelete("contacts/{id:guid}")]
+    [Authorize(Roles = "TenantOwner")]
+    public async Task<IActionResult> DeleteContact(Guid id) =>
+        await _business.DeleteContactAsync(id)
+            ? Ok(ApiResponse<object>.Ok(new { deleted = true }))
+            : NotFound(ApiResponse<object>.Fail("Contact not found."));
+
     [HttpGet("plans")]
     [AllowAnonymous]
     public async Task<IActionResult> Plans() =>
@@ -74,6 +91,16 @@ public class TenantBusinessController : ControllerBase
     public async Task<IActionResult> RecordPayment(Guid id, [FromBody] PaymentRequest request) =>
         StatusCode(StatusCodes.Status201Created,
             ApiResponse<PaymentResponse>.Ok(await _business.RecordPaymentAsync(id, request)));
+
+    [HttpPost("orders/{id:guid}/checkout")]
+    [Authorize(Roles = "TenantOwner")]
+    public async Task<IActionResult> Checkout(Guid id, [FromBody] CheckoutOrderRequest request)
+    {
+        var actorEmail = User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value ?? "tenant-owner";
+        return Ok(ApiResponse<CheckoutOrderResponse>.Ok(
+            await _business.CompleteCheckoutAsync(id, request, actorEmail),
+            "Payment confirmed and license activated."));
+    }
 
     [HttpGet("payments")]
     public async Task<IActionResult> Payments([FromQuery] PagedQuery query, [FromQuery] string? status) =>
@@ -101,6 +128,23 @@ public class TenantBusinessController : ControllerBase
     public async Task<IActionResult> Quotations([FromQuery] PagedQuery query, [FromQuery] string? status) =>
         Ok(ApiResponse<PagedResult<QuotationResponse>>.Ok(await _business.GetQuotationsAsync(query, status, null)));
 
+    [HttpPost("quotations")]
+    [Authorize(Roles = "TenantOwner")]
+    public async Task<IActionResult> CreateQuotation([FromBody] QuotationRequest request)
+    {
+        request.TenantId = (await _business.GetCurrentTenantAsync())?.Id
+            ?? throw new ArgumentException("Tenant profile has not been provisioned.");
+        return StatusCode(StatusCodes.Status201Created,
+            ApiResponse<QuotationResponse>.Ok(await _business.CreateQuotationAsync(request)));
+    }
+
+    [HttpPost("quotations/{id:guid}/convert")]
+    [Authorize(Roles = "TenantOwner")]
+    public async Task<IActionResult> ConvertQuotation(Guid id) =>
+        await _business.ConvertQuotationToOrderAsync(id) is { } result
+            ? Ok(ApiResponse<OrderResponse>.Ok(result, "Quotation converted to order."))
+            : NotFound(ApiResponse<object>.Fail("Quotation not found."));
+
     [HttpGet("quotations/{id:guid}/pdf")]
     public async Task<IActionResult> QuotationPdf(Guid id) =>
         await _documents.ExportQuotationAsync(id) is { } result
@@ -118,10 +162,20 @@ public class TenantBusinessController : ControllerBase
             : NotFound(ApiResponse<object>.Fail("Contract not found."));
 
     [HttpGet("onboarding")]
-    public async Task<IActionResult> Onboarding() =>
-        await _business.GetOnboardingAsync(null) is { } result
-            ? Ok(ApiResponse<OnboardingResponse>.Ok(result))
-            : NotFound(ApiResponse<object>.Fail("Onboarding not found."));
+    public async Task<IActionResult> Onboarding()
+    {
+        if (_scope.IsPlatformAdmin)
+        {
+            var allOnboarding = await _business.GetAllOnboardingAsync();
+            return Ok(ApiResponse<OnboardingListResponse>.Ok(allOnboarding));
+        }
+        var onboarding = await _business.GetOnboardingAsync(null);
+        if (onboarding != null)
+            return Ok(ApiResponse<OnboardingResponse>.Ok(onboarding));
+        // TenantOwner chưa có onboarding → tự tạo mới (trường hợp tenant cũ trước khi flow mới)
+        var created = await _business.EnsureOnboardingAsync(null);
+        return Ok(ApiResponse<OnboardingResponse>.Ok(created));
+    }
 
     [HttpPut("onboarding")]
     [Authorize(Roles = "TenantOwner")]

@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Check, Edit, Layers, PackageCheck, Plus, Save, X
+  AlertCircle, Check, ChevronDown, ChevronLeft, ChevronRight, Edit, Layers, PackageCheck,
+  Plus, Save, Sparkles, X, Tag, DollarSign, Users, Monitor,
+  Shield, Calendar, Award, Info, Globe, Activity
 } from 'lucide-react';
 import { businessApi } from '../api/business';
 import { platformApi } from '../api/platform';
@@ -26,6 +28,8 @@ const featureRows = [
   ['Kiểm soát tool-call của AI Agent', false, false, false, false, true]
 ] as const;
 
+type AddStep = 'info' | 'pricing' | 'features';
+
 export const BusinessPackaging: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -33,14 +37,15 @@ export const BusinessPackaging: React.FC = () => {
   const canBuyPlan = user?.role === 'TenantOwner';
   const [plans, setPlans] = useState<ProductPlanResponse[]>([]);
   const [selectedPlanId, setSelectedPlanId] = useState<string>('');
-
-
   const [loading, setLoading] = useState(false);
   const [buying, setBuying] = useState(false);
-  const [editingPlan, setEditingPlan] = useState<ProductPlanResponse | null>(null);
+
   const [showAddForm, setShowAddForm] = useState(false);
-  
-  const [newPlan, setNewPlan] = useState({
+  const [addStep, setAddStep] = useState<AddStep>('info');
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+
+  const createEmptyNewPlan = () => ({
     code: '',
     name: '',
     description: '',
@@ -52,8 +57,10 @@ export const BusinessPackaging: React.FC = () => {
     maxAgents: 0,
     features: ['Chính sách bảo mật AI cơ bản'],
     isActive: true,
-    displayOrder: 1
+    displayOrder: (plans[plans.length - 1]?.displayOrder ?? 0) + 1
   });
+
+  const [newPlan, setNewPlan] = useState(createEmptyNewPlan);
 
   const loadPlans = async () => {
     setLoading(true);
@@ -75,28 +82,52 @@ export const BusinessPackaging: React.FC = () => {
     loadPlans();
   }, [isPlatformAdmin]);
 
-  const handleSaveEdit = async () => {
-    if (!editingPlan || !isPlatformAdmin) return;
-    try {
-      await platformApi.updatePlan(editingPlan.id, editingPlan);
-      alert('Cập nhật gói thành công!');
-      setEditingPlan(null);
-      loadPlans();
-    } catch (e: any) {
-      alert('Lỗi: ' + e?.message || e);
-    }
+  const validatePlan = (plan: ProductPlanResponse | typeof newPlan): Record<string, string> => {
+    const errs: Record<string, string> = {};
+    if (!plan.name?.trim()) errs.name = 'Tên gói không được để trống';
+    if (!plan.code?.trim()) errs.code = 'Mã gói không được để trống';
+    if (plan.monthlyPrice < 0) errs.monthlyPrice = 'Giá không được âm';
+    if (plan.yearlyPrice < 0) errs.yearlyPrice = 'Giá không được âm';
+    if (plan.includedUsers <= 0) errs.includedUsers = 'Phải có ít nhất 1 user';
+    if (plan.includedDevices <= 0) errs.includedDevices = 'Phải có ít nhất 1 thiết bị';
+    if (plan.maxAgents < 0) errs.maxAgents = 'Số agent không được âm';
+    return errs;
   };
 
   const handleCreate = async () => {
     if (!isPlatformAdmin) return;
+    const errs = validatePlan(newPlan);
+    setErrors(errs);
+    if (Object.keys(errs).length > 0) {
+      setAddStep('info'); // Quay lại bước 1 hiển thị lỗi nếu có
+      return;
+    }
+    setSaving(true);
     try {
       await platformApi.createPlan(newPlan);
-      alert('Tạo gói thành công!');
       setShowAddForm(false);
-      loadPlans();
+      setErrors({});
+      setAddStep('info');
+      setNewPlan(createEmptyNewPlan());
+      await loadPlans();
     } catch (e: any) {
-      alert('Lỗi: ' + e?.message || e);
+      alert('Lỗi: ' + (e?.message || e));
+    } finally {
+      setSaving(false);
     }
+  };
+
+  const openAddForm = () => {
+    setNewPlan(createEmptyNewPlan());
+    setErrors({});
+    setAddStep('info');
+    setShowAddForm(true);
+  };
+
+  const closeAddForm = () => {
+    setShowAddForm(false);
+    setErrors({});
+    setAddStep('info');
   };
 
   const plan = plans.find(p => p.id === selectedPlanId) ?? plans[0];
@@ -117,11 +148,7 @@ export const BusinessPackaging: React.FC = () => {
         notes: `TenantOwner selected ${targetPlan.name} from package page.`
       });
       navigate('/app/business/payment', {
-        state: {
-          order,
-          plan: targetPlan,
-          purchaseMonths: 1
-        }
+        state: { order, plan: targetPlan, purchaseMonths: 1 }
       });
     } catch (e: any) {
       alert('Lỗi: ' + (e?.message || e));
@@ -130,7 +157,7 @@ export const BusinessPackaging: React.FC = () => {
     }
   };
 
-
+  const newYearlyTotal = newPlan.yearlyPrice * newPlan.includedUsers;
 
   return (
     <div className="business-page">
@@ -144,29 +171,22 @@ export const BusinessPackaging: React.FC = () => {
           </p>
         </div>
         {isPlatformAdmin && <div className="business-header-actions">
-          <button className="btn-primary" onClick={() => setShowAddForm(true)}><Plus size={15} /> Tạo gói mới</button>
+          <button className="btn-primary" onClick={openAddForm}><Plus size={15} /> Tạo gói mới</button>
         </div>}
       </div>
 
       {isPlatformAdmin && showAddForm && (
-        <section className="card glass business-section p-6 mb-8">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold flex items-center gap-2"><Plus size={18}/> Thêm gói dịch vụ mới</h2>
-            <button onClick={() => setShowAddForm(false)} className="text-gray-400 hover:text-white"><X size={20}/></button>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <label>Mã gói (VD: STARTER)<input className="w-full p-2 mt-1 rounded bg-black/20 border border-white/10" value={newPlan.code} onChange={e => setNewPlan({...newPlan, code: e.target.value})} /></label>
-            <label>Tên gói (VD: Starter Plan)<input className="w-full p-2 mt-1 rounded bg-black/20 border border-white/10" value={newPlan.name} onChange={e => setNewPlan({...newPlan, name: e.target.value})} /></label>
-            <label>Giá mỗi user / tháng (VND)<input type="number" className="w-full p-2 mt-1 rounded bg-black/20 border border-white/10" value={newPlan.monthlyPrice} onChange={e => setNewPlan({...newPlan, monthlyPrice: Number(e.target.value)})} /></label>
-            <label>Số users tối đa<input type="number" className="w-full p-2 mt-1 rounded bg-black/20 border border-white/10" value={newPlan.includedUsers} onChange={e => setNewPlan({...newPlan, includedUsers: Number(e.target.value)})} /></label>
-            <label>Số thiết bị tối đa<input type="number" className="w-full p-2 mt-1 rounded bg-black/20 border border-white/10" value={newPlan.includedDevices} onChange={e => setNewPlan({...newPlan, includedDevices: Number(e.target.value)})} /></label>
-            <label>Thứ tự hiển thị<input type="number" className="w-full p-2 mt-1 rounded bg-black/20 border border-white/10" value={newPlan.displayOrder} onChange={e => setNewPlan({...newPlan, displayOrder: Number(e.target.value)})} /></label>
-            <label className="col-span-2">Mô tả ngắn<input className="w-full p-2 mt-1 rounded bg-black/20 border border-white/10" value={newPlan.description} onChange={e => setNewPlan({...newPlan, description: e.target.value})} /></label>
-          </div>
-          <div className="mt-6 flex justify-end">
-            <button className="btn-primary" onClick={handleCreate}><Save size={16}/> Lưu gói mới</button>
-          </div>
-        </section>
+        <AddPlanModal
+          draft={newPlan}
+          onChange={setNewPlan}
+          onClose={closeAddForm}
+          onSave={handleCreate}
+          step={addStep}
+          setStep={setAddStep}
+          errors={errors}
+          saving={saving}
+          yearlyTotal={newYearlyTotal}
+        />
       )}
 
       {loading ? (
@@ -185,8 +205,8 @@ export const BusinessPackaging: React.FC = () => {
               <div key={item.id} className={`business-plan-card pricing-plan-card card glass ${selectedPlanId === item.id ? 'active' : ''} relative`}>
                 {isPlatformAdmin && (
                   <button
-                    onClick={() => setEditingPlan(item)}
-                    className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors"
+                    onClick={(e) => { e.stopPropagation(); alert('Tính năng đang được phát triển'); }}
+                    className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-blue-500/30 hover:text-blue-300 rounded-full transition-colors z-10"
                     title="Sửa cấu hình gói"
                   >
                     <Edit size={14} />
@@ -214,6 +234,9 @@ export const BusinessPackaging: React.FC = () => {
                   </div>
                   <ul>
                     {item.features?.slice(0, 5).map(feature => <li key={feature}><Check size={13} /> {feature}</li>)}
+                    {item.features && item.features.length > 5 && (
+                      <li className="text-xs text-gray-500">+{item.features.length - 5} tính năng khác</li>
+                    )}
                   </ul>
                   {canBuyPlan && (
                     <button
@@ -234,43 +257,7 @@ export const BusinessPackaging: React.FC = () => {
             ))}
             {plans.length === 0 && <div className="text-gray-400 p-4">Chưa có gói dịch vụ nào. Hãy tạo mới.</div>}
           </div>
-
-
         </section>
-      )}
-
-      {isPlatformAdmin && editingPlan && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-[#1e2128] border border-white/10 p-6 rounded-xl shadow-2xl w-[600px] max-w-full">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold flex items-center gap-2"><Edit size={18}/> Chỉnh sửa gói: {editingPlan.name}</h3>
-              <button onClick={() => setEditingPlan(null)} className="text-gray-400 hover:text-white"><X size={20}/></button>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <label>Tên gói<input className="w-full p-2 mt-1 rounded bg-black/20 border border-white/10" value={editingPlan.name} onChange={e => setEditingPlan({...editingPlan, name: e.target.value})} /></label>
-              <label>Mã gói<input className="w-full p-2 mt-1 rounded bg-black/20 border border-white/10" value={editingPlan.code} onChange={e => setEditingPlan({...editingPlan, code: e.target.value})} /></label>
-              
-              <label>Giá tháng / user (VND)<input type="number" className="w-full p-2 mt-1 rounded bg-black/20 border border-white/10" value={editingPlan.monthlyPrice} onChange={e => setEditingPlan({...editingPlan, monthlyPrice: Number(e.target.value)})} /></label>
-              <label>Giá năm / user (VND)<input type="number" className="w-full p-2 mt-1 rounded bg-black/20 border border-white/10" value={editingPlan.yearlyPrice} onChange={e => setEditingPlan({...editingPlan, yearlyPrice: Number(e.target.value)})} /></label>
-              
-              <label>Số Users cho phép<input type="number" className="w-full p-2 mt-1 rounded bg-black/20 border border-white/10" value={editingPlan.includedUsers} onChange={e => setEditingPlan({...editingPlan, includedUsers: Number(e.target.value)})} /></label>
-              <label>Số Devices cho phép<input type="number" className="w-full p-2 mt-1 rounded bg-black/20 border border-white/10" value={editingPlan.includedDevices} onChange={e => setEditingPlan({...editingPlan, includedDevices: Number(e.target.value)})} /></label>
-              
-              <label className="col-span-2">Mô tả (Sales Hook)<input className="w-full p-2 mt-1 rounded bg-black/20 border border-white/10" value={editingPlan.description || ''} onChange={e => setEditingPlan({...editingPlan, description: e.target.value})} /></label>
-              
-              <label className="flex items-center gap-2 col-span-2 p-2 mt-2 bg-white/5 rounded border border-white/10 cursor-pointer hover:bg-white/10 transition-colors">
-                <input type="checkbox" className="w-5 h-5 accent-blue-500" checked={editingPlan.isActive} onChange={e => setEditingPlan({...editingPlan, isActive: e.target.checked})} />
-                <span className="font-medium text-white">Kích hoạt gói dịch vụ này (Đang bán)</span>
-              </label>
-            </div>
-            
-            <div className="mt-8 flex justify-end gap-3">
-              <button className="btn-secondary" onClick={() => setEditingPlan(null)}>Hủy</button>
-              <button className="btn-primary" onClick={handleSaveEdit}><Save size={16}/> Lưu thay đổi</button>
-            </div>
-          </div>
-        </div>
       )}
 
       <section className="business-section card glass pricing-compare-section">
@@ -308,6 +295,464 @@ export const BusinessPackaging: React.FC = () => {
   );
 };
 
+// =================================================================
+// Field & helpers
+// =================================================================
+const Field: React.FC<{ label: string; required?: boolean; error?: string; colSpan?: number; children: React.ReactNode }> =
+  ({ label, required, error, colSpan, children }) => (
+    <label className={`block ${colSpan === 2 ? 'col-span-2' : ''}`}>
+      <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+        {label}
+        {required && <span className="text-rose-400 text-sm">*</span>}
+      </span>
+      {children}
+      {error && (
+        <span className="text-xs text-rose-400 mt-1.5 flex items-center gap-1.5 animate-pulse">
+          <AlertCircle size={12} /> {error}
+        </span>
+      )}
+    </label>
+  );
+
+const IconInput: React.FC<{
+  icon: React.ReactNode;
+  error?: string;
+  theme?: 'indigo' | 'emerald';
+  [key: string]: any;
+}> = ({ icon, error, theme = 'indigo', ...props }) => {
+  const focusRingCls = theme === 'emerald'
+    ? 'focus:border-emerald-500 focus:ring-emerald-500/20'
+    : 'focus:border-indigo-500 focus:ring-indigo-500/20';
+
+  return (
+    <div className="relative mt-1.5">
+      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+        {icon}
+      </div>
+      <input
+        className={`w-full pl-10 pr-4 py-2.5 text-sm rounded-xl bg-slate-950/60 border ${
+          error
+            ? 'border-red-500/50 focus:border-red-500 focus:ring-red-500/20'
+            : `border-slate-800/80 ${focusRingCls}`
+        } text-white placeholder-slate-600 focus:outline-none focus:ring-4 transition-all duration-200`}
+        style={{ backgroundColor: '#09090b' }}
+        {...props}
+      />
+    </div>
+  );
+};
+
+const IconSelect: React.FC<{
+  icon: React.ReactNode;
+  theme?: 'indigo' | 'emerald';
+  children: React.ReactNode;
+  [key: string]: any;
+}> = ({ icon, theme = 'indigo', children, ...props }) => {
+  const focusRingCls = theme === 'emerald'
+    ? 'focus:border-emerald-500 focus:ring-emerald-500/20'
+    : 'focus:border-indigo-500 focus:ring-indigo-500/20';
+
+  return (
+    <div className="relative mt-1.5">
+      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+        {icon}
+      </div>
+      <select
+        className={`w-full pl-10 pr-10 py-2.5 text-sm rounded-xl bg-slate-950/60 border border-slate-800/80 text-white focus:outline-none focus:ring-4 transition-all duration-200 appearance-none ${focusRingCls}`}
+        style={{ backgroundColor: '#09090b' }}
+        {...props}
+      >
+        {children}
+      </select>
+      <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-slate-500">
+        <ChevronDown size={14} />
+      </div>
+    </div>
+  );
+};
+
+const IconTextarea: React.FC<{
+  icon: React.ReactNode;
+  error?: string;
+  theme?: 'indigo' | 'emerald';
+  [key: string]: any;
+}> = ({ icon, error, theme = 'indigo', ...props }) => {
+  const focusRingCls = theme === 'emerald'
+    ? 'focus:border-emerald-500 focus:ring-emerald-500/20'
+    : 'focus:border-indigo-500 focus:ring-indigo-500/20';
+
+  return (
+    <div className="relative mt-1.5">
+      <div className="absolute top-3 left-3.5 pointer-events-none text-slate-500">
+        {icon}
+      </div>
+      <textarea
+        className={`w-full pl-10 pr-4 py-2.5 text-sm rounded-xl bg-slate-950/60 border ${
+          error
+            ? 'border-red-500/50 focus:border-red-500 focus:ring-red-500/20'
+            : `border-slate-800/80 ${focusRingCls}`
+        } text-white placeholder-slate-600 focus:outline-none focus:ring-4 transition-all duration-200`}
+        style={{ backgroundColor: '#09090b' }}
+        {...props}
+      />
+    </div>
+  );
+};
+
+const FeatureTags: React.FC<{
+  features: string[];
+  onChange: (next: string[]) => void;
+  theme?: 'indigo' | 'emerald';
+}> = ({ features, onChange, theme = 'indigo' }) => {
+  const [draft, setDraft] = useState('');
+  const add = () => {
+    const v = draft.trim();
+    if (!v) return;
+    if (features.includes(v)) { setDraft(''); return; }
+    onChange([...features, v]);
+    setDraft('');
+  };
+  const remove = (idx: number) => onChange(features.filter((_, i) => i !== idx));
+
+  const focusRingCls = theme === 'emerald'
+    ? 'focus:border-emerald-500 focus:ring-emerald-500/20'
+    : 'focus:border-indigo-500 focus:ring-indigo-500/20';
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-2 p-3.5 rounded-xl bg-slate-950/40 border border-slate-800/80 min-h-[50px] transition-all duration-200">
+        {features.length === 0 && <span className="text-xs text-slate-500 py-1 pl-1">Chưa có tính năng nào. Hãy nhập ở dưới để thêm...</span>}
+        {features.map((f, i) => (
+          <span key={i} className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg border text-xs font-semibold transition-all duration-150
+            ${theme === 'emerald'
+              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
+              : 'bg-indigo-500/10 border-indigo-500/20 text-indigo-300'}`}>
+            <Sparkles size={11} className={theme === 'emerald' ? 'text-emerald-400' : 'text-indigo-400'} />
+            {f}
+            <button type="button" onClick={() => remove(i)} className="ml-1 text-slate-400 hover:text-rose-400 transition-colors cursor-pointer"><X size={12} /></button>
+          </span>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <input
+          className={`flex-1 px-4 py-2.5 text-sm rounded-xl bg-slate-950/60 border border-slate-800/80 placeholder-slate-500 focus:outline-none focus:ring-4 transition-all duration-200 ${focusRingCls}`}
+          style={{ backgroundColor: '#09090b' }}
+          placeholder="Nhập tính năng rồi nhấn Enter..."
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
+        />
+        <button
+          type="button"
+          className={`flex items-center gap-1.5 px-4 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-200 hover:-translate-y-0.5 cursor-pointer shadow-md
+            ${theme === 'emerald'
+              ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-emerald-500/20 hover:shadow-emerald-500/30'
+              : 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-indigo-500/20 hover:shadow-indigo-500/30'}`}
+          onClick={add}
+        >
+          <Plus size={14} /> Thêm
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// =================================================================
+// Add Plan Modal — STEPPED WIZARD LAYOUT
+// =================================================================
+const AddPlanModal: React.FC<{
+  draft: {
+    code: string;
+    name: string;
+    description: string;
+    monthlyPrice: number;
+    yearlyPrice: number;
+    currency: string;
+    includedUsers: number;
+    includedDevices: number;
+    maxAgents: number;
+    features: string[];
+    isActive: boolean;
+    displayOrder: number;
+  };
+  onChange: (draft: any) => void;
+  onClose: () => void;
+  onSave: () => void;
+  step: AddStep;
+  setStep: (s: AddStep) => void;
+  errors: Record<string, string>;
+  saving: boolean;
+  yearlyTotal: number;
+}> = ({ draft, onChange, onClose, onSave, step, setStep, errors, saving, yearlyTotal }) => {
+  
+  const progressPercent = step === 'info' ? 33 : step === 'pricing' ? 66 : 100;
+
+  return (
+    <div className="fixed inset-0 flex items-center justify-center bg-black/75 backdrop-blur-md p-4" style={{ zIndex: 1000 }}>
+      <div className="border border-slate-800/90 rounded-2xl shadow-[0_0_50px_-12px_rgba(16,185,129,0.25)] w-[580px] max-w-full flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200" style={{ backgroundColor: '#16181d' }}>
+        
+        {/* Header with Title & Step Progress */}
+        <div className="px-6 pt-5 pb-4 border-b border-slate-800/80 bg-slate-950/40">
+          <div className="flex justify-between items-center mb-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                <Plus size={16} className="text-white" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white uppercase tracking-wider">Tạo gói dịch vụ mới</h3>
+                <p className="text-[10px] text-slate-500">Thiết lập tham số đóng gói từng bước</p>
+              </div>
+            </div>
+            <button onClick={onClose} className="text-slate-500 hover:text-white p-1.5 rounded-lg hover:bg-slate-800/60 transition-colors cursor-pointer">
+              <X size={16}/>
+            </button>
+          </div>
+          
+          {/* Visual Step Progress Bar */}
+          <div className="space-y-1.5">
+            <div className="flex justify-between text-[10px] font-bold text-slate-500">
+              <span className={step === 'info' ? 'text-emerald-400 font-extrabold' : ''}>1. Thông tin chung</span>
+              <span className={step === 'pricing' ? 'text-emerald-400 font-extrabold' : ''}>2. Giá & Giới hạn</span>
+              <span className={step === 'features' ? 'text-emerald-400 font-extrabold' : ''}>3. Tính năng & Hoàn tất</span>
+            </div>
+            <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 transition-all duration-350 rounded-full" style={{ width: `${progressPercent}%` }} />
+            </div>
+          </div>
+        </div>
+
+        {/* Step-specific Form body */}
+        <div className="p-6 flex-1 overflow-y-auto max-h-[60vh] space-y-5">
+          {step === 'info' && (
+            <div className="space-y-4">
+              <Field label="Tên gói dịch vụ" required error={errors.name}>
+                <IconInput 
+                  icon={<Tag size={14} />} 
+                  error={errors.name} 
+                  value={draft.name} 
+                  onChange={(e: any) => onChange({...draft, name: e.target.value})} 
+                  placeholder="VD: Enterprise Plan" 
+                  theme="emerald" 
+                />
+              </Field>
+              <Field label="Mã định danh gói (Unique Code)" required error={errors.code}>
+                <IconInput 
+                  icon={<Shield size={14} />} 
+                  error={errors.code} 
+                  value={draft.code} 
+                  onChange={(e: any) => onChange({...draft, code: e.target.value.toUpperCase()})} 
+                  placeholder="VD: ENTERPRISE" 
+                  theme="emerald" 
+                />
+              </Field>
+              <Field label="Thứ tự sắp xếp hiển thị">
+                <IconInput 
+                  type="number" 
+                  icon={<Layers size={14} />} 
+                  value={draft.displayOrder} 
+                  onChange={(e: any) => onChange({...draft, displayOrder: Number(e.target.value)})} 
+                  theme="emerald" 
+                />
+              </Field>
+              <Field label="Mô tả bán hàng (Sales Hook)">
+                <IconTextarea 
+                  rows={3} 
+                  icon={<Info size={14} />} 
+                  value={draft.description} 
+                  onChange={(e: any) => onChange({...draft, description: e.target.value})} 
+                  placeholder="Mô tả ngắn gọn về giá trị gói..." 
+                  theme="emerald" 
+                />
+              </Field>
+            </div>
+          )}
+
+          {step === 'pricing' && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Giá mỗi tháng / user" error={errors.monthlyPrice}>
+                  <IconInput 
+                    type="number" 
+                    icon={<DollarSign size={14} />} 
+                    error={errors.monthlyPrice} 
+                    value={draft.monthlyPrice} 
+                    onChange={(e: any) => onChange({...draft, monthlyPrice: Number(e.target.value)})} 
+                    theme="emerald" 
+                  />
+                </Field>
+                <Field label="Giá mỗi năm / user" error={errors.yearlyPrice}>
+                  <IconInput 
+                    type="number" 
+                    icon={<Calendar size={14} />} 
+                    error={errors.yearlyPrice} 
+                    value={draft.yearlyPrice} 
+                    onChange={(e: any) => onChange({...draft, yearlyPrice: Number(e.target.value)})} 
+                    theme="emerald" 
+                  />
+                </Field>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Loại tiền tệ">
+                  <IconSelect 
+                    icon={<Globe size={14} />} 
+                    value={draft.currency} 
+                    onChange={(e: any) => onChange({...draft, currency: e.target.value})} 
+                    theme="emerald"
+                  >
+                    <option value="VND">VND</option>
+                    <option value="USD">USD</option>
+                  </IconSelect>
+                </Field>
+                <Field label="Số AI Agents tối đa">
+                  <IconInput 
+                    type="number" 
+                    icon={<Activity size={14} />} 
+                    value={draft.maxAgents} 
+                    onChange={(e: any) => onChange({...draft, maxAgents: Number(e.target.value)})} 
+                    theme="emerald" 
+                  />
+                </Field>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Số lượng Users tối thiểu" required error={errors.includedUsers}>
+                  <IconInput 
+                    type="number" 
+                    icon={<Users size={14} />} 
+                    error={errors.includedUsers} 
+                    value={draft.includedUsers} 
+                    onChange={(e: any) => onChange({...draft, includedUsers: Number(e.target.value)})} 
+                    theme="emerald" 
+                  />
+                </Field>
+                <Field label="Số lượng Devices tối thiểu" required error={errors.includedDevices}>
+                  <IconInput 
+                    type="number" 
+                    icon={<Monitor size={14} />} 
+                    error={errors.includedDevices} 
+                    value={draft.includedDevices} 
+                    onChange={(e: any) => onChange({...draft, includedDevices: Number(e.target.value)})} 
+                    theme="emerald" 
+                  />
+                </Field>
+              </div>
+
+              <label className="flex items-center gap-3 mt-1.5 px-4 py-3 rounded-xl bg-slate-950/40 border border-slate-800/80 cursor-pointer hover:bg-slate-800/30 transition-all duration-200">
+                <input 
+                  type="checkbox" 
+                  className="w-4 h-4 rounded border-slate-800 text-emerald-600 focus:ring-emerald-500/20 focus:ring-offset-slate-900 bg-slate-950/80 cursor-pointer" 
+                  checked={draft.isActive} 
+                  onChange={(e: any) => onChange({...draft, isActive: e.target.checked})} 
+                />
+                <div>
+                  <span className="text-xs font-semibold text-slate-300 block">Kích hoạt gói dịch vụ này ngay</span>
+                  <span className="text-[10px] text-slate-500 block mt-0.5">Khách hàng sẽ nhìn thấy và có thể chọn mua gói</span>
+                </div>
+              </label>
+            </div>
+          )}
+
+          {step === 'features' && (
+            <div className="space-y-4">
+              <Field label="Tính năng nổi bật đi kèm">
+                <p className="text-[10.5px] text-slate-400 mb-2">Các tính năng chính cốt lõi nhất sẽ hiển thị trên card để khách hàng so sánh trực quan.</p>
+                <FeatureTags
+                  features={draft.features}
+                  onChange={(features) => onChange({ ...draft, features })}
+                  theme="emerald"
+                />
+              </Field>
+
+              {/* Package Creation Summary Box */}
+              <div className="p-4 rounded-xl border border-slate-850 bg-slate-950/50 space-y-2.5">
+                <h4 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                  <Award size={13} className="text-emerald-400" /> Tóm tắt cấu hình gói
+                </h4>
+                <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
+                  <div className="flex justify-between border-b border-slate-900/60 pb-1">
+                    <span className="text-slate-500">Tên gói:</span>
+                    <span className="text-slate-300 font-bold">{draft.name || '—'}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-slate-900/60 pb-1">
+                    <span className="text-slate-500">Mã gói:</span>
+                    <span className="text-emerald-400 font-bold font-mono">{draft.code || '—'}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-slate-900/60 pb-1 col-span-2">
+                    <span className="text-slate-500">Đơn giá tháng / năm:</span>
+                    <span className="text-white font-bold">{formatVnd(draft.monthlyPrice)} / {formatVnd(draft.yearlyPrice)} (mỗi user)</span>
+                  </div>
+                  <div className="flex justify-between pt-0.5 col-span-2 text-slate-400">
+                    <span>Ước tính doanh thu (Gói năm / {draft.includedUsers} Users):</span>
+                    <strong className="text-emerald-400">{formatVnd(yearlyTotal)}</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Modal Wizard Navigation Footer */}
+        <div className="flex justify-between items-center px-6 py-4 border-t border-slate-800/80 bg-slate-950/40">
+          <div>
+            {step !== 'info' ? (
+              <button 
+                type="button"
+                onClick={() => setStep(step === 'features' ? 'pricing' : 'info')}
+                className="flex items-center gap-1 px-4 py-2 rounded-xl text-xs font-bold text-slate-400 bg-transparent border border-slate-800 hover:text-white hover:bg-slate-800/60 transition-colors cursor-pointer"
+              >
+                <ChevronLeft size={14} /> Quay lại
+              </button>
+            ) : (
+              <button 
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-400 bg-transparent border border-slate-800 hover:text-white hover:bg-slate-800/60 transition-colors cursor-pointer"
+              >
+                Hủy
+              </button>
+            )}
+          </div>
+
+          <div className="flex gap-2">
+            {step !== 'features' ? (
+              <button 
+                type="button"
+                onClick={() => {
+                  // Validate form fields của bước hiện tại trước khi next
+                  if (step === 'info') {
+                    if (!draft.name?.trim() || !draft.code?.trim()) {
+                      alert('Vui lòng điền đầy đủ Tên gói và Mã gói dịch vụ!');
+                      return;
+                    }
+                  }
+                  setStep('features');
+                }}
+                className="flex items-center gap-1 px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider text-white bg-gradient-to-r from-emerald-500 to-teal-600 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-emerald-500/20 transition-all duration-200 cursor-pointer"
+              >
+                Tiếp theo <ChevronRight size={14} />
+              </button>
+            ) : (
+              <button 
+                type="button"
+                onClick={onSave}
+                disabled={saving}
+                className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider text-white bg-gradient-to-r from-emerald-500 to-teal-600 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-emerald-500/20 transition-all duration-200 cursor-pointer disabled:opacity-50"
+              >
+                <Save size={14} /> {saving ? 'Đang tạo...' : 'Lưu gói dịch vụ'}
+              </button>
+            )}
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+};
+
+// =================================================================
+// Utilities
+// =================================================================
 function formatVnd(value: number) {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(value);
 }

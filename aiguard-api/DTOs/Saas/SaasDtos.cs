@@ -210,6 +210,22 @@ public class PaymentReconcileRequest
     public string? Note { get; set; }
 }
 
+public class CheckoutOrderRequest
+{
+    [Range(0.01, double.MaxValue)] public decimal Amount { get; set; }
+    public string Currency { get; set; } = "VND";
+    public string Method { get; set; } = "InstantDemo";
+    public string? TransactionReference { get; set; }
+    [Range(1, 36)] public int PeriodMonths { get; set; } = 1;
+}
+
+public class CheckoutOrderResponse
+{
+    public OrderResponse Order { get; set; } = null!;
+    public PaymentResponse Payment { get; set; } = null!;
+    public LicenseCreatedResponse License { get; set; } = null!;
+}
+
 public class PaymentResponse
 {
     public Guid Id { get; set; }
@@ -217,6 +233,7 @@ public class PaymentResponse
     public Guid OrderId { get; set; }
     public string OrderNumber { get; set; } = string.Empty;
     public Guid TenantId { get; set; }
+    public string TenantCode { get; set; } = string.Empty;
     public decimal Amount { get; set; }
     public string Currency { get; set; } = string.Empty;
     public string Method { get; set; } = string.Empty;
@@ -439,6 +456,12 @@ public class EnrollmentTokenResponse
     public string EnrollmentToken { get; set; } = string.Empty;
     public DateTime ExpiresAt { get; set; }
     public string InstallCommand { get; set; } = string.Empty;
+}
+
+public class OnboardingListResponse
+{
+    public List<OnboardingResponse> Items { get; set; } = [];
+    public int Total { get; set; }
 }
 
 public class OnboardingResponse

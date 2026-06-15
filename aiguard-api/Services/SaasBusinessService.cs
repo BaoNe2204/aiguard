@@ -24,6 +24,7 @@ public interface ISaasBusinessService
     Task<TenantSettingsResponse> UpdateSettingsAsync(Guid? tenantId, TenantSettingsRequest request);
     Task<List<ContactResponse>> GetContactsAsync(Guid? tenantId);
     Task<ContactResponse> CreateContactAsync(Guid? tenantId, ContactRequest request);
+    Task<ContactResponse?> UpdateContactAsync(Guid id, Guid? tenantId, ContactRequest request);
     Task<bool> DeleteContactAsync(Guid id);
     Task<List<ProductPlanResponse>> GetPlansAsync(bool activeOnly);
     Task<ProductPlanResponse> CreatePlanAsync(ProductPlanRequest request);
@@ -32,6 +33,7 @@ public interface ISaasBusinessService
     Task<OrderResponse> CreateOrderAsync(OrderRequest request);
     Task<OrderResponse?> CancelOrderAsync(Guid id, string? reason);
     Task<PaymentResponse> RecordPaymentAsync(Guid orderId, PaymentRequest request);
+    Task<CheckoutOrderResponse> CompleteCheckoutAsync(Guid orderId, CheckoutOrderRequest request, string actorEmail);
     Task<PagedResult<PaymentResponse>> GetPaymentsAsync(PagedQuery query, string? status, Guid? tenantId);
     Task<PaymentResponse?> ReconcilePaymentAsync(Guid id, PaymentReconcileRequest request, string actorEmail);
     Task<List<SubscriptionResponse>> GetSubscriptionsAsync(Guid? tenantId);
@@ -54,6 +56,8 @@ public interface ISaasBusinessService
     Task<ContractResponse> CreateContractAsync(ContractRequest request);
     Task<ContractResponse?> UpdateContractAsync(Guid id, ContractActionRequest request);
     Task<OnboardingResponse?> GetOnboardingAsync(Guid? tenantId);
+    Task<OnboardingResponse> EnsureOnboardingAsync(Guid? tenantId);
+    Task<OnboardingListResponse> GetAllOnboardingAsync();
     Task<OnboardingResponse?> UpdateOnboardingAsync(Guid? tenantId, OnboardingUpdateRequest request);
     Task<EnrollmentTokenResponse> RegenerateEnrollmentTokenAsync(Guid? tenantId);
     Task<PagedResult<TicketResponse>> GetTicketsAsync(PagedQuery query, string? status, Guid? tenantId);
@@ -533,6 +537,33 @@ public class SaasBusinessService : ISaasBusinessService
         };
     }
 
+    public async Task<ContactResponse?> UpdateContactAsync(Guid id, Guid? tenantId, ContactRequest request)
+    {
+        var tenant = await ResolveTenantAsync(tenantId);
+        var contact = await _db.CustomerContacts.FirstOrDefaultAsync(x => x.Id == id && x.TenantId == tenant.Id);
+        if (contact == null) return null;
+        var email = request.Email.Trim().ToLowerInvariant();
+        if (email != contact.Email && await _db.CustomerContacts.AnyAsync(x => x.TenantId == tenant.Id && x.Email == email && x.Id != id))
+            throw new ArgumentException("Contact email already exists.");
+        if (request.IsPrimary)
+            await _db.CustomerContacts.Where(x => x.TenantId == tenant.Id && x.IsPrimary && x.Id != id)
+                .ExecuteUpdateAsync(x => x.SetProperty(c => c.IsPrimary, false));
+        contact.FullName = request.FullName.Trim();
+        contact.Email = email;
+        contact.Phone = request.Phone?.Trim();
+        contact.JobTitle = request.JobTitle?.Trim();
+        contact.IsPrimary = request.IsPrimary;
+        contact.IsBillingContact = request.IsBillingContact;
+        await _db.SaveChangesAsync();
+        return new ContactResponse
+        {
+            Id = contact.Id, TenantId = contact.TenantId, FullName = contact.FullName,
+            Email = contact.Email, Phone = contact.Phone, JobTitle = contact.JobTitle,
+            IsPrimary = contact.IsPrimary, IsBillingContact = contact.IsBillingContact,
+            CreatedAt = contact.CreatedAt
+        };
+    }
+
     public async Task<bool> DeleteContactAsync(Guid id)
     {
         var contact = await _db.CustomerContacts.FirstOrDefaultAsync(x => x.Id == id);
@@ -578,7 +609,17 @@ public class SaasBusinessService : ISaasBusinessService
     public async Task<PagedResult<OrderResponse>> GetOrdersAsync(PagedQuery query, string? status, Guid? tenantId)
     {
         var q = _db.SalesOrders.Include(x => x.Tenant).Include(x => x.ProductPlan).AsNoTracking().AsQueryable();
-        if (tenantId.HasValue) q = q.Where(x => x.TenantId == tenantId);
+        if (_scope.IsPlatformAdmin)
+        {
+            if (tenantId.HasValue) q = q.Where(x => x.TenantId == tenantId);
+        }
+        else
+        {
+            var tenant = await _db.Tenants.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Code == _scope.TenantCode)
+                ?? throw new ArgumentException("Tenant profile has not been provisioned.");
+            q = q.Where(x => x.TenantId == tenant.Id);
+        }
         if (!string.IsNullOrWhiteSpace(status)) q = q.Where(x => x.Status == status);
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
@@ -651,10 +692,95 @@ public class SaasBusinessService : ISaasBusinessService
         return MapPayment(payment);
     }
 
+    public async Task<CheckoutOrderResponse> CompleteCheckoutAsync(Guid orderId, CheckoutOrderRequest request, string actorEmail)
+    {
+        var order = await _db.SalesOrders.Include(x => x.Tenant).Include(x => x.ProductPlan)
+            .FirstOrDefaultAsync(x => x.Id == orderId) ?? throw new KeyNotFoundException();
+        await ResolveTenantAsync(order.TenantId);
+
+        if (order.Status == "Provisioned")
+        {
+            var existingPayment = await _db.PaymentRecords.AsNoTracking()
+                .Where(x => x.OrderId == order.Id && x.Status == "Confirmed")
+                .OrderByDescending(x => x.ReconciledAt)
+                .FirstOrDefaultAsync();
+            var existingLicense = await _db.TenantLicenses.AsNoTracking()
+                .Where(x => x.TenantId == order.TenantId && x.Status == "Active")
+                .OrderByDescending(x => x.CreatedAt)
+                .FirstOrDefaultAsync()
+                ?? throw new InvalidOperationException("Provisioned order is missing an active license.");
+            return new CheckoutOrderResponse
+            {
+                Order = MapOrder(order),
+                Payment = existingPayment != null ? MapPayment(existingPayment) : new PaymentResponse
+                {
+                    OrderId = order.Id,
+                    OrderNumber = order.OrderNumber,
+                    TenantId = order.TenantId,
+                    Amount = order.TotalAmount,
+                    Currency = order.Currency,
+                    Method = request.Method,
+                    Status = "Confirmed"
+                },
+                License = await MapLicenseAsync(existingLicense)
+            };
+        }
+
+        if (order.Status is "Cancelled")
+            throw new ArgumentException("Cancelled orders cannot be checked out.");
+
+        var now = DateTime.UtcNow;
+        var months = request.PeriodMonths is >= 1 and <= 36
+            ? request.PeriodMonths
+            : order.BillingCycle.Equals("Yearly", StringComparison.OrdinalIgnoreCase) ? 12 : 1;
+
+        var payment = new PaymentRecord
+        {
+            PaymentNumber = Number("PAY"),
+            OrderId = order.Id,
+            TenantId = order.TenantId,
+            TenantCode = order.TenantCode,
+            Amount = request.Amount,
+            Currency = request.Currency.Trim().ToUpperInvariant(),
+            Method = request.Method.Trim(),
+            TransactionReference = request.TransactionReference?.Trim(),
+            Status = "Confirmed",
+            ReconciliationNote = "Instant checkout",
+            ReconciledBy = actorEmail,
+            ReconciledAt = now,
+            PaidAt = now
+        };
+        order.Status = "Paid";
+        order.PaidAt = now;
+        order.PaymentReference = payment.TransactionReference;
+        order.UpdatedAt = now;
+        _db.PaymentRecords.Add(payment);
+        await _db.SaveChangesAsync();
+
+        var license = await ProvisionOrderCoreAsync(order, months);
+        payment.Order = order;
+        return new CheckoutOrderResponse
+        {
+            Order = MapOrder(order),
+            Payment = MapPayment(payment),
+            License = license
+        };
+    }
+
     public async Task<PagedResult<PaymentResponse>> GetPaymentsAsync(PagedQuery query, string? status, Guid? tenantId)
     {
         var q = _db.PaymentRecords.Include(x => x.Order).AsNoTracking().AsQueryable();
-        if (tenantId.HasValue) q = q.Where(x => x.TenantId == tenantId);
+        if (_scope.IsPlatformAdmin)
+        {
+            if (tenantId.HasValue) q = q.Where(x => x.TenantId == tenantId);
+        }
+        else
+        {
+            var tenant = await _db.Tenants.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Code == _scope.TenantCode)
+                ?? throw new ArgumentException("Tenant profile has not been provisioned.");
+            q = q.Where(x => x.TenantId == tenant.Id);
+        }
         if (!string.IsNullOrWhiteSpace(status)) q = q.Where(x => x.Status == status);
         var total = await q.CountAsync();
         var items = await q.OrderByDescending(x => x.CreatedAt).Skip(Offset(query)).Take(PageSize(query)).ToListAsync();
@@ -726,6 +852,26 @@ public class SaasBusinessService : ISaasBusinessService
             .FirstOrDefaultAsync(x => x.Id == orderId) ?? throw new KeyNotFoundException();
         if (order.Status != "Paid") throw new ArgumentException("Only fully paid orders can be provisioned.");
         var months = order.BillingCycle.Equals("Yearly", StringComparison.OrdinalIgnoreCase) ? 12 : 1;
+        return await ProvisionOrderCoreAsync(order, months);
+    }
+
+    private async Task<LicenseCreatedResponse> ProvisionOrderCoreAsync(SalesOrder order, int periodMonths)
+    {
+        if (order.Status == "Provisioned")
+        {
+            var activeLicense = await _db.TenantLicenses.AsNoTracking()
+                .Where(x => x.TenantId == order.TenantId && x.Status == "Active")
+                .OrderByDescending(x => x.CreatedAt)
+                .FirstOrDefaultAsync()
+                ?? throw new InvalidOperationException("Provisioned order is missing an active license.");
+            return await MapLicenseAsync(activeLicense);
+        }
+
+        if (order.Status != "Paid") throw new ArgumentException("Only fully paid orders can be provisioned.");
+
+        var months = periodMonths is >= 1 and <= 36
+            ? periodMonths
+            : order.BillingCycle.Equals("Yearly", StringComparison.OrdinalIgnoreCase) ? 12 : 1;
         var now = DateTime.UtcNow;
         var subscription = await _db.Subscriptions
             .Where(x => x.TenantId == order.TenantId && x.Status != "Cancelled")
@@ -1041,6 +1187,47 @@ public class SaasBusinessService : ISaasBusinessService
         return onboarding == null ? null : MapOnboarding(onboarding);
     }
 
+    public async Task<OnboardingResponse> EnsureOnboardingAsync(Guid? tenantId)
+    {
+        var tenant = await ResolveTenantAsync(tenantId);
+        var onboarding = await _db.TenantOnboardings.FirstOrDefaultAsync(x => x.TenantId == tenant.Id);
+        if (onboarding != null) return MapOnboarding(onboarding);
+
+        var enrollmentRaw = _security.GenerateSecret();
+        var enrollment = new EnrollmentToken
+        {
+            TenantCode = tenant.Code,
+            TokenHash = _security.HashSecret(enrollmentRaw),
+            ExpiresAt = DateTime.UtcNow.AddHours(24)
+        };
+        _db.EnrollmentTokens.Add(enrollment);
+
+        onboarding = new TenantOnboarding
+        {
+            TenantId = tenant.Id,
+            TenantCode = tenant.Code,
+            AdminCreated = true,
+            EnrollmentTokenCreated = true,
+            EnrollmentTokenId = enrollment.Id
+        };
+        _db.TenantOnboardings.Add(onboarding);
+        await _db.SaveChangesAsync();
+        return MapOnboarding(onboarding);
+    }
+
+    public async Task<OnboardingListResponse> GetAllOnboardingAsync()
+    {
+        var items = await _db.TenantOnboardings
+            .Include(x => x.Tenant)
+            .OrderByDescending(x => x.StartedAt)
+            .ToListAsync();
+        return new OnboardingListResponse
+        {
+            Items = items.Select(MapOnboarding).ToList(),
+            Total = items.Count
+        };
+    }
+
     public async Task<OnboardingResponse?> UpdateOnboardingAsync(Guid? tenantId, OnboardingUpdateRequest request)
     {
         var tenant = await ResolveTenantAsync(tenantId);
@@ -1249,7 +1436,7 @@ public class SaasBusinessService : ISaasBusinessService
     private static PaymentResponse MapPayment(PaymentRecord x) => new()
     {
         Id = x.Id, PaymentNumber = x.PaymentNumber, OrderId = x.OrderId,
-        OrderNumber = x.Order?.OrderNumber ?? string.Empty, TenantId = x.TenantId,
+        OrderNumber = x.Order?.OrderNumber ?? string.Empty, TenantId = x.TenantId, TenantCode = x.TenantCode,
         Amount = x.Amount, Currency = x.Currency, Method = x.Method, Status = x.Status,
         TransactionReference = x.TransactionReference, ReceiptUrl = x.ReceiptUrl,
         ReconciliationNote = x.ReconciliationNote, CreatedAt = x.CreatedAt, ReconciledAt = x.ReconciledAt

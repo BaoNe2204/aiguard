@@ -10,7 +10,7 @@ namespace aiguard_api.Controllers;
 
 [ApiController]
 [Route("api/endpoints/shadow-ai")]
-[Authorize(Roles = "DepartmentManager,SecurityAdmin,TenantOwner")]
+[Authorize(Roles = "DepartmentManager,SecurityAdmin,TenantOwner,PlatformAdmin")]
 public class ShadowAiController : ControllerBase
 {
     private readonly IShadowAiService _shadowAi;
