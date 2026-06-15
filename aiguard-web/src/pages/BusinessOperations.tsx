@@ -834,7 +834,7 @@ const CustomersView: React.FC<{ customers: TenantResponse[]; isPlatformAdmin: bo
           )}
         </div>
         {showAdd && (
-          <div className="bizops-inline-form">
+          <div className="bizops-inline-form tenant-trial-form">
             <h3>Thêm khách hàng dùng thử</h3>
             <div className="bizops-form-grid">
               <input type="text" placeholder="Tên công ty" value={newCompany} onChange={e => setNewCompany(e.target.value)} />
@@ -842,9 +842,9 @@ const CustomersView: React.FC<{ customers: TenantResponse[]; isPlatformAdmin: bo
               <input type="text" placeholder="Tên admin" value={newName} onChange={e => setNewName(e.target.value)} />
               <input type="email" placeholder="Email admin" value={newEmail} onChange={e => setNewEmail(e.target.value)} />
             </div>
-            <div className="bizops-actions">
-              <button className="btn-primary" onClick={handleAddTrial}>Tạo Trial</button>
-              <button className="btn-secondary" onClick={() => setShowAdd(false)}>Hủy</button>
+            <div className="bizops-actions tenant-trial-actions">
+              <button className="btn-primary tenant-trial-submit" onClick={handleAddTrial}>Tạo Trial</button>
+              <button className="btn-secondary tenant-trial-cancel" onClick={() => setShowAdd(false)}>Hủy</button>
             </div>
           </div>
         )}
@@ -1193,7 +1193,7 @@ const OnboardingChecklistView: React.FC = () => {
       {message && <div className="governance-alert success">{message}</div>}
 
       {isPlatformAdmin && onboardingList.length > 0 && (
-        <div className="card glass p-4 flex items-center gap-4">
+        <div className="card glass p-4 flex items-center gap-4 onboarding-tenant-selector">
           <span className="text-sm text-gray-400">Tenant:</span>
           <select
             className="select-dark"
@@ -1252,9 +1252,9 @@ const OnboardingChecklistView: React.FC = () => {
       )}
 
       {onboarding && (
-        <div className="company-settings-grid">
+        <div className="company-settings-grid onboarding-workspace-grid">
           {/* Checklist */}
-          <section className="card glass bizops-panel">
+          <section className="card glass bizops-panel onboarding-checklist-card">
             <div className="bizops-panel-title">
               <div><CheckSquare size={18} /><h2>Checklist Triển khai: {onboarding.tenantCode.toUpperCase()}</h2></div>
               <div>
@@ -1264,7 +1264,7 @@ const OnboardingChecklistView: React.FC = () => {
               </div>
             </div>
 
-            <div className="p-4 mb-6 rounded-xl border border-white/5" style={{ background: 'rgba(0,0,0,0.2)' }}>
+            <div className="onboarding-progress-card">
               <div className="flex justify-between items-center mb-2">
                 <span className="text-xs font-semibold text-gray-400">TIẾN ĐỘ THIẾT LẬP</span>
                 <span className="text-xs font-bold text-indigo-400">{calculateProgress()}%</span>
@@ -1275,7 +1275,7 @@ const OnboardingChecklistView: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-4 onboarding-step-list">
               {[
                 { done: onboarding.adminCreated, label: '1. Tạo tài khoản Tenant Admin', detail: 'Tài khoản quản trị ban đầu đã khởi tạo khi đăng ký.' },
                 { done: onboarding.enrollmentTokenCreated, label: '2. Cấp Enrollment Token', detail: 'Cấp mã token xác thực thiết bị Agent.', button: true },
@@ -1284,8 +1284,8 @@ const OnboardingChecklistView: React.FC = () => {
                 { done: onboarding.policyEnabled, label: '5. Kích hoạt chính sách bảo mật', detail: 'Thiết lập Policy Rule Builder hoặc Whitelist/Blacklist DLP.', checkbox: true, checked: policyEnabled, onChange: setPolicyEnabled },
                 { done: onboarding.testPromptCompleted, label: '6. Gửi Prompt chạy thử', detail: 'Gửi prompt chứa dữ liệu nhạy cảm giả lập để kiểm tra hoạt động chặn.', checkbox: true, checked: testPromptCompleted, onChange: setTestPromptCompleted },
               ].map((step, i) => (
-                <div key={i} className="flex items-start gap-3 p-3 rounded-lg border border-white/5" style={{ background: 'rgba(255,255,255,0.02)' }}>
-                  <div className="mt-0.5">
+                <div key={i} className={`onboarding-step-row ${step.done ? 'is-done' : 'is-pending'}`}>
+                  <div className="onboarding-step-icon">
                     {step.done
                       ? <BadgeCheck className="text-emerald-400" size={18} />
                       : step.checkbox
@@ -1293,12 +1293,12 @@ const OnboardingChecklistView: React.FC = () => {
                             checked={step.checked} onChange={e => step.onChange?.(e.target.checked)} />
                         : <div className="w-4 h-4 rounded-full border border-gray-500 flex items-center justify-center text-[10px] text-gray-400 font-bold">{i + 1}</div>}
                   </div>
-                  <div className="flex-grow">
+                  <div className="onboarding-step-copy">
                     <strong className="block text-sm text-gray-200">{step.label}</strong>
                     <span className="text-xs text-gray-400">{step.detail}</span>
                   </div>
                   {step.button && (
-                    <button className="btn-secondary text-xs px-2.5 py-1 min-h-[30px]" onClick={handleRegenerateToken} disabled={generatingToken}>
+                    <button className="btn-secondary text-xs px-2.5 py-1 min-h-[30px] onboarding-token-button" onClick={handleRegenerateToken} disabled={generatingToken}>
                       {generatingToken ? 'Đang tạo...' : onboarding.enrollmentTokenCreated ? 'Cấp lại Token' : 'Tạo Token'}
                     </button>
                   )}
@@ -1307,9 +1307,9 @@ const OnboardingChecklistView: React.FC = () => {
             </div>
 
             {/* Notes */}
-            <div className="mt-6 pt-4 border-t border-white/10">
+            <div className="mt-6 pt-4 border-t border-white/10 onboarding-notes">
               <label className="block text-xs font-semibold text-gray-400 mb-2">Ghi chú triển khai:</label>
-              <textarea className="w-full bg-black/30 border border-white/10 text-white rounded-lg p-3 text-sm min-h-[90px] outline-none focus:border-indigo-500/50"
+              <textarea className="w-full bg-black/30 border border-white/10 text-white rounded-lg p-3 text-sm min-h-[90px] outline-none focus:border-indigo-500/50 onboarding-notes-input"
                 value={notes} onChange={e => setNotes(e.target.value)} placeholder="Nhập ghi chú triển khai riêng..." />
             </div>
 
@@ -1321,9 +1321,9 @@ const OnboardingChecklistView: React.FC = () => {
           </section>
 
           {/* Guide */}
-          <section className="flex flex-col gap-6">
+          <section className="flex flex-col gap-6 onboarding-side-panel">
             {tokenInfo && (
-              <div className="card glass p-6 border-indigo-500/30" style={{ background: 'rgba(99,102,241,0.05)' }}>
+              <div className="card glass p-6 border-indigo-500/30 onboarding-token-card" style={{ background: 'rgba(99,102,241,0.05)' }}>
                 <h3 className="text-sm font-bold text-indigo-400 mb-4 flex items-center gap-2">
                   <Terminal size={16} />Thông tin Token kích hoạt vừa cấp
                 </h3>

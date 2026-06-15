@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertCircle, Check, ChevronDown, ChevronLeft, ChevronRight, Edit, Layers, PackageCheck,
@@ -41,6 +42,7 @@ export const BusinessPackaging: React.FC = () => {
   const [buying, setBuying] = useState(false);
 
   const [showAddForm, setShowAddForm] = useState(false);
+  const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
   const [addStep, setAddStep] = useState<AddStep>('info');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -117,8 +119,54 @@ export const BusinessPackaging: React.FC = () => {
     }
   };
 
+  const handleUpdate = async () => {
+    if (!isPlatformAdmin || !editingPlanId) return;
+    const errs = validatePlan(newPlan);
+    setErrors(errs);
+    if (Object.keys(errs).length > 0) {
+      setAddStep('info');
+      return;
+    }
+    setSaving(true);
+    try {
+      await platformApi.updatePlan(editingPlanId, newPlan);
+      setShowAddForm(false);
+      setEditingPlanId(null);
+      setErrors({});
+      setAddStep('info');
+      setNewPlan(createEmptyNewPlan());
+      await loadPlans();
+    } catch (e: any) {
+      alert('Lỗi: ' + (e?.message || e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const openAddForm = () => {
     setNewPlan(createEmptyNewPlan());
+    setEditingPlanId(null);
+    setErrors({});
+    setAddStep('info');
+    setShowAddForm(true);
+  };
+
+  const openEditForm = (targetPlan: ProductPlanResponse) => {
+    setNewPlan({
+      code: targetPlan.code,
+      name: targetPlan.name,
+      description: targetPlan.description ?? '',
+      monthlyPrice: targetPlan.monthlyPrice,
+      yearlyPrice: targetPlan.yearlyPrice,
+      currency: targetPlan.currency,
+      includedUsers: targetPlan.includedUsers,
+      includedDevices: targetPlan.includedDevices,
+      maxAgents: targetPlan.maxAgents,
+      features: targetPlan.features ?? [],
+      isActive: targetPlan.isActive,
+      displayOrder: targetPlan.displayOrder
+    });
+    setEditingPlanId(targetPlan.id);
     setErrors({});
     setAddStep('info');
     setShowAddForm(true);
@@ -126,6 +174,7 @@ export const BusinessPackaging: React.FC = () => {
 
   const closeAddForm = () => {
     setShowAddForm(false);
+    setEditingPlanId(null);
     setErrors({});
     setAddStep('info');
   };
@@ -180,12 +229,13 @@ export const BusinessPackaging: React.FC = () => {
           draft={newPlan}
           onChange={setNewPlan}
           onClose={closeAddForm}
-          onSave={handleCreate}
+          onSave={editingPlanId ? handleUpdate : handleCreate}
           step={addStep}
           setStep={setAddStep}
           errors={errors}
           saving={saving}
           yearlyTotal={newYearlyTotal}
+          mode={editingPlanId ? 'edit' : 'create'}
         />
       )}
 
@@ -205,9 +255,10 @@ export const BusinessPackaging: React.FC = () => {
               <div key={item.id} className={`business-plan-card pricing-plan-card card glass ${selectedPlanId === item.id ? 'active' : ''} relative`}>
                 {isPlatformAdmin && (
                   <button
-                    onClick={(e) => { e.stopPropagation(); alert('Tính năng đang được phát triển'); }}
-                    className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-blue-500/30 hover:text-blue-300 rounded-full transition-colors z-10"
-                    title="Sửa cấu hình gói"
+                    onClick={(e) => { e.stopPropagation(); openEditForm(item); }}
+                    className="plan-edit-button"
+                    title="Chỉnh sửa gói"
+                    aria-label={`Chỉnh sửa gói ${item.name}`}
                   >
                     <Edit size={14} />
                   </button>
@@ -300,14 +351,14 @@ export const BusinessPackaging: React.FC = () => {
 // =================================================================
 const Field: React.FC<{ label: string; required?: boolean; error?: string; colSpan?: number; children: React.ReactNode }> =
   ({ label, required, error, colSpan, children }) => (
-    <label className={`block ${colSpan === 2 ? 'col-span-2' : ''}`}>
-      <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+    <label className={`package-field block ${colSpan === 2 ? 'col-span-2' : ''}`}>
+      <span className="package-field-label text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
         {label}
         {required && <span className="text-rose-400 text-sm">*</span>}
       </span>
       {children}
       {error && (
-        <span className="text-xs text-rose-400 mt-1.5 flex items-center gap-1.5 animate-pulse">
+        <span className="package-field-error text-xs text-rose-400 mt-1.5 flex items-center gap-1.5 animate-pulse">
           <AlertCircle size={12} /> {error}
         </span>
       )}
@@ -325,8 +376,8 @@ const IconInput: React.FC<{
     : 'focus:border-indigo-500 focus:ring-indigo-500/20';
 
   return (
-    <div className="relative mt-1.5">
-      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+    <div className="package-input-wrap relative mt-1.5">
+      <div className="package-input-icon absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
         {icon}
       </div>
       <input
@@ -353,8 +404,8 @@ const IconSelect: React.FC<{
     : 'focus:border-indigo-500 focus:ring-indigo-500/20';
 
   return (
-    <div className="relative mt-1.5">
-      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+    <div className="package-input-wrap relative mt-1.5">
+      <div className="package-input-icon absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
         {icon}
       </div>
       <select
@@ -364,7 +415,7 @@ const IconSelect: React.FC<{
       >
         {children}
       </select>
-      <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-slate-500">
+      <div className="package-select-caret absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-slate-500">
         <ChevronDown size={14} />
       </div>
     </div>
@@ -382,8 +433,8 @@ const IconTextarea: React.FC<{
     : 'focus:border-indigo-500 focus:ring-indigo-500/20';
 
   return (
-    <div className="relative mt-1.5">
-      <div className="absolute top-3 left-3.5 pointer-events-none text-slate-500">
+    <div className="package-input-wrap package-textarea-wrap relative mt-1.5">
+      <div className="package-input-icon absolute top-3 left-3.5 pointer-events-none text-slate-500">
         {icon}
       </div>
       <textarea
@@ -419,11 +470,11 @@ const FeatureTags: React.FC<{
     : 'focus:border-indigo-500 focus:ring-indigo-500/20';
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap gap-2 p-3.5 rounded-xl bg-slate-950/40 border border-slate-800/80 min-h-[50px] transition-all duration-200">
+    <div className="package-feature-editor space-y-3">
+      <div className="package-feature-list flex flex-wrap gap-2 p-3.5 rounded-xl bg-slate-950/40 border border-slate-800/80 min-h-[50px] transition-all duration-200">
         {features.length === 0 && <span className="text-xs text-slate-500 py-1 pl-1">Chưa có tính năng nào. Hãy nhập ở dưới để thêm...</span>}
         {features.map((f, i) => (
-          <span key={i} className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg border text-xs font-semibold transition-all duration-150
+          <span key={i} className={`package-feature-chip inline-flex items-center gap-1.5 px-3 py-1 rounded-lg border text-xs font-semibold transition-all duration-150
             ${theme === 'emerald'
               ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
               : 'bg-indigo-500/10 border-indigo-500/20 text-indigo-300'}`}>
@@ -433,7 +484,7 @@ const FeatureTags: React.FC<{
           </span>
         ))}
       </div>
-      <div className="flex gap-2">
+      <div className="package-feature-add flex gap-2">
         <input
           className={`flex-1 px-4 py-2.5 text-sm rounded-xl bg-slate-950/60 border border-slate-800/80 placeholder-slate-500 focus:outline-none focus:ring-4 transition-all duration-200 ${focusRingCls}`}
           style={{ backgroundColor: '#09090b' }}
@@ -483,46 +534,59 @@ const AddPlanModal: React.FC<{
   errors: Record<string, string>;
   saving: boolean;
   yearlyTotal: number;
-}> = ({ draft, onChange, onClose, onSave, step, setStep, errors, saving, yearlyTotal }) => {
-  
-  const progressPercent = step === 'info' ? 33 : step === 'pricing' ? 66 : 100;
+  mode?: 'create' | 'edit';
+}> = ({ draft, onChange, onClose, onSave, step, setStep, errors, saving, yearlyTotal, mode = 'create' }) => {
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, []);
 
-  return (
-    <div className="fixed inset-0 flex items-center justify-center bg-black/75 backdrop-blur-md p-4" style={{ zIndex: 1000 }}>
-      <div className="border border-slate-800/90 rounded-2xl shadow-[0_0_50px_-12px_rgba(16,185,129,0.25)] w-[580px] max-w-full flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200" style={{ backgroundColor: '#16181d' }}>
+  const progressPercent = step === 'info' ? 33 : step === 'pricing' ? 66 : 100;
+  const isEditMode = mode === 'edit';
+
+  const modal = (
+    <div className="package-modal-overlay fixed inset-0 flex items-center justify-center bg-black/75 backdrop-blur-md p-4" style={{ zIndex: 1000 }}>
+      <div className="package-modal-card border border-slate-800/90 rounded-2xl shadow-[0_0_50px_-12px_rgba(16,185,129,0.25)] w-[580px] max-w-full flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200" style={{ backgroundColor: '#16181d' }}>
         
         {/* Header with Title & Step Progress */}
-        <div className="px-6 pt-5 pb-4 border-b border-slate-800/80 bg-slate-950/40">
-          <div className="flex justify-between items-center mb-3">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-500/20">
-                <Plus size={16} className="text-white" />
+        <div className="package-modal-header px-6 pt-5 pb-4 border-b border-slate-800/80 bg-slate-950/40">
+          <div className="package-modal-title-row flex justify-between items-center mb-3">
+            <div className="package-modal-title flex items-center gap-2.5">
+              <div className="package-modal-icon w-9 h-9 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                {isEditMode ? <Edit size={16} className="text-white" /> : <Plus size={16} className="text-white" />}
               </div>
               <div>
-                <h3 className="text-sm font-bold text-white uppercase tracking-wider">Tạo gói dịch vụ mới</h3>
-                <p className="text-[10px] text-slate-500">Thiết lập tham số đóng gói từng bước</p>
+                <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+                  {isEditMode ? 'Chỉnh sửa gói dịch vụ' : 'Tạo gói dịch vụ mới'}
+                </h3>
+                <p className="text-[10px] text-slate-500">
+                  {isEditMode ? 'Cập nhật thông tin, giá và tính năng của gói hiện có' : 'Thiết lập tham số đóng gói từng bước'}
+                </p>
               </div>
             </div>
-            <button onClick={onClose} className="text-slate-500 hover:text-white p-1.5 rounded-lg hover:bg-slate-800/60 transition-colors cursor-pointer">
+            <button onClick={onClose} className="package-modal-close text-slate-500 hover:text-white p-1.5 rounded-lg hover:bg-slate-800/60 transition-colors cursor-pointer">
               <X size={16}/>
             </button>
           </div>
           
           {/* Visual Step Progress Bar */}
-          <div className="space-y-1.5">
-            <div className="flex justify-between text-[10px] font-bold text-slate-500">
+          <div className="package-stepper space-y-1.5">
+            <div className="package-step-labels flex justify-between text-[10px] font-bold text-slate-500">
               <span className={step === 'info' ? 'text-emerald-400 font-extrabold' : ''}>1. Thông tin chung</span>
               <span className={step === 'pricing' ? 'text-emerald-400 font-extrabold' : ''}>2. Giá & Giới hạn</span>
               <span className={step === 'features' ? 'text-emerald-400 font-extrabold' : ''}>3. Tính năng & Hoàn tất</span>
             </div>
-            <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 transition-all duration-350 rounded-full" style={{ width: `${progressPercent}%` }} />
+            <div className="package-step-track h-1 bg-slate-800 rounded-full overflow-hidden">
+              <div className="package-step-fill h-full bg-gradient-to-r from-emerald-500 to-teal-500 transition-all duration-350 rounded-full" style={{ width: `${progressPercent}%` }} />
             </div>
           </div>
         </div>
 
         {/* Step-specific Form body */}
-        <div className="p-6 flex-1 overflow-y-auto max-h-[60vh] space-y-5">
+        <div className="package-modal-body p-6 flex-1 overflow-y-auto max-h-[60vh] space-y-5">
           {step === 'info' && (
             <div className="space-y-4">
               <Field label="Tên gói dịch vụ" required error={errors.name}>
@@ -638,7 +702,7 @@ const AddPlanModal: React.FC<{
                 </Field>
               </div>
 
-              <label className="flex items-center gap-3 mt-1.5 px-4 py-3 rounded-xl bg-slate-950/40 border border-slate-800/80 cursor-pointer hover:bg-slate-800/30 transition-all duration-200">
+              <label className="package-active-toggle flex items-center gap-3 mt-1.5 px-4 py-3 rounded-xl bg-slate-950/40 border border-slate-800/80 cursor-pointer hover:bg-slate-800/30 transition-all duration-200">
                 <input 
                   type="checkbox" 
                   className="w-4 h-4 rounded border-slate-800 text-emerald-600 focus:ring-emerald-500/20 focus:ring-offset-slate-900 bg-slate-950/80 cursor-pointer" 
@@ -665,7 +729,7 @@ const AddPlanModal: React.FC<{
               </Field>
 
               {/* Package Creation Summary Box */}
-              <div className="p-4 rounded-xl border border-slate-850 bg-slate-950/50 space-y-2.5">
+              <div className="package-summary-box p-4 rounded-xl border border-slate-850 bg-slate-950/50 space-y-2.5">
                 <h4 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
                   <Award size={13} className="text-emerald-400" /> Tóm tắt cấu hình gói
                 </h4>
@@ -693,7 +757,7 @@ const AddPlanModal: React.FC<{
         </div>
 
         {/* Modal Wizard Navigation Footer */}
-        <div className="flex justify-between items-center px-6 py-4 border-t border-slate-800/80 bg-slate-950/40">
+        <div className="package-modal-footer flex justify-between items-center px-6 py-4 border-t border-slate-800/80 bg-slate-950/40">
           <div>
             {step !== 'info' ? (
               <button 
@@ -726,7 +790,7 @@ const AddPlanModal: React.FC<{
                       return;
                     }
                   }
-                  setStep('features');
+                  setStep(step === 'info' ? 'pricing' : 'features');
                 }}
                 className="flex items-center gap-1 px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider text-white bg-gradient-to-r from-emerald-500 to-teal-600 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-emerald-500/20 transition-all duration-200 cursor-pointer"
               >
@@ -739,7 +803,7 @@ const AddPlanModal: React.FC<{
                 disabled={saving}
                 className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider text-white bg-gradient-to-r from-emerald-500 to-teal-600 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-emerald-500/20 transition-all duration-200 cursor-pointer disabled:opacity-50"
               >
-                <Save size={14} /> {saving ? 'Đang tạo...' : 'Lưu gói dịch vụ'}
+                <Save size={14} /> {saving ? (isEditMode ? 'Đang lưu...' : 'Đang tạo...') : (isEditMode ? 'Lưu thay đổi' : 'Lưu gói dịch vụ')}
               </button>
             )}
           </div>
@@ -748,6 +812,8 @@ const AddPlanModal: React.FC<{
       </div>
     </div>
   );
+
+  return createPortal(modal, document.body);
 };
 
 // =================================================================
