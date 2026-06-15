@@ -341,31 +341,31 @@ export const Endpoints: React.FC = () => {
                 <DataTable
                   data={devices}
                   columns={[
-                    { header: t('Hostname', 'Tên máy'), accessor: 'hostname' },
-                    { header: t('User Email', 'Email người dùng'), accessor: 'userEmail' },
-                    { header: t('Department', 'Phòng ban'), accessor: 'departmentName' },
+                    { header: t('Hostname', 'Tên máy'), accessor: 'hostname', width: '150px' },
+                    { header: t('User Email', 'Email người dùng'), accessor: 'userEmail', width: '240px' },
+                    { header: t('Department', 'Phòng ban'), accessor: 'departmentName', width: '190px' },
                     { header: t('Activity', 'Hoạt động'), accessor: (item) => (
                       <span className={`device-live-pill ${isDeviceOnline(item.lastSeen) ? 'online' : 'offline'}`}>
                         {isDeviceOnline(item.lastSeen) ? <Activity size={13} /> : <WifiOff size={13} />}
                         {isDeviceOnline(item.lastSeen) ? t('Online', 'Đang hoạt động') : t('Offline', 'Không hoạt động')}
                       </span>
                     ), width: '145px' },
-                    { header: t('Agent Ver', 'Phiên bản Agent'), accessor: (item) => item.agentVersion || '—', width: '110px' },
+                    { header: t('Agent Ver', 'Phiên bản Agent'), accessor: (item) => item.agentVersion || '—', width: '130px' },
                     { header: t('Extension', 'Tiện ích'), accessor: (item) => (
                       <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-semibold rounded-md ${item.extensionActive ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}`}>
                         {item.extensionActive ? t('Active', 'Hoạt động') : t('Inactive', 'Không hoạt động')}
                       </span>
-                    ), width: '100px' },
-                    { header: t('Policy', 'Chính sách'), accessor: 'policyVersion', width: '110px' },
+                    ), width: '170px' },
+                    { header: t('Policy', 'Chính sách'), accessor: 'policyVersion', width: '170px' },
                     { header: t('Last seen', 'Lần cuối hoạt động'), accessor: (item) => formatDeviceSeen(item.lastSeen, locale), width: '165px' },
-                    { header: t('Health', 'Sức khỏe'), accessor: (item) => <RiskBadge level={item.riskStatus === 'Safe' ? 'Low' : item.riskStatus === 'Warning' ? 'Medium' : 'Critical'} />, width: '90px' },
+                    { header: t('Health', 'Sức khỏe'), accessor: (item) => <RiskBadge level={item.riskStatus === 'Safe' ? 'Low' : item.riskStatus === 'Warning' ? 'Medium' : 'Critical'} />, width: '140px' },
                     { header: t('Actions', 'Thao tác'), accessor: (item) => (
-                      <div className="flex gap-1">
+                      <div className="device-row-actions">
                         <button className="btn-action text-xs" onClick={() => triggerSync(item.id)}>{t('Sync', 'Đồng bộ')}</button>
                         <button className="btn-action text-xs" onClick={() => handleRotateKey(item.id)}>{t('Rotate', 'Tạo lại khóa')}</button>
                         <button className="btn-action text-xs text-rose-400" onClick={() => handleRevokeKey(item.id)}>{t('Revoke', 'Thu hồi')}</button>
                       </div>
-                    ), width: '210px' }
+                    ), width: '280px' }
                   ]}
                 />
                 <Pagination page={devicesPage} totalPages={devicesTotalPages} totalCount={devicesTotalCount} pageSize={20} onPageChange={setDevicesPage} />

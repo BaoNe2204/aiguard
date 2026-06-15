@@ -435,21 +435,31 @@ const FalsePositiveTab = ({ reports, refresh, run }: { reports: FalsePositive[] 
 
 const IncidentTab = ({ incidents, refresh, run }: { incidents: Incident[] } & AsyncActions) => {
   const [form, setForm] = useState({ title: '', severity: 'High', summary: '' });
-  return <section className="card glass governance-section">
-    <h2><AlertTriangle size={18} /> Incident Management</h2>
-    <form className="governance-form grid-2" onSubmit={event => {
+  return <section className="card glass governance-section incident-management-section">
+    <div className="incident-section-title">
+      <h2><AlertTriangle size={18} /> Incident Management</h2>
+      <p>Tạo và theo dõi sự cố bảo mật cần xử lý.</p>
+    </div>
+    <form className="governance-form grid-2 incident-create-form" onSubmit={event => {
       event.preventDefault();
       void run(async () => {
         await governanceApi.createIncident({ ...form, sourceType: 'Manual' });
         setForm({ title: '', severity: 'High', summary: '' }); await refresh();
       }, 'Đã tạo incident.');
     }}>
-      <input required placeholder="Tiêu đề sự cố" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} />
-      <select value={form.severity} onChange={e => setForm({ ...form, severity: e.target.value })}>
-        {['Low', 'Medium', 'High', 'Critical'].map(value => <option key={value}>{value}</option>)}
-      </select>
-      <textarea placeholder="Tóm tắt điều tra" value={form.summary} onChange={e => setForm({ ...form, summary: e.target.value })} />
-      <button className="btn-primary" type="submit"><Plus size={14} /> Tạo incident</button>
+      <div className="incident-main-fields">
+        <input required placeholder="Tiêu đề sự cố" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} />
+        <textarea placeholder="Tóm tắt điều tra" value={form.summary} onChange={e => setForm({ ...form, summary: e.target.value })} />
+      </div>
+      <div className="incident-side-fields">
+        <label>
+          Mức độ
+          <select value={form.severity} onChange={e => setForm({ ...form, severity: e.target.value })}>
+            {['Low', 'Medium', 'High', 'Critical'].map(value => <option key={value}>{value}</option>)}
+          </select>
+        </label>
+        <button className="btn-primary incident-submit-button" type="submit"><Plus size={14} /> Tạo incident</button>
+      </div>
     </form>
     <div className="governance-table-wrap"><table className="governance-table">
       <thead><tr><th>Ma</th><th>Tiêu đề</th><th>Severity</th><th>Status</th><th>Cập nhật</th></tr></thead>
