@@ -193,8 +193,8 @@ function readArgument(raw, name) {
 function applySetupPayload(payload) {
   if (payload.apiBaseUrl) elements.api.value = payload.apiBaseUrl;
   if (payload.enrollmentToken) elements.enrollmentToken.value = payload.enrollmentToken;
-  if (payload.userEmail) elements.email.value = payload.userEmail.toLowerCase();
-  if (payload.departmentName) elements.department.value = payload.departmentName;
+  if (payload.userEmail) elements.email.value = payload.userEmail.replace(/[<>]/g, "").toLowerCase();
+  if (payload.departmentName) elements.department.value = payload.departmentName.replace(/[<>]/g, "");
   if (payload.hostname) elements.host.value = payload.hostname;
 }
 
@@ -214,10 +214,10 @@ async function enroll() {
       type: "AIGUARD_ENROLL",
       body: {
         apiBaseUrl: elements.api.value,
-        hostname: elements.host.value,
-        userEmail: elements.email.value,
-        departmentName: elements.department.value,
-        enrollmentToken: elements.enrollmentToken.value
+        hostname: elements.host.value.trim(),
+        userEmail: elements.email.value.replace(/[<>]/g, "").trim().toLowerCase(),
+        departmentName: elements.department.value.replace(/[<>]/g, "").trim(),
+        enrollmentToken: elements.enrollmentToken.value.replace(/\s/g, "")
       }
     });
 

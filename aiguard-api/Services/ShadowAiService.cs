@@ -37,7 +37,7 @@ public class ShadowAiService : IShadowAiService
                 Mode = x.Mode,
                 LastUpdated = x.LastUpdated
             }).ToListAsync(),
-        BlockUnknownAi = true
+        BlockUnknownAi = false
     };
 
     public async Task<ShadowAiDiscoveryResponse> DiscoverAsync(Device device, ShadowAiDiscoverRequest request)
@@ -49,7 +49,7 @@ public class ShadowAiService : IShadowAiService
         var domain = uri.IdnHost.ToLowerInvariant();
         var rules = await _db.AiWebsites.Where(x => x.IsActive).ToListAsync();
         var matched = rules.FirstOrDefault(rule => DomainMatches(domain, rule.DomainPattern));
-        var decision = matched?.Mode ?? "Block";
+        var decision = matched?.Mode ?? "Monitor";
         var now = DateTime.UtcNow;
         var item = await _db.ShadowAiDiscoveryEvents.FirstOrDefaultAsync(x =>
             x.DeviceId == device.Id && x.Domain == domain);
@@ -154,7 +154,7 @@ public class ShadowAiService : IShadowAiService
         PageTitle = item.PageTitle,
         IsApproved = item.IsApproved,
         Decision = item.Decision,
-        ShouldBlock = !item.IsApproved || item.Decision == "Block",
+        ShouldBlock = item.Decision == "Block",
         VisitCount = item.VisitCount,
         FirstSeenAt = item.FirstSeenAt,
         LastSeenAt = item.LastSeenAt

@@ -90,6 +90,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     AIGUARD_ENROLL: () => enrollDevice(message),
     AIGUARD_TEST: () => testConnection(),
     AIGUARD_STATUS: () => getStatus(),
+    AIGUARD_GET_SIGNALR_CONFIG: () => getSignalRConfig(),
+    AIGUARD_APPROVAL_DECIDED: () => handleApprovalDecided(message),
+    AIGUARD_EXTENSION_COMMAND: () => handleExtensionCommand(message),
     AIGUARD_OPEN_OPTIONS: async () => {
       await chrome.runtime.openOptionsPage();
       return { ok: true };
@@ -388,6 +391,106 @@ async function sendExtensionHeartbeat() {
   }
 }
 
+function normalizeHubUrl(apiBaseUrl) {
+  try {
+    const url = new URL(apiBaseUrl);
+    return `${url.origin}/hubs/endpoint`;
+  } catch {
+    return `${apiBaseUrl}/hubs/endpoint`;
+  }
+}
+
+async function getSignalRConfig() {
+  const config = await getConfig();
+  if (!config.apiBaseUrl || !config.endpointKey || !config.hostname) {
+    return { ok: false, error: "Not enrolled" };
+  }
+  return {
+    ok: true,
+    hubUrl: normalizeHubUrl(config.apiBaseUrl),
+    accessToken: config.endpointKey,
+    hostname: config.hostname
+  };
+}
+
+async function handleApprovalDecided(message) {
+  // Forward approval decision to all content scripts that are waiting
+  const { approvalId, status, note, decision } = message.payload;
+  try {
+    const tabs = await chrome.tabs.query({ status: "complete" });
+    for (const tab of tabs) {
+      if (!tab.id || tab.url?.startsWith("chrome-extension://")) continue;
+      chrome.tabs.sendMessage(tab.id, {
+        type: "AIGUARD_APPROVAL_DECISION",
+        approvalId,
+        status,
+        note,
+        decision
+      }).catch(() => undefined);
+    }
+  } catch {
+    // Ignore tab query errors
+  }
+}
+
+async function broadcastNotification(message, tone = "info") {
+  try {
+    const tabs = await chrome.tabs.query({ status: "complete" });
+    for (const tab of tabs) {
+      if (!tab.id || tab.url?.startsWith("chrome-extension://") || tab.url?.startsWith("chrome://")) continue;
+      chrome.tabs.sendMessage(tab.id, {
+        type: "AIGUARD_SHOW_NOTIFICATION",
+        payload: { message, tone }
+      }).catch(() => undefined);
+    }
+  } catch {
+    // Ignore
+  }
+}
+
+async function handleExtensionCommand(message) {
+  const { command, payload, commandId } = message.payload;
+  const config = await getConfig();
+  if (config.enabled === false) return;
+
+  if (command === "refresh-policy" || command === "PolicyRefresh") {
+    // Refresh DLP policy
+    try {
+      await syncShadowPolicy();
+      await chrome.storage.local.set({ policyVersion: (await getConfig()).policyVersion || "synced" });
+      await updateBadge();
+      await broadcastNotification("Policy refreshed by admin.", "success");
+    } catch (error) {
+      console.error("Policy refresh failed:", error);
+    }
+  } else if (command === "enable") {
+    await chrome.storage.local.set({ enabled: true });
+    await updateBadge();
+  } else if (command === "disable") {
+    await chrome.storage.local.set({ enabled: false });
+    await updateBadge();
+  } else if (command === "sync-shadow") {
+    await syncShadowPolicy();
+  } else if (command === "RequestScan" && payload) {
+    // Forward scan request to all content scripts
+    try {
+      const tabs = await chrome.tabs.query({ status: "complete" });
+      for (const tab of tabs) {
+        if (!tab.id || tab.url?.startsWith("chrome-extension://")) continue;
+        chrome.tabs.sendMessage(tab.id, {
+          type: "AIGUARD_SCAN_REQUEST",
+          content: payload.content,
+          websiteAi: payload.websiteAi,
+          scanId: payload.scanId
+        }).catch(() => undefined);
+      }
+    } catch {
+      // Ignore
+    }
+  }
+  console.log(`AIGuard command received: ${command}`, payload);
+}
+
 async function discoverAiNavigation(tabId, url, title) {
   if (url.startsWith("chrome-extension://") || url.startsWith("edge-extension://")) return;
   let parsed;
@@ -405,10 +508,20 @@ async function discoverAiNavigation(tabId, url, title) {
     || patterns.some(item => domainMatches(parsed.hostname, item.pattern));
   if (!isCandidate) return;
 
-  const key = `${tabId}:${parsed.hostname}:${parsed.pathname}`;
-  const previous = recentDiscoveries.get(key) || 0;
-  if (Date.now() - previous < 30000) return;
-  recentDiscoveries.set(key, Date.now());
+  const key = `${parsed.hostname}:${parsed.pathname}`;
+  const previous = recentDiscoveries.get(key);
+  if (previous && (Date.now() - previous.timestamp < 30000)) {
+    if (previous.shouldBlock) {
+      const blockedUrl = chrome.runtime.getURL("blocked.html")
+        + `?domain=${encodeURIComponent(parsed.hostname)}`
+        + `&decision=${encodeURIComponent(previous.decision || "Block")}`;
+      await chrome.tabs.update(tabId, { url: blockedUrl });
+    }
+    return;
+  }
+  
+  // Prevent duplicate inflight requests
+  recentDiscoveries.set(key, { timestamp: Date.now(), shouldBlock: false, decision: "" });
 
   const response = await requestApi({
     apiBaseUrl: config.apiBaseUrl,
@@ -422,12 +535,21 @@ async function discoverAiNavigation(tabId, url, title) {
       browser: navigator.userAgent.includes("Edg/") ? "Edge" : "Chrome"
     }
   });
-  if (!response.ok || !response.payload?.data?.shouldBlock) return;
+  if (!response.ok || !response.payload?.data) return;
 
-  const blockedUrl = chrome.runtime.getURL("blocked.html")
-    + `?domain=${encodeURIComponent(parsed.hostname)}`
-    + `&decision=${encodeURIComponent(response.payload.data.decision || "Block")}`;
-  await chrome.tabs.update(tabId, { url: blockedUrl });
+  const data = response.payload.data;
+  recentDiscoveries.set(key, { 
+    timestamp: Date.now(), 
+    shouldBlock: data.shouldBlock, 
+    decision: data.decision 
+  });
+
+  if (data.shouldBlock) {
+    const blockedUrl = chrome.runtime.getURL("blocked.html")
+      + `?domain=${encodeURIComponent(parsed.hostname)}`
+      + `&decision=${encodeURIComponent(data.decision || "Block")}`;
+    await chrome.tabs.update(tabId, { url: blockedUrl });
+  }
 }
 
 function domainMatches(hostname, pattern) {

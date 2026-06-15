@@ -77,8 +77,9 @@ public class DlpScannerService : IDlpScannerService
         var now = DateTime.UtcNow;
         var contentHash = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(request.Content)));
         var listEntries = await _db.PolicyListEntries
+            .Include(e => e.Department)
             .Where(e => e.IsActive && (e.ExpiresAt == null || e.ExpiresAt > now) &&
-                (e.DepartmentId == null || e.DepartmentId == policy.DepartmentId))
+                (e.DepartmentId == null || (e.Department != null && (e.Department.Code == request.DepartmentCode || e.Department.Name == request.DepartmentCode))))
             .ToListAsync();
 
         if (listEntries.Any(e => e.ListType == "Whitelist" &&

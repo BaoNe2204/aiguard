@@ -161,4 +161,24 @@ export const endpointsApi = {
       { method: 'POST' }
     );
   },
+
+  // Real-time commands to extensions
+  sendCommand(data: {
+    targetType: 'device' | 'all';
+    deviceId?: string;
+    command: string;
+    payload?: Record<string, unknown>;
+  }): Promise<void> {
+    return apiRequest<void>('/endpoints/commands/send', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  refreshPolicy(deviceId?: string): Promise<void> {
+    return apiRequest<void>(
+      `/endpoints/commands/policy-refresh${buildQuery(deviceId ? { deviceId } : {})}`,
+      { method: 'POST' }
+    );
+  },
 };

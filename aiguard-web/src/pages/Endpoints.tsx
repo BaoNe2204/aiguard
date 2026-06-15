@@ -16,6 +16,7 @@ import {
   type EndpointTelemetryResponse
 } from '../api/endpoints';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useRealtimeExtension } from '../contexts/RealtimeContext';
 
 type TabType = 'overview' | 'devices' | 'websites' | 'events' | 'deployment';
 
@@ -42,6 +43,8 @@ export const Endpoints: React.FC = () => {
     : location.pathname.endsWith('/ai-websites') ? 'websites'
     : location.pathname.endsWith('/deployment') ? 'deployment'
     : 'overview';
+
+  const { extensionEvents, extensionStatus } = useRealtimeExtension();
 
   // ── Devices state ──
   const [devices, setDevices] = useState<DeviceResponse[]>([]);
@@ -173,6 +176,34 @@ export const Endpoints: React.FC = () => {
     else if (activeTab === 'deployment') fetchDeployment();
   }, [activeTab, fetchDevices, fetchEvents, fetchWebsites, fetchDeployment, fetchOverview]);
 
+  // Prepend real-time DLP events to the log view
+  useEffect(() => {
+    if (extensionEvents.length === 0) return;
+    const latestEvent = extensionEvents[0];
+    setEvents(prev => {
+      const mappedEvent: EndpointEventResponse = {
+        id: `rt-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+        userEmail: latestEvent.userEmail,
+        hostname: latestEvent.hostname,
+        browser: 'Extension',
+        websiteAi: latestEvent.websiteAi,
+        eventType: latestEvent.eventType,
+        riskScore: latestEvent.riskScore,
+        riskLevel: latestEvent.riskLevel,
+        decision: latestEvent.decision,
+        dataTypeMatched: latestEvent.dataTypeMatched,
+        maskedContentPreview: null,
+        originalHash: '',
+        policyVersion: 'real-time',
+        createdAt: latestEvent.createdAt
+      };
+      if (prev.length > 0 && prev[0].createdAt === mappedEvent.createdAt && prev[0].hostname === mappedEvent.hostname) {
+        return prev;
+      }
+      return [mappedEvent, ...prev].slice(0, 50);
+    });
+  }, [extensionEvents]);
+
   const triggerSync = async (id: string) => {
     setSyncStatus(prev => ({ ...prev, [id]: 'syncing' }));
     try {
@@ -236,7 +267,7 @@ export const Endpoints: React.FC = () => {
 
   const handleRotateToken = async () => {
     try {
-      const result = await endpointsApi.rotateDeploymentToken();
+      const result = await endpointsApi.rotateDeploymentToken(deployToken?.tenantCode);
       setDeployToken(result);
     } catch (err: any) {
       setError(err.message);
@@ -251,11 +282,23 @@ export const Endpoints: React.FC = () => {
     }
   };
 
+  const getDeviceOnlineRealtime = (device: DeviceResponse) => {
+    const s = extensionStatus.get(device.id);
+    if (s) return s.connected;
+    return isDeviceOnline(device.lastSeen);
+  };
+
+  const getExtensionActiveRealtime = (device: DeviceResponse) => {
+    const s = extensionStatus.get(device.id);
+    if (s && s.connected) return true;
+    return device.extensionActive;
+  };
+
   const deviceStats = {
     total: devicesTotalCount || devices.length,
-    online: devices.filter(device => isDeviceOnline(device.lastSeen)).length,
-    offline: devices.filter(device => !isDeviceOnline(device.lastSeen)).length,
-    extensionActive: devices.filter(device => device.extensionActive).length
+    online: devices.filter(device => getDeviceOnlineRealtime(device)).length,
+    offline: devices.filter(device => !getDeviceOnlineRealtime(device)).length,
+    extensionActive: devices.filter(device => getExtensionActiveRealtime(device)).length
   };
 
   return (
@@ -344,18 +387,24 @@ export const Endpoints: React.FC = () => {
                     { header: t('Hostname', 'Tên máy'), accessor: 'hostname', width: '150px' },
                     { header: t('User Email', 'Email người dùng'), accessor: 'userEmail', width: '240px' },
                     { header: t('Department', 'Phòng ban'), accessor: 'departmentName', width: '190px' },
-                    { header: t('Activity', 'Hoạt động'), accessor: (item) => (
-                      <span className={`device-live-pill ${isDeviceOnline(item.lastSeen) ? 'online' : 'offline'}`}>
-                        {isDeviceOnline(item.lastSeen) ? <Activity size={13} /> : <WifiOff size={13} />}
-                        {isDeviceOnline(item.lastSeen) ? t('Online', 'Đang hoạt động') : t('Offline', 'Không hoạt động')}
-                      </span>
-                    ), width: '145px' },
+                    { header: t('Activity', 'Hoạt động'), accessor: (item) => {
+                      const isOnline = getDeviceOnlineRealtime(item);
+                      return (
+                        <span className={`device-live-pill ${isOnline ? 'online' : 'offline'}`}>
+                          {isOnline ? <Activity size={13} /> : <WifiOff size={13} />}
+                          {isOnline ? t('Online', 'Đang hoạt động') : t('Offline', 'Không hoạt động')}
+                        </span>
+                      );
+                    }, width: '145px' },
                     { header: t('Agent Ver', 'Phiên bản Agent'), accessor: (item) => item.agentVersion || '—', width: '130px' },
-                    { header: t('Extension', 'Tiện ích'), accessor: (item) => (
-                      <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-semibold rounded-md ${item.extensionActive ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}`}>
-                        {item.extensionActive ? t('Active', 'Hoạt động') : t('Inactive', 'Không hoạt động')}
-                      </span>
-                    ), width: '170px' },
+                    { header: t('Extension', 'Tiện ích'), accessor: (item) => {
+                      const isExtActive = getExtensionActiveRealtime(item);
+                      return (
+                        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-semibold rounded-md ${isExtActive ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}`}>
+                          {isExtActive ? t('Active', 'Hoạt động') : t('Inactive', 'Không hoạt động')}
+                        </span>
+                      );
+                    }, width: '170px' },
                     { header: t('Policy', 'Chính sách'), accessor: 'policyVersion', width: '170px' },
                     { header: t('Last seen', 'Lần cuối hoạt động'), accessor: (item) => formatDeviceSeen(item.lastSeen, locale), width: '165px' },
                     { header: t('Health', 'Sức khỏe'), accessor: (item) => <RiskBadge level={item.riskStatus === 'Safe' ? 'Low' : item.riskStatus === 'Warning' ? 'Medium' : 'Critical'} />, width: '140px' },
@@ -485,17 +534,21 @@ export const Endpoints: React.FC = () => {
                 <div className="flex flex-col gap-4">
                   <div className="p-4 rounded-lg bg-zinc-800/40 border border-zinc-700/30 flex justify-between items-center">
                     <div>
-                      <h3 className="font-bold text-white">Windows Desktop Agent (.MSI)</h3>
+                      <h3 className="font-bold text-white">Windows Desktop Agent (.EXE)</h3>
                       <p className="text-xs text-zinc-400">{t('For Registry and Clipboard control', 'Kiểm soát Registry và Clipboard')}</p>
                     </div>
-                    <button className="btn-action flex items-center gap-1.5"><Download size={14} /> {t('Download', 'Tải xuống')}</button>
+                    <a href="/aiguard-endpoint-agent.exe" download="aiguard-endpoint-agent.exe" className="btn-action flex items-center gap-1.5">
+                      <Download size={14} /> {t('Download', 'Tải xuống')}
+                    </a>
                   </div>
                   <div className="p-4 rounded-lg bg-zinc-800/40 border border-zinc-700/30 flex justify-between items-center">
                     <div>
-                      <h3 className="font-bold text-white">Chrome / Edge Extension (.CRX)</h3>
+                      <h3 className="font-bold text-white">Chrome / Edge Extension (.ZIP)</h3>
                       <p className="text-xs text-zinc-400">{t('For Textbox monitoring and submit interception', 'Giám sát ô nhập liệu và chặn thao tác gửi')}</p>
                     </div>
-                    <button className="btn-action flex items-center gap-1.5"><Download size={14} /> {t('Download', 'Tải xuống')}</button>
+                    <a href="/aiguard-extension.zip" download="aiguard-extension.zip" className="btn-action flex items-center gap-1.5">
+                      <Download size={14} /> {t('Download', 'Tải xuống')}
+                    </a>
                   </div>
                 </div>
                 {deployToken && (

@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { LanguageProvider } from './contexts/LanguageContext';
+import { RealtimeProvider } from './contexts/RealtimeContext';
 import { ProtectedRoute } from './components/layout/ProtectedRoute';
 import { AppLayout } from './components/layout/AppLayout';
 import { Login } from './pages/Login';
@@ -47,6 +48,7 @@ function App() {
   return (
     <LanguageProvider>
       <AuthProvider>
+        <RealtimeProvider>
         <BrowserRouter>
         <Routes>
           <Route path="/" element={<Landing />} />
@@ -63,7 +65,7 @@ function App() {
             <Route path="endpoints/devices" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><Endpoints /></ProtectedRoute>} />
             <Route path="endpoints/events" element={<ProtectedRoute allowedRoles={DASHBOARD_ROLES}><Endpoints /></ProtectedRoute>} />
             <Route path="endpoints/ai-websites" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><Endpoints /></ProtectedRoute>} />
-            <Route path="endpoints/deployment" element={<ProtectedRoute allowedRoles={['TenantOwner']}><Endpoints /></ProtectedRoute>} />
+            <Route path="endpoints/deployment" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><Endpoints /></ProtectedRoute>} />
             
             {/* Approvals subroutes */}
             <Route path="approvals/prompts" element={<ProtectedRoute allowedRoles={APPROVAL_ROLES}><Approvals /></ProtectedRoute>} />
@@ -129,6 +131,7 @@ function App() {
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
         </BrowserRouter>
+        </RealtimeProvider>
       </AuthProvider>
     </LanguageProvider>
   );

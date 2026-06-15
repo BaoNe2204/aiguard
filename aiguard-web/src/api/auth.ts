@@ -1,4 +1,4 @@
-import { apiRequest, setToken, setRefreshToken, clearTokens } from './client';
+import { apiRequest, setToken, setRefreshToken, getRefreshToken, clearTokens } from './client';
 
 export interface LoginRequest {
   email: string;
@@ -57,9 +57,23 @@ export const authApi = {
     return apiRequest<UserProfile>('/auth/profile');
   },
 
-  logout(): void {
-    clearTokens();
-    window.location.href = '/login';
+  logout(allSessions = false): void {
+    const refreshToken = getRefreshToken();
+    void (async () => {
+      try {
+        if (refreshToken) {
+          await apiRequest<object>('/auth/logout', {
+            method: 'POST',
+            body: JSON.stringify({ refreshToken, allSessions }),
+          });
+        }
+      } catch {
+        // Logout must always clear the browser session, even if the API is unavailable.
+      } finally {
+        clearTokens();
+        window.location.href = '/login';
+      }
+    })();
   },
 
   clearSession(): void {
