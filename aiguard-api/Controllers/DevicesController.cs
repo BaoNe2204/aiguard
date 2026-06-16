@@ -123,4 +123,28 @@ public class DevicesController : ControllerBase
         var device = await _deviceService.HeartbeatAsync(request);
         return Ok(ApiResponse<DeviceResponse>.Ok(device));
     }
+
+    [HttpGet("{id:guid}/custom-settings")]
+    public async Task<IActionResult> GetCustomSettings(Guid id)
+    {
+        var result = await _deviceService.GetCustomSettingsAsync(id);
+        if (result == null) return NotFound(ApiResponse<object>.Fail("Device not found"));
+        return Ok(ApiResponse<DeviceCustomSettingsResponse>.Ok(result));
+    }
+
+    [HttpPut("{id:guid}/custom-settings")]
+    public async Task<IActionResult> UpdateCustomSettings(Guid id, [FromBody] DeviceCustomSettingsRequest request)
+    {
+        var result = await _deviceService.UpdateCustomSettingsAsync(id, request);
+        if (result == null) return NotFound(ApiResponse<object>.Fail("Device not found"));
+        return Ok(ApiResponse<DeviceCustomSettingsResponse>.Ok(result));
+    }
+
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> DeleteDevice(Guid id)
+    {
+        var result = await _deviceService.DeleteDeviceAsync(id);
+        if (!result) return NotFound(ApiResponse<object>.Fail("Device not found"));
+        return Ok(ApiResponse<object>.Ok(null));
+    }
 }
