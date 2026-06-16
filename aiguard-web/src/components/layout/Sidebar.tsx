@@ -108,10 +108,12 @@ export const Sidebar: React.FC = () => {
             icon: <Laptop size={18} />,
             subItems: [
               { title: 'Thiết bị đã triển khai', path: '/app/endpoints/devices' },
+              { title: 'Cài đặt riêng', path: '/app/endpoints/custom-settings' },
               { title: 'Website AI theo dõi', path: '/app/endpoints/ai-websites' },
-              { title: 'Theo dõi Agent / DLP', path: '/app/endpoints/events' },
-              { title: 'aiguard-endpoint-agent', path: '/app/endpoints/agent' },
-              { title: 'aiguard-extension', path: '/app/endpoints/extension' }
+              { title: 'Nhật ký DLP', path: '/app/endpoints/dlp-events' },
+              { title: 'Telemetry Agent', path: '/app/endpoints/telemetry' },
+              { title: 'Desktop Agent', path: '/app/endpoints/agent' },
+              { title: 'Browser Extension', path: '/app/endpoints/extension' }
             ]
           },
           {

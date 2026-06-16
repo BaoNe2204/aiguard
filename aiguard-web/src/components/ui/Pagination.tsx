@@ -1,5 +1,6 @@
 import React from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import styles from './Pagination.module.css';
 import { useLanguage } from '../../contexts/LanguageContext';
 
 interface Props {
@@ -18,13 +19,13 @@ export const Pagination: React.FC<Props> = ({ page, totalPages, totalCount, page
   const end = Math.min(page * pageSize, totalCount);
 
   return (
-    <div className="pagination-container">
-      <span className="pagination-info">
+    <div className={styles.paginationContainer}>
+      <span className={styles.paginationInfo}>
         {t('Showing', 'Hiển thị')} {start.toLocaleString(locale)}-{end.toLocaleString(locale)} {t('of', 'trên')} {totalCount.toLocaleString(locale)}
       </span>
-      <div className="pagination-buttons">
+      <div className={styles.paginationButtons}>
         <button
-          className="pagination-btn"
+          className={styles.paginationBtn}
           disabled={page <= 1}
           onClick={() => onPageChange(page - 1)}
           title={t('Previous page', 'Trang trước')}
@@ -41,7 +42,7 @@ export const Pagination: React.FC<Props> = ({ page, totalPages, totalCount, page
           return (
             <button
               key={pageNumber}
-              className={`pagination-btn ${pageNumber === page ? 'active' : ''}`}
+              className={`${styles.paginationBtn} ${pageNumber === page ? styles.active : ''}`}
               onClick={() => onPageChange(pageNumber)}
             >
               {pageNumber}
@@ -49,7 +50,7 @@ export const Pagination: React.FC<Props> = ({ page, totalPages, totalCount, page
           );
         })}
         <button
-          className="pagination-btn"
+          className={styles.paginationBtn}
           disabled={page >= totalPages}
           onClick={() => onPageChange(page + 1)}
           title={t('Next page', 'Trang sau')}

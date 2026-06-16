@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Activity, Download, MonitorCheck, RefreshCw, Plus, Search, Copy, X, AlertTriangle, WifiOff, Puzzle, TerminalSquare } from 'lucide-react';
+import { Activity, Download, MonitorCheck, RefreshCw, Plus, Search, Copy, X, AlertTriangle, WifiOff, Puzzle, TerminalSquare, ChevronDown } from 'lucide-react';
 import { DataTable } from '../components/ui/DataTable';
 import { RiskBadge } from '../components/ui/RiskBadge';
 import { DecisionBadge } from '../components/ui/DecisionBadge';
@@ -13,30 +13,35 @@ import {
   type AiWebsiteResponse,
   type DeploymentTokenResponse,
   type ShadowAiDiscoveryResponse,
-  type EndpointTelemetryResponse
+  type EndpointTelemetryResponse,
+  type DeviceAiWebsiteOverrideDto
 } from '../api/endpoints';
+import { policiesApi, type SecurityPolicyResponse } from '../api/policies';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useRealtimeExtension } from '../contexts/RealtimeContext';
 
-type TabType = 'overview' | 'devices' | 'websites' | 'events' | 'agent' | 'extension' | 'deployment';
+type TabType = 'overview' | 'devices' | 'custom-settings' | 'websites' | 'dlp-events' | 'telemetry' | 'agent' | 'extension' | 'deployment';
 
 const endpointTabs: Array<{ key: TabType; path: string; label: string }> = [
   { key: 'overview', path: '/app/endpoints', label: 'Tổng quan' },
   { key: 'devices', path: '/app/endpoints/devices', label: 'Thiết bị đã triển khai' },
+  { key: 'custom-settings', path: '/app/endpoints/custom-settings', label: 'Cài đặt riêng' },
   { key: 'websites', path: '/app/endpoints/ai-websites', label: 'Website AI theo dõi' },
-  { key: 'events', path: '/app/endpoints/events', label: 'Theo dõi Agent / DLP' },
-  { key: 'agent', path: '/app/endpoints/agent', label: 'aiguard-endpoint-agent' },
-  { key: 'extension', path: '/app/endpoints/extension', label: 'aiguard-extension' }
+  { key: 'dlp-events', path: '/app/endpoints/dlp-events', label: 'Nhật ký DLP' },
+  { key: 'telemetry', path: '/app/endpoints/telemetry', label: 'Telemetry Agent' },
+  { key: 'agent', path: '/app/endpoints/agent', label: 'Desktop Agent' },
+  { key: 'extension', path: '/app/endpoints/extension', label: 'Browser Extension' }
 ];
-
 
 function isDeviceOnline(lastSeen?: string | null) {
   if (!lastSeen) return false;
-  return Date.now() - new Date(lastSeen).getTime() <= 5 * 60 * 1000;
+  const normalized = lastSeen.endsWith('Z') ? lastSeen : lastSeen + 'Z';
+  return Date.now() - new Date(normalized).getTime() <= 45 * 1000;
 }
 
 function formatDeviceSeen(value: string, locale: string) {
-  const seen = new Date(value);
+  const normalized = value.endsWith('Z') ? value : value + 'Z';
+  const seen = new Date(normalized);
   const diffMinutes = Math.max(0, Math.round((Date.now() - seen.getTime()) / 60000));
   if (diffMinutes < 1) return 'Vừa xong';
   if (diffMinutes < 60) return `${diffMinutes} phút trước`;
@@ -44,15 +49,79 @@ function formatDeviceSeen(value: string, locale: string) {
 }
 
 export const Endpoints: React.FC = () => {
+  const [selectedDevice, setSelectedDevice] = useState<DeviceResponse | null>(null);
+
+  const ActionDropdown = ({ item, onSync, onRotate, onDelete, t }: any) => {
+    const [open, setOpen] = useState(false);
+    return (
+      <div
+        className="relative inline-block text-left"
+        tabIndex={-1}
+        onBlur={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node)) setOpen(false);
+        }}
+      >
+        <button
+          type="button"
+          className="btn-action flex items-center gap-1 px-3 py-1.5 text-xs"
+          onClick={() => setOpen(!open)}
+          style={{ minWidth: '95px', justifyContent: 'space-between' }}
+        >
+          {t('Actions', 'Thao tác')} <ChevronDown size={14} />
+        </button>
+        {open && (
+          <div className="absolute right-0 mt-2 w-36 origin-top-right glass shadow-xl z-50 p-1.5 flex flex-col gap-1">
+            <button
+              className="btn-action w-full text-left text-xs"
+              style={{ border: 'none', background: 'transparent' }}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => { setOpen(false); setSelectedDevice(item); }}
+            >
+              {t('View Details', 'Xem chi tiết')}
+            </button>
+            <div style={{ height: '1px', background: 'rgba(255, 255, 255, 0.1)', margin: '2px 0' }}></div>
+            <button
+              className="btn-action w-full text-left text-xs"
+              style={{ border: 'none', background: 'transparent' }}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => { setOpen(false); onSync(item.id); }}
+            >
+              {t('Sync Policy', 'Đồng bộ')}
+            </button>
+            <button
+              className="btn-action w-full text-left text-xs"
+              style={{ border: 'none', background: 'transparent' }}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => { setOpen(false); onRotate(item); }}
+            >
+              {t('Rotate Key', 'Tạo lại khóa')}
+            </button>
+            <div style={{ height: '1px', background: 'rgba(255, 255, 255, 0.1)', margin: '2px 0' }}></div>
+            <button
+              className="btn-action w-full text-left text-xs text-rose-400"
+              style={{ border: 'none', background: 'transparent', color: '#f87171' }}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => { setOpen(false); onDelete(item); }}
+            >
+              {t('Delete Device', 'Xóa thiết bị')}
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const location = useLocation();
   const { t, locale } = useLanguage();
   const activeTab: TabType = location.pathname.endsWith('/devices') ? 'devices'
-    : location.pathname.endsWith('/events') ? 'events'
-    : location.pathname.endsWith('/ai-websites') ? 'websites'
-    : location.pathname.endsWith('/agent') ? 'agent'
-    : location.pathname.endsWith('/extension') ? 'extension'
-    : location.pathname.endsWith('/deployment') ? 'deployment'
-    : 'overview';
+    : location.pathname.endsWith('/custom-settings') ? 'custom-settings'
+    : location.pathname.endsWith('/events') || location.pathname.endsWith('/dlp-events') ? 'dlp-events'
+      : location.pathname.endsWith('/telemetry') ? 'telemetry'
+      : location.pathname.endsWith('/ai-websites') ? 'websites'
+        : location.pathname.endsWith('/agent') ? 'agent'
+          : location.pathname.endsWith('/extension') ? 'extension'
+            : location.pathname.endsWith('/deployment') ? 'deployment'
+              : 'overview';
 
   const { extensionEvents, extensionStatus } = useRealtimeExtension();
 
@@ -63,8 +132,22 @@ export const Endpoints: React.FC = () => {
   const [devicesTotalCount, setDevicesTotalCount] = useState(0);
   const [devicesSearch, setDevicesSearch] = useState('');
   const [devicesLoading, setDevicesLoading] = useState(false);
-  const [, setSyncStatus] = useState<Record<string, string>>({});
+  const [syncStatus, setSyncStatus] = useState<Record<string, string>>({});
+  const [deviceActionStatus, setDeviceActionStatus] = useState<Record<string, string>>({});
   const [rotatedKey, setRotatedKey] = useState<string | null>(null);
+  const [rotateKeyModal, setRotateKeyModal] = useState<DeviceResponse | null>(null);
+  const [deleteDeviceModal, setDeleteDeviceModal] = useState<DeviceResponse | null>(null);
+
+  // ── Custom Settings states ──
+  const [customSettingsDevice, setCustomSettingsDevice] = useState<DeviceResponse | null>(null);
+  const [availablePolicies, setAvailablePolicies] = useState<SecurityPolicyResponse[]>([]);
+  const [customSettingsLoading, setCustomSettingsLoading] = useState(false);
+  const [customPolicyId, setCustomPolicyId] = useState<string | null>(null);
+  const [websiteOverrides, setWebsiteOverrides] = useState<DeviceAiWebsiteOverrideDto[]>([]);
+  const [savingCustomSettings, setSavingCustomSettings] = useState(false);
+
+  // ── Selected DLP Event Details state ──
+  const [selectedEvent, setSelectedEvent] = useState<EndpointEventResponse | null>(null);
 
   // ── Events state ──
   const [events, setEvents] = useState<EndpointEventResponse[]>([]);
@@ -72,7 +155,13 @@ export const Endpoints: React.FC = () => {
   const [eventsTotalPages, setEventsTotalPages] = useState(1);
   const [eventsTotalCount, setEventsTotalCount] = useState(0);
   const [eventsLoading, setEventsLoading] = useState(false);
+
+  // ── Telemetry state ──
   const [telemetry, setTelemetry] = useState<EndpointTelemetryResponse[]>([]);
+  const [telemetryPage, setTelemetryPage] = useState(1);
+  const [telemetryTotalPages, setTelemetryTotalPages] = useState(1);
+  const [telemetryTotalCount, setTelemetryTotalCount] = useState(0);
+  const [telemetryLoading, setTelemetryLoading] = useState(false);
 
   // ── Websites state ──
   const [websites, setWebsites] = useState<AiWebsiteResponse[]>([]);
@@ -98,7 +187,7 @@ export const Endpoints: React.FC = () => {
   const fetchDevices = useCallback(async () => {
     setDevicesLoading(true);
     try {
-      const result = await endpointsApi.getDevices({ page: devicesPage, pageSize: 20, search: devicesSearch });
+      const result = await endpointsApi.getDevices({ page: devicesPage, pageSize: 10, search: devicesSearch });
       setDevices(result.items);
       setDevicesTotalPages(result.totalPages);
       setDevicesTotalCount(result.totalCount);
@@ -113,12 +202,8 @@ export const Endpoints: React.FC = () => {
   const fetchEvents = useCallback(async () => {
     setEventsLoading(true);
     try {
-      const [result, telemetryResult] = await Promise.all([
-        endpointsApi.getEvents({ page: eventsPage, pageSize: 20 }),
-        endpointsApi.getTelemetry({ pageSize: 50 })
-      ]);
+      const result = await endpointsApi.getEvents({ page: eventsPage, pageSize: 10 });
       setEvents(result.items);
-      setTelemetry(telemetryResult.items);
       setEventsTotalPages(result.totalPages);
       setEventsTotalCount(result.totalCount);
     } catch (err: any) {
@@ -127,6 +212,71 @@ export const Endpoints: React.FC = () => {
       setEventsLoading(false);
     }
   }, [eventsPage]);
+
+  // ── Fetch Telemetry ──
+  const fetchTelemetry = useCallback(async () => {
+    setTelemetryLoading(true);
+    try {
+      const result = await endpointsApi.getTelemetry({ page: telemetryPage, pageSize: 10 });
+      setTelemetry(result.items);
+      setTelemetryTotalPages(result.totalPages);
+      setTelemetryTotalCount(result.totalCount);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setTelemetryLoading(false);
+    }
+  }, [telemetryPage]);
+
+  // ── Open Custom Settings Modal ──
+  const openCustomSettingsModal = async (device: DeviceResponse) => {
+    setCustomSettingsDevice(device);
+    setCustomSettingsLoading(true);
+    try {
+      const policies = await policiesApi.getDepartmentPolicies();
+      setAvailablePolicies(policies);
+
+      const settings = await endpointsApi.getDeviceCustomSettings(device.id);
+      setCustomPolicyId(settings.customSecurityPolicyId);
+      setWebsiteOverrides(settings.aiWebsiteOverrides);
+    } catch (err: any) {
+      setError(err.message || 'Không thể tải cấu hình riêng của thiết bị.');
+    } finally {
+      setCustomSettingsLoading(false);
+    }
+  };
+
+  const handleOverrideChange = (aiWebsiteId: string, value: string) => {
+    setWebsiteOverrides(prev =>
+      prev.map(item =>
+        item.aiWebsiteId === aiWebsiteId
+          ? { ...item, overrideMode: value }
+          : item
+      )
+    );
+  };
+
+  const handleSaveCustomSettings = async () => {
+    if (!customSettingsDevice) return;
+    setSavingCustomSettings(true);
+    try {
+      await endpointsApi.updateDeviceCustomSettings(customSettingsDevice.id, {
+        customSecurityPolicyId: customPolicyId,
+        aiWebsiteOverrides: websiteOverrides
+      });
+      try {
+        await endpointsApi.refreshPolicy(customSettingsDevice.id);
+      } catch (e) {
+        console.error("Failed to trigger policy refresh", e);
+      }
+      setCustomSettingsDevice(null);
+      await fetchDevices();
+    } catch (err: any) {
+      setError(err.message || 'Lỗi khi lưu cấu hình riêng.');
+    } finally {
+      setSavingCustomSettings(false);
+    }
+  };
 
   // ── Fetch Websites ──
   const fetchWebsites = useCallback(async () => {
@@ -182,15 +332,20 @@ export const Endpoints: React.FC = () => {
 
   useEffect(() => {
     if (activeTab === 'overview') fetchOverview();
-    else if (activeTab === 'devices') fetchDevices();
-    else if (activeTab === 'events') fetchEvents();
+    else if (activeTab === 'devices' || activeTab === 'custom-settings') {
+      fetchDevices();
+      const interval = setInterval(fetchDevices, 30000);
+      return () => clearInterval(interval);
+    }
+    else if (activeTab === 'dlp-events') fetchEvents();
+    else if (activeTab === 'telemetry') fetchTelemetry();
     else if (activeTab === 'websites') fetchWebsites();
     else if (activeTab === 'agent' || activeTab === 'extension') {
       fetchDeployment();
       fetchDevices();
     }
     else if (activeTab === 'deployment') fetchDeployment();
-  }, [activeTab, fetchDevices, fetchEvents, fetchWebsites, fetchDeployment, fetchOverview]);
+  }, [activeTab, fetchDevices, fetchEvents, fetchTelemetry, fetchWebsites, fetchDeployment, fetchOverview]);
 
   // Prepend real-time DLP events to the log view
   useEffect(() => {
@@ -262,22 +417,23 @@ export const Endpoints: React.FC = () => {
   };
 
   const handleRotateKey = async (id: string) => {
-    if (!window.confirm(t('Rotate this endpoint key? The current key will stop working immediately.', 'Tạo lại khóa thiết bị này? Khóa hiện tại sẽ ngừng hoạt động ngay lập tức.'))) return;
     try {
       const result = await endpointsApi.rotateEndpointKey(id);
       setRotatedKey(result.endpointKey);
+      setDeviceActionStatus(prev => ({ ...prev, [id]: t('New key created', 'Đã tạo khóa mới') }));
+      await fetchDevices();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Key rotation failed');
     }
   };
 
-  const handleRevokeKey = async (id: string) => {
-    if (!window.confirm(t('Revoke this endpoint key? The device will be disconnected.', 'Thu hồi khóa thiết bị này? Thiết bị sẽ bị ngắt kết nối.'))) return;
+  const handleDeleteDevice = async (id: string) => {
     try {
-      await endpointsApi.revokeEndpointKey(id);
+      await endpointsApi.deleteDevice(id);
+      setDeviceActionStatus(prev => ({ ...prev, [id]: t('Device deleted', 'Đã xóa thiết bị') }));
       await fetchDevices();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Key revocation failed');
+      setError(err instanceof Error ? err.message : 'Delete failed');
     }
   };
 
@@ -303,22 +459,24 @@ export const Endpoints: React.FC = () => {
   };
 
   const getDeviceOnlineRealtime = (device: DeviceResponse) => {
+    if (device.endpointKeyRevoked || device.isRemoteDisabled) return false;
     const s = extensionStatus.get(device.id);
     if (s) return s.connected;
     return isDeviceOnline(device.lastSeen);
   };
 
   const getExtensionActiveRealtime = (device: DeviceResponse) => {
+    if (device.endpointKeyRevoked || device.isRemoteDisabled) return false;
     const s = extensionStatus.get(device.id);
     if (s && s.connected) return true;
     return device.extensionActive;
   };
 
   const deviceStats = {
-    total: devicesTotalCount || devices.length,
-    online: devices.filter(device => getDeviceOnlineRealtime(device)).length,
-    offline: devices.filter(device => !getDeviceOnlineRealtime(device)).length,
-    extensionActive: devices.filter(device => getExtensionActiveRealtime(device)).length
+    total: overviewStats.total > 0 ? overviewStats.total : (devicesTotalCount || devices.length),
+    online: overviewStats.active > 0 ? overviewStats.active : devices.filter(device => getDeviceOnlineRealtime(device)).length,
+    offline: overviewStats.offline > 0 ? overviewStats.offline : devices.filter(device => !getDeviceOnlineRealtime(device)).length,
+    extensionActive: overviewStats.extensionActive > 0 ? overviewStats.extensionActive : devices.filter(device => getExtensionActiveRealtime(device)).length
   };
 
   return (
@@ -351,8 +509,7 @@ export const Endpoints: React.FC = () => {
         </div>
       )}
 
-      {/* Tabs */}
-{/* Tab Contents */}
+      {/* Tab Contents */}
       <div className="tab-content">
         {activeTab === 'overview' && (
           overviewLoading ? <LoadingSpinner text={t('Loading overview...', 'Đang tải tổng quan...')} /> : (
@@ -410,40 +567,96 @@ export const Endpoints: React.FC = () => {
                 <DataTable
                   data={devices}
                   columns={[
-                    { header: t('Hostname', 'Tên máy'), accessor: 'hostname', width: '150px' },
-                    { header: t('User Email', 'Email người dùng'), accessor: 'userEmail', width: '240px' },
-                    { header: t('Department', 'Phòng ban'), accessor: 'departmentName', width: '190px' },
-                    { header: t('Activity', 'Hoạt động'), accessor: (item) => {
-                      const isOnline = getDeviceOnlineRealtime(item);
-                      return (
-                        <span className={`device-live-pill ${isOnline ? 'online' : 'offline'}`}>
-                          {isOnline ? <Activity size={13} /> : <WifiOff size={13} />}
-                          {isOnline ? t('Online', 'Đang hoạt động') : t('Offline', 'Không hoạt động')}
-                        </span>
-                      );
-                    }, width: '145px' },
-                    { header: t('Agent Ver', 'Phiên bản Agent'), accessor: (item) => item.agentVersion || '—', width: '130px' },
-                    { header: t('Extension', 'Tiện ích'), accessor: (item) => {
-                      const isExtActive = getExtensionActiveRealtime(item);
-                      return (
-                        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-semibold rounded-md ${isExtActive ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}`}>
-                          {isExtActive ? t('Active', 'Hoạt động') : t('Inactive', 'Không hoạt động')}
-                        </span>
-                      );
-                    }, width: '170px' },
-                    { header: t('Policy', 'Chính sách'), accessor: 'policyVersion', width: '170px' },
-                    { header: t('Last seen', 'Lần cuối hoạt động'), accessor: (item) => formatDeviceSeen(item.lastSeen, locale), width: '165px' },
-                    { header: t('Health', 'Sức khỏe'), accessor: (item) => <RiskBadge level={item.riskStatus === 'Safe' ? 'Low' : item.riskStatus === 'Warning' ? 'Medium' : 'Critical'} />, width: '140px' },
-                    { header: t('Actions', 'Thao tác'), accessor: (item) => (
-                      <div className="device-row-actions">
-                        <button className="btn-action text-xs" onClick={() => triggerSync(item.id)}>{t('Sync', 'Đồng bộ')}</button>
-                        <button className="btn-action text-xs" onClick={() => handleRotateKey(item.id)}>{t('Rotate', 'Tạo lại khóa')}</button>
-                        <button className="btn-action text-xs text-rose-400" onClick={() => handleRevokeKey(item.id)}>{t('Revoke', 'Thu hồi')}</button>
-                      </div>
-                    ), width: '280px' }
+                    { header: t('Hostname', 'Tên máy'), accessor: 'hostname', width: '20%' },
+                    { header: t('User Email', 'Email người dùng'), accessor: 'userEmail' },
+                    { header: t('Department', 'Phòng ban'), accessor: 'departmentName', width: '12%' },
+                    {
+                      header: t('Agent Status', 'Trạng thái Agent'), accessor: (item) => {
+                        if (item.endpointKeyRevoked) {
+                          return (
+                            <span className="device-live-pill revoked">
+                              <WifiOff size={13} />
+                              {t('Revoked', 'Đã thu hồi')}
+                            </span>
+                          );
+                        }
+                        const isOnline = getDeviceOnlineRealtime(item);
+                        return (
+                          <span className={`device-live-pill ${isOnline ? 'online' : 'offline'}`}>
+                            {isOnline ? <Activity size={13} /> : <WifiOff size={13} />}
+                            {isOnline ? t('Online', 'Đang hoạt động') : t('Offline', 'Không hoạt động')}
+                          </span>
+                        );
+                      }, width: '160px', align: 'center'
+                    },
+                    {
+                      header: t('Extension Status', 'Trạng thái Tiện ích'), accessor: (item) => {
+                        const isExtActive = getExtensionActiveRealtime(item);
+                        return (
+                          <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-semibold rounded-md ${isExtActive ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}`}>
+                            {isExtActive ? t('Active', 'Hoạt động') : t('Inactive', 'Không hoạt động')}
+                          </span>
+                        );
+                      }, width: '180px'
+                    },
+                    { header: t('Last seen', 'Lần cuối hoạt động'), accessor: (item) => formatDeviceSeen(item.lastSeen, locale), width: '15%' },
+                    {
+                      header: t('Actions', 'Thao tác'), accessor: (item) => (
+                        <div className="flex flex-col items-end gap-1">
+                          <ActionDropdown item={item} onSync={triggerSync} onRotate={setRotateKeyModal} onDelete={setDeleteDeviceModal} t={t} />
+                          {syncStatus[item.id] && <span className="text-emerald-400 text-[11px] font-medium whitespace-nowrap">{syncStatus[item.id]}</span>}
+                          {deviceActionStatus[item.id] && <span className="text-sky-300 text-[11px] font-medium whitespace-nowrap">{deviceActionStatus[item.id]}</span>}
+                        </div>
+                      ), width: '120px'
+                    }
                   ]}
                 />
-                <Pagination page={devicesPage} totalPages={devicesTotalPages} totalCount={devicesTotalCount} pageSize={20} onPageChange={setDevicesPage} />
+                <Pagination page={devicesPage} totalPages={devicesTotalPages} totalCount={devicesTotalCount} pageSize={10} onPageChange={setDevicesPage} />
+              </>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'custom-settings' && (
+          <div className="custom-settings-tab card glass">
+            <div className="endpoint-section-head">
+              <div>
+                <span className="endpoint-eyebrow">{t('Custom settings', 'Cài đặt riêng')}</span>
+                <h2>{t('Custom Settings for Accounts & Devices', 'Cài đặt riêng cho từng thiết bị')}</h2>
+                <p>{t('Override default policy and configure custom AI websites or protection modes for each account.', 'Cấu hình chính sách bảo mật và chế độ bảo vệ AI website riêng cho từng tài khoản và thiết bị.')}</p>
+              </div>
+              <div className="endpoint-search-actions">
+                <div className="input-with-icon">
+                  <Search size={14} className="input-icon" />
+                  <input type="text" placeholder={t('Search devices...', 'Tìm thiết bị...')} value={devicesSearch} onChange={e => { setDevicesSearch(e.target.value); setDevicesPage(1); }} />
+                </div>
+                <button className="btn-secondary" type="button" onClick={() => void fetchDevices()}>
+                  <RefreshCw size={14} /> {t('Refresh', 'Tải lại')}
+                </button>
+              </div>
+            </div>
+            {devicesLoading ? <LoadingSpinner text={t('Loading devices...', 'Đang tải thiết bị...')} /> : (
+              <>
+                <DataTable
+                  data={devices}
+                  columns={[
+                    { header: t('Hostname', 'Tên máy'), accessor: 'hostname', width: '25%' },
+                    { header: t('User Email', 'Email người dùng'), accessor: 'userEmail' },
+                    { header: t('Department', 'Phòng ban'), accessor: 'departmentName', width: '20%' },
+                    { header: t('Policy version', 'Phiên bản chính sách'), accessor: 'policyVersion', width: '20%' },
+                    {
+                      header: t('Actions', 'Thao tác'), accessor: (item) => (
+                        <button
+                          className="btn-primary flex items-center gap-1.5 px-3 py-1.5 text-xs"
+                          onClick={() => openCustomSettingsModal(item)}
+                        >
+                          {t('Settings', 'Cài đặt')}
+                        </button>
+                      ), width: '120px'
+                    }
+                  ]}
+                />
+                <Pagination page={devicesPage} totalPages={devicesTotalPages} totalCount={devicesTotalCount} pageSize={10} onPageChange={setDevicesPage} />
               </>
             )}
           </div>
@@ -459,51 +672,55 @@ export const Endpoints: React.FC = () => {
             </div>
             {websitesLoading ? <LoadingSpinner text={t('Loading websites...', 'Đang tải website...')} /> : (
               <>
-              <DataTable
-                data={websites}
-                columns={[
-                  { header: t('AI Platform', 'Nền tảng AI'), accessor: 'name' },
-                  { header: t('Domain Matches', 'Tên miền khớp'), accessor: 'domainPattern' },
-                  { header: t('Protection Mode', 'Chế độ bảo vệ'), accessor: (item) => <DecisionBadge decision={item.mode === 'RequireApproval' ? 'PendingApproval' : item.mode as any} /> },
-                  { header: t('Last Updated', 'Cập nhật lần cuối'), accessor: (item) => new Date(item.lastUpdated).toLocaleDateString(locale), width: '150px' },
-                  { header: t('Status', 'Trạng thái'), accessor: (item) => (
-                    <label className="switch">
-                      <input type="checkbox" checked={item.isActive} onChange={() => handleToggleWebsite(item.id, item.isActive)} />
-                      <span className="slider round"></span>
-                    </label>
-                  ), width: '100px' },
-                  { header: t('Action', 'Thao tác'), accessor: (item) => (
-                    <button className="btn-action text-xs text-rose-400" onClick={() => handleDeleteWebsite(item.id)}>{t('Delete', 'Xóa')}</button>
-                  ), width: '80px' }
-                ]}
-              />
-              <div className="shadow-ai-section">
-                <div className="card-header mt-6">
-                  <div>
-                    <h2>Shadow AI Discovery</h2>
-                    <p className="subtitle">Website AI được phát hiện từ thiết bị, kể cả nền tảng chưa có trong allowlist.</p>
-                  </div>
-                  <span className="counter">{shadowDiscoveries.filter(item => !item.isApproved).length} chưa được phép</span>
-                </div>
                 <DataTable
-                  data={shadowDiscoveries}
+                  data={websites}
                   columns={[
-                    { header: 'Tên miền', accessor: 'domain' },
-                    { header: 'Người dùng', accessor: 'userEmail' },
-                    { header: 'Thiết bị', accessor: 'hostname' },
-                    { header: 'Số lượt', accessor: (item) => item.visitCount, width: '80px' },
-                    { header: 'Lần cuối', accessor: (item) => new Date(item.lastSeenAt).toLocaleString(locale), width: '170px' },
-                    { header: 'Quyết định', accessor: (item) => <DecisionBadge decision={item.decision as any} />, width: '140px' },
-                    { header: 'Trạng thái', accessor: (item) => item.isApproved ? 'Đã quản lý' : 'Shadow AI', width: '120px' }
+                    { header: t('AI Platform', 'Nền tảng AI'), accessor: 'name' },
+                    { header: t('Domain Matches', 'Tên miền khớp'), accessor: 'domainPattern' },
+                    { header: t('Protection Mode', 'Chế độ bảo vệ'), accessor: (item) => <DecisionBadge decision={item.mode === 'RequireApproval' ? 'PendingApproval' : item.mode as any} /> },
+                    { header: t('Last Updated', 'Cập nhật lần cuối'), accessor: (item) => new Date(item.lastUpdated).toLocaleDateString(locale), width: '150px' },
+                    {
+                      header: t('Status', 'Trạng thái'), accessor: (item) => (
+                        <label className="switch">
+                          <input type="checkbox" checked={item.isActive} onChange={() => handleToggleWebsite(item.id, item.isActive)} />
+                          <span className="slider round"></span>
+                        </label>
+                      ), width: '100px'
+                    },
+                    {
+                      header: t('Action', 'Thao tác'), accessor: (item) => (
+                        <button className="btn-action text-xs text-rose-400" onClick={() => handleDeleteWebsite(item.id)}>{t('Delete', 'Xóa')}</button>
+                      ), width: '80px'
+                    }
                   ]}
                 />
-              </div>
+                <div className="shadow-ai-section">
+                  <div className="card-header mt-6">
+                    <div>
+                      <h2>Shadow AI Discovery</h2>
+                      <p className="subtitle">Website AI được phát hiện từ thiết bị, kể cả nền tảng chưa có trong allowlist.</p>
+                    </div>
+                    <span className="counter">{shadowDiscoveries.filter(item => !item.isApproved).length} chưa được phép</span>
+                  </div>
+                  <DataTable
+                    data={shadowDiscoveries}
+                    columns={[
+                      { header: 'Tên miền', accessor: 'domain' },
+                      { header: 'Người dùng', accessor: 'userEmail' },
+                      { header: 'Thiết bị', accessor: 'hostname' },
+                      { header: 'Số lượt', accessor: (item) => item.visitCount, width: '80px' },
+                      { header: 'Lần cuối', accessor: (item) => new Date(item.lastSeenAt).toLocaleString(locale), width: '170px' },
+                      { header: 'Quyết định', accessor: (item) => <DecisionBadge decision={item.decision as any} />, width: '140px' },
+                      { header: 'Trạng thái', accessor: (item) => item.isApproved ? 'Đã quản lý' : 'Shadow AI', width: '120px' }
+                    ]}
+                  />
+                </div>
               </>
             )}
           </div>
         )}
 
-        {activeTab === 'events' && (
+        {activeTab === 'dlp-events' && (
           <div className="events-tab card glass">
             <div className="card-header">
               <h2>{t('Endpoint DLP Logs', 'Nhật ký DLP thiết bị')}</h2>
@@ -518,35 +735,53 @@ export const Endpoints: React.FC = () => {
                     { header: t('Hostname', 'Tên máy'), accessor: 'hostname', width: '120px' },
                     { header: t('Platform', 'Nền tảng'), accessor: 'websiteAi', width: '120px' },
                     { header: t('Matched data', 'Dữ liệu phát hiện'), accessor: 'dataTypeMatched' },
-                    { header: t('Masked Preview', 'Nội dung đã che'), accessor: (item) => item.maskedContentPreview || '—' },
-                    { header: t('Decision', 'Quyết định'), accessor: (item) => <DecisionBadge decision={item.decision as any} />, width: '150px' }
+                    { 
+                      header: t('Masked Preview', 'Nội dung đã che'), 
+                      accessor: (item) => item.maskedContentPreview ? (item.maskedContentPreview.length > 40 ? item.maskedContentPreview.substring(0, 40) + '...' : item.maskedContentPreview) : '—' 
+                    },
+                    { header: t('Decision', 'Quyết định'), accessor: (item) => <DecisionBadge decision={item.decision as any} />, width: '150px' },
+                    {
+                      header: t('Action', 'Thao tác'), accessor: (item) => (
+                        <button className="btn-action text-xs flex items-center gap-1" onClick={() => setSelectedEvent(item)}>
+                          {t('View Details', 'Xem chi tiết')}
+                        </button>
+                      ), width: '120px'
+                    }
                   ]}
                 />
-                <Pagination page={eventsPage} totalPages={eventsTotalPages} totalCount={eventsTotalCount} pageSize={20} onPageChange={setEventsPage} />
-                <div className="shadow-ai-section">
-                  <div className="card-header mt-6">
-                    <div>
-                      <h2>Desktop Agent Telemetry</h2>
-                      <p className="subtitle">Metadata USB, network share, RDP, email client và dịch vụ in. Không thu nội dung clipboard hoặc tài liệu.</p>
-                    </div>
-                  </div>
-                  <DataTable
-                    data={telemetry}
-                    columns={[
-                      { header: 'Thời gian', accessor: (item) => new Date(item.occurredAt).toLocaleString(locale), width: '170px' },
-                      { header: 'Thiết bị', accessor: 'hostname' },
-                      { header: 'Người dùng', accessor: 'userEmail' },
-                      { header: 'Nhóm', accessor: 'category' },
-                      { header: 'Sự kiện', accessor: 'eventType' },
-                      { header: 'Chi tiết', accessor: (item) => item.detail || '-' },
-                      { header: 'Mức độ', accessor: (item) => <RiskBadge level={
+                <Pagination page={eventsPage} totalPages={eventsTotalPages} totalCount={eventsTotalCount} pageSize={10} onPageChange={setEventsPage} />
+              </>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'telemetry' && (
+          <div className="telemetry-tab card glass">
+            <div className="card-header">
+              <h2>Desktop Agent Telemetry</h2>
+              <p className="subtitle">Metadata USB, network share, RDP, email client và dịch vụ in. Không thu nội dung clipboard hoặc tài liệu.</p>
+            </div>
+            {telemetryLoading ? <LoadingSpinner text={t('Loading telemetry...', 'Đang tải dữ liệu...')} /> : (
+              <>
+                <DataTable
+                  data={telemetry}
+                  columns={[
+                    { header: 'Thời gian', accessor: (item) => new Date(item.occurredAt).toLocaleString(locale), width: '170px' },
+                    { header: 'Thiết bị', accessor: 'hostname' },
+                    { header: 'Người dùng', accessor: 'userEmail' },
+                    { header: 'Nhóm', accessor: 'category' },
+                    { header: 'Sự kiện', accessor: 'eventType' },
+                    { header: 'Chi tiết', accessor: (item) => item.detail || '-' },
+                    {
+                      header: 'Mức độ', accessor: (item) => <RiskBadge level={
                         item.severity === 'Critical' || item.severity === 'High' || item.severity === 'Medium'
                           ? item.severity
                           : 'Low'
-                      } />, width: '110px' }
-                    ]}
-                  />
-                </div>
+                      } />, width: '110px'
+                    }
+                  ]}
+                />
+                <Pagination page={telemetryPage} totalPages={telemetryTotalPages} totalCount={telemetryTotalCount} pageSize={10} onPageChange={setTelemetryPage} />
               </>
             )}
           </div>
@@ -565,7 +800,7 @@ export const Endpoints: React.FC = () => {
                 </div>
                 <div className="endpoint-manager-actions">
                   <a href="/aiguard-endpoint-agent.exe" download="aiguard-endpoint-agent.exe" className="btn-primary">
-                    <Download size={14} /> Tải agent EXE
+                     <Download size={14} /> Tải agent EXE
                   </a>
                   <button className="btn-secondary" type="button" onClick={() => void handleRotateToken('agent')} disabled={rotatingKeyFor === 'agent'}>
                     <RefreshCw size={14} /> {rotatingKeyFor === 'agent' ? 'Đang reset...' : 'Reset Agent Key'}
@@ -773,30 +1008,90 @@ export const Endpoints: React.FC = () => {
         )}
       </div>
 
+      {/* Device Details Modal */}
+      {selectedDevice && (
+        <div className="modal-overlay">
+          <div className="modal-card max-w-2xl w-full glass">
+            <div className="modal-header">
+              <h2>{t('Device Details', 'Chi tiết thiết bị')}</h2>
+              <button className="text-zinc-400 hover:text-white" onClick={() => setSelectedDevice(null)}><X size={18} /></button>
+            </div>
+            <div className="modal-body">
+              <div className="grid grid-cols-2 gap-y-4 gap-x-8 text-sm">
+                <div>
+                  <span className="block text-zinc-400 text-xs font-semibold mb-1">{t('Hostname', 'Tên máy')}</span>
+                  <strong className="text-white text-base">{selectedDevice.hostname}</strong>
+                </div>
+                <div>
+                  <span className="block text-zinc-400 text-xs font-semibold mb-1">{t('User Email', 'Email người dùng')}</span>
+                  <span className="text-white text-base">{selectedDevice.userEmail}</span>
+                </div>
+                <div>
+                  <span className="block text-zinc-400 text-xs font-semibold mb-1">{t('Department', 'Phòng ban')}</span>
+                  <span className="text-white">{selectedDevice.departmentName || '—'}</span>
+                </div>
+                <div>
+                  <span className="block text-zinc-400 text-xs font-semibold mb-1">{t('Agent Version', 'Phiên bản Agent')}</span>
+                  <span className="text-white">{selectedDevice.agentVersion || '—'}</span>
+                </div>
+                <div>
+                  <span className="block text-zinc-400 text-xs font-semibold mb-1">{t('Applied Policy', 'Chính sách áp dụng')}</span>
+                  <span className="text-white font-mono">{selectedDevice.policyVersion || '—'}</span>
+                </div>
+                <div>
+                  <span className="block text-zinc-400 text-xs font-semibold mb-1">{t('Health Status', 'Sức khỏe thiết bị')}</span>
+                  <RiskBadge level={selectedDevice.riskStatus === 'Safe' ? 'Low' : selectedDevice.riskStatus === 'Warning' ? 'Medium' : 'Critical'} />
+                </div>
+                <div>
+                  <span className="block text-zinc-400 text-xs font-semibold mb-1">{t('Desktop Agent Status', 'Trạng thái Desktop Agent')}</span>
+                  <span className={`device-live-pill ${getDeviceOnlineRealtime(selectedDevice) ? 'online' : 'offline'} !w-auto !min-w-0 !px-2 !py-0.5`}>
+                    {getDeviceOnlineRealtime(selectedDevice) ? <Activity size={12} /> : <WifiOff size={12} />}
+                    {getDeviceOnlineRealtime(selectedDevice) ? t('Online', 'Đang hoạt động') : t('Offline', 'Không hoạt động')}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-zinc-400 text-xs font-semibold mb-1">{t('Browser Extension Status', 'Trạng thái Tiện ích')}</span>
+                  <span className={`device-live-pill ${getExtensionActiveRealtime(selectedDevice) ? 'online' : 'offline'} !w-auto !min-w-0 !px-2 !py-0.5`}>
+                    {getExtensionActiveRealtime(selectedDevice) ? <Activity size={12} /> : <WifiOff size={12} />}
+                    {getExtensionActiveRealtime(selectedDevice) ? t('Active', 'Đang hoạt động') : t('Inactive', 'Không hoạt động')}
+                  </span>
+                </div>
+                <div className="col-span-2">
+                  <span className="block text-zinc-400 text-xs font-semibold mb-1">{t('Last Seen', 'Lần cuối kết nối')}</span>
+                  <span className="text-white">{new Date(selectedDevice.lastSeen.endsWith('Z') ? selectedDevice.lastSeen : selectedDevice.lastSeen + 'Z').toLocaleString(locale)}</span>
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer flex justify-end gap-3">
+              <button className="btn-secondary" onClick={() => setSelectedDevice(null)}>{t('Close', 'Đóng')}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Add Website Modal */}
       {showAddModal && (
         <div className="modal-overlay">
-          <div className="modal-card max-w-lg w-full glass">
+          <div className="modal-card w-full glass" style={{ maxWidth: '450px' }}>
             <div className="modal-header">
-              <h2>{t('Add AI Website Rule', 'Thêm quy tắc website AI')}</h2>
+              <h2>{t('Add Website Domain', 'Thêm tên miền Website')}</h2>
               <button className="text-zinc-400 hover:text-white" onClick={() => setShowAddModal(false)}><X size={18} /></button>
             </div>
-            <div className="modal-body flex flex-col gap-4 text-sm">
-              <div className="form-group">
-                <label className="block text-zinc-400 font-semibold mb-1">{t('Platform Name', 'Tên nền tảng')}</label>
-                <input type="text" value={newRule.name} onChange={e => setNewRule(p => ({ ...p, name: e.target.value }))} placeholder="e.g. DeepSeek" className="bg-zinc-900 border border-zinc-700 text-white text-sm p-2 rounded w-full" />
+            <div className="modal-body space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">{t('Website Name', 'Tên website')}</label>
+                <input type="text" className="w-full bg-zinc-900 border border-zinc-700 text-white p-2 rounded" placeholder="ChatGPT" value={newRule.name} onChange={e => setNewRule({ ...newRule, name: e.target.value })} />
               </div>
-              <div className="form-group">
-                <label className="block text-zinc-400 font-semibold mb-1">{t('Domain Pattern', 'Mẫu tên miền')}</label>
-                <input type="text" value={newRule.domainPattern} onChange={e => setNewRule(p => ({ ...p, domainPattern: e.target.value }))} placeholder="e.g. *.deepseek.com" className="bg-zinc-900 border border-zinc-700 text-white text-sm p-2 rounded w-full" />
+              <div>
+                <label className="block text-sm font-medium mb-1">{t('Domain Pattern', 'Mẫu tên miền')}</label>
+                <input type="text" className="w-full bg-zinc-900 border border-zinc-700 text-white p-2 rounded" placeholder="chatgpt.com" value={newRule.domainPattern} onChange={e => setNewRule({ ...newRule, domainPattern: e.target.value })} />
               </div>
-              <div className="form-group">
-                <label className="block text-zinc-400 font-semibold mb-1">{t('Protection Mode', 'Chế độ bảo vệ')}</label>
-                <select value={newRule.mode} onChange={e => setNewRule(p => ({ ...p, mode: e.target.value }))} className="bg-zinc-900 border border-zinc-700 text-white text-sm p-2 rounded w-full">
-                  <option value="Block">{t('Block', 'Chặn')}</option>
-                  <option value="Mask">{t('Mask', 'Che dữ liệu')}</option>
-                  <option value="PendingApproval">{t('Require Approval', 'Yêu cầu phê duyệt')}</option>
-                  <option value="Allow">{t('Allow (Monitor)', 'Cho phép (giám sát)')}</option>
+              <div>
+                <label className="block text-sm font-medium mb-1">{t('Mode', 'Chế độ')}</label>
+                <select className="w-full bg-zinc-900 border border-zinc-700 text-white p-2 rounded" value={newRule.mode} onChange={e => setNewRule({ ...newRule, mode: e.target.value })}>
+                  <option value="Mask">{t('Mask (Anonymize Data)', 'Che giấu (Ẩn danh dữ liệu)')}</option>
+                  <option value="Block">{t('Block (Prevent Access)', 'Chặn (Ngăn cập)')}</option>
+                  <option value="Allow">{t('Allow (Monitor Only)', 'Cho phép (Chỉ giám sát)')}</option>
                 </select>
               </div>
             </div>
@@ -807,6 +1102,61 @@ export const Endpoints: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Rotate Key Modal */}
+      {rotateKeyModal && (
+        <div className="modal-overlay">
+          <div className="modal-card w-full glass" style={{ maxWidth: '420px' }}>
+            <div className="modal-header">
+              <h2>{t('Rotate Key', 'Tạo lại khóa')}</h2>
+              <button className="text-zinc-400 hover:text-white" onClick={() => setRotateKeyModal(null)}><X size={18} /></button>
+            </div>
+            <div className="modal-body">
+              <p className="mb-4 text-sm text-zinc-300">
+                {t('Which key do you want to rotate for ', 'Bạn muốn tạo lại khóa nào cho ')} <strong>{rotateKeyModal.hostname}</strong>?
+              </p>
+              <div className="flex flex-col gap-3">
+                <button className="btn-primary py-2.5" onClick={() => { handleRotateKey(rotateKeyModal.id); setRotateKeyModal(null); }}>
+                  {t('Desktop Agent Key', 'Khóa Desktop Agent')}
+                </button>
+                <button className="btn-primary py-2.5" onClick={() => { handleRotateKey(rotateKeyModal.id); setRotateKeyModal(null); }}>
+                  {t('Browser Extension Key', 'Khóa Tiện ích trình duyệt')}
+                </button>
+              </div>
+            </div>
+            <div className="modal-footer flex justify-end gap-2 mt-4">
+              <button className="btn-action px-4 py-2" onClick={() => setRotateKeyModal(null)}>
+                {t('Cancel', 'Hủy')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Device Modal */}
+      {deleteDeviceModal && (
+        <div className="modal-overlay">
+          <div className="modal-card w-full glass" style={{ maxWidth: '420px' }}>
+            <div className="modal-header">
+              <h2 className="text-rose-400">{t('Delete Device', 'Xóa thiết bị')}</h2>
+              <button className="text-zinc-400 hover:text-white" onClick={() => setDeleteDeviceModal(null)}><X size={18} /></button>
+            </div>
+            <div className="modal-body">
+              <p className="mb-4 text-sm text-zinc-300">
+                {t('Are you sure you want to delete the device ', 'Bạn có chắc chắn muốn xóa thiết bị ')} <strong>{deleteDeviceModal.hostname}</strong>?
+                {t(' This action cannot be undone.', ' Hành động này không thể hoàn tác.')}
+              </p>
+            </div>
+            <div className="modal-footer flex justify-end gap-2 mt-4">
+              <button className="btn-action px-4 py-2" onClick={() => setDeleteDeviceModal(null)}>{t('Cancel', 'Hủy')}</button>
+              <button className="btn-primary px-4 py-2 !bg-rose-500/20 !text-rose-400 !border-rose-500/30" onClick={() => { handleDeleteDevice(deleteDeviceModal.id); setDeleteDeviceModal(null); }}>
+                {t('Delete', 'Xóa')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {rotatedKey && (
         <div className="modal-overlay">
           <div className="modal-card max-w-xl w-full glass">
@@ -817,6 +1167,168 @@ export const Endpoints: React.FC = () => {
             </div>
             <div className="modal-footer mt-4 flex justify-end">
               <button className="btn-primary px-3 py-1.5" onClick={() => setRotatedKey(null)}>{t('I saved the key', 'Tôi đã lưu khóa')}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DLP Event Details Modal */}
+      {selectedEvent && (
+        <div className="modal-overlay">
+          <div className="modal-card max-w-2xl w-full glass">
+            <div className="modal-header">
+              <h2>{t('DLP Event Details', 'Chi tiết sự kiện DLP')}</h2>
+              <button className="text-zinc-400 hover:text-white" onClick={() => setSelectedEvent(null)}><X size={18} /></button>
+            </div>
+            <div className="modal-body">
+              <div className="grid grid-cols-2 gap-y-4 gap-x-8 text-sm">
+                <div>
+                  <span className="block text-zinc-400 text-xs font-semibold mb-1">{t('Time', 'Thời gian')}</span>
+                  <strong className="text-white">{new Date(selectedEvent.createdAt).toLocaleString(locale)}</strong>
+                </div>
+                <div>
+                  <span className="block text-zinc-400 text-xs font-semibold mb-1">{t('User Email', 'Email người dùng')}</span>
+                  <span className="text-white">{selectedEvent.userEmail}</span>
+                </div>
+                <div>
+                  <span className="block text-zinc-400 text-xs font-semibold mb-1">{t('Hostname', 'Tên máy')}</span>
+                  <span className="text-white">{selectedEvent.hostname}</span>
+                </div>
+                <div>
+                  <span className="block text-zinc-400 text-xs font-semibold mb-1">{t('AI Platform', 'Nền tảng AI')}</span>
+                  <span className="text-white">{selectedEvent.websiteAi}</span>
+                </div>
+                <div>
+                  <span className="block text-zinc-400 text-xs font-semibold mb-1">{t('Browser', 'Trình duyệt')}</span>
+                  <span className="text-white">{selectedEvent.browser || 'Extension'}</span>
+                </div>
+                <div>
+                  <span className="block text-zinc-400 text-xs font-semibold mb-1">{t('Matched Data', 'Dữ liệu phát hiện')}</span>
+                  <span className="text-amber-400 font-semibold">{selectedEvent.dataTypeMatched || '—'}</span>
+                </div>
+                <div>
+                  <span className="block text-zinc-400 text-xs font-semibold mb-1">{t('Risk Score / Level', 'Điểm rủi ro / Mức độ')}</span>
+                  <div className="flex items-center gap-2">
+                    <RiskBadge level={selectedEvent.riskLevel as any} />
+                    <span className="text-white font-mono">({selectedEvent.riskScore}/100)</span>
+                  </div>
+                </div>
+                <div>
+                  <span className="block text-zinc-400 text-xs font-semibold mb-1">{t('Decision', 'Quyết định')}</span>
+                  <DecisionBadge decision={selectedEvent.decision as any} />
+                </div>
+                <div className="col-span-2">
+                  <span className="block text-zinc-400 text-xs font-semibold mb-2">{t('Masked Preview', 'Nội dung đã che')}</span>
+                  <div className="p-3 bg-zinc-950/80 border border-zinc-800 rounded font-mono text-xs text-zinc-300 whitespace-pre-wrap break-all max-h-60 overflow-y-auto">
+                    {selectedEvent.maskedContentPreview || t('No preview available', 'Không có bản xem trước')}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer flex justify-end gap-3 mt-4">
+              <button className="btn-secondary" onClick={() => setSelectedEvent(null)}>{t('Close', 'Đóng')}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Settings Modal */}
+      {customSettingsDevice && (
+        <div className="modal-overlay">
+          <div className="modal-card max-w-2xl w-full glass">
+            <div className="modal-header">
+              <h2>{t('Custom Device Settings', 'Cấu hình riêng cho thiết bị')} - {customSettingsDevice.hostname}</h2>
+              <button className="text-zinc-400 hover:text-white" onClick={() => setCustomSettingsDevice(null)}><X size={18} /></button>
+            </div>
+            <div className="modal-body">
+              {customSettingsLoading ? (
+                <LoadingSpinner text={t('Loading custom settings...', 'Đang tải cấu hình...')} />
+              ) : (
+                <div className="space-y-6">
+                  {/* Select Custom Security Policy */}
+                  <div>
+                    <label className="block text-sm font-semibold text-zinc-300 mb-2">
+                      {t('Custom Security Policy', 'Chính sách bảo mật áp dụng')}
+                    </label>
+                    <select
+                      className="w-full bg-zinc-900 border border-zinc-700 text-white p-2.5 rounded text-sm focus:outline-none focus:border-indigo-500"
+                      value={customPolicyId || ''}
+                      onChange={(e) => setCustomPolicyId(e.target.value || null)}
+                    >
+                      <option value="">{t('Default (Use department policy)', 'Mặc định (Dùng chính sách phòng ban)')}</option>
+                      {availablePolicies.map((policy) => (
+                        <option key={policy.id} value={policy.id}>
+                          {policy.name} {policy.departmentName ? `(${policy.departmentName})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-zinc-500 mt-1.5">
+                      {t('Select a custom security policy for this device. If none selected, the default department policy will be used.', 'Chọn một chính sách bảo mật riêng cho thiết bị này. Nếu bỏ trống, thiết bị sẽ kế thừa chính sách của phòng ban.')}
+                    </p>
+                  </div>
+
+                  {/* AI Websites Overrides */}
+                  <div>
+                    <label className="block text-sm font-semibold text-zinc-300 mb-3">
+                      {t('AI Website Protection Overrides', 'Ghi đè chế độ bảo vệ AI website')}
+                    </label>
+                    <div className="border border-zinc-800 rounded-lg overflow-hidden bg-zinc-950/20">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="bg-zinc-900 border-b border-zinc-800 text-zinc-400 font-semibold">
+                            <th className="p-3">{t('AI Website', 'Website AI')}</th>
+                            <th className="p-3">{t('Global Mode', 'Mặc định hệ thống')}</th>
+                            <th className="p-3">{t('Override Mode', 'Chế độ ghi đè')}</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-800">
+                          {websiteOverrides.map((override) => (
+                            <tr key={override.aiWebsiteId} className="hover:bg-zinc-900/30">
+                              <td className="p-3 font-semibold text-white">{override.name}</td>
+                              <td className="p-3 text-zinc-400">
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold border ${
+                                  override.globalMode === 'Block' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' :
+                                  override.globalMode === 'Mask' ? 'bg-sky-500/10 text-sky-400 border-sky-500/20' :
+                                  'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                }`}>
+                                  {override.globalMode}
+                                </span>
+                              </td>
+                              <td className="p-3">
+                                <select
+                                  className="bg-zinc-900 border border-zinc-700 text-white text-xs px-2 py-1 rounded focus:outline-none focus:border-indigo-500"
+                                  value={override.overrideMode}
+                                  onChange={(e) => handleOverrideChange(override.aiWebsiteId, e.target.value)}
+                                >
+                                  <option value="Inherit">{t('Inherit (Use Global)', 'Kế thừa (Mặc định)')}</option>
+                                  <option value="Block">{t('Block', 'Chặn')}</option>
+                                  <option value="Mask">{t('Mask', 'Che giấu')}</option>
+                                  <option value="Allow">{t('Allow', 'Cho phép')}</option>
+                                </select>
+                              </td>
+                            </tr>
+                          ))}
+                          {websiteOverrides.length === 0 && (
+                            <tr>
+                              <td colSpan={3} className="p-4 text-center text-zinc-500">
+                                {t('No AI website rules configured.', 'Chưa có quy tắc website AI nào.')}
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="modal-footer flex justify-end gap-2 mt-6 border-t border-zinc-800 pt-4">
+              <button className="btn-action px-4 py-2" onClick={() => setCustomSettingsDevice(null)} disabled={savingCustomSettings}>
+                {t('Cancel', 'Hủy')}
+              </button>
+              <button className="btn-primary px-4 py-2" onClick={handleSaveCustomSettings} disabled={savingCustomSettings || customSettingsLoading}>
+                {savingCustomSettings ? t('Saving...', 'Đang lưu...') : t('Save Settings', 'Lưu cấu hình')}
+              </button>
             </div>
           </div>
         </div>
