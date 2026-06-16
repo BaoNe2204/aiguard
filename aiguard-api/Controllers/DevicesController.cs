@@ -1,8 +1,11 @@
+using System.Security.Claims;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using aiguard_api.DTOs.Common;
 using aiguard_api.DTOs.Endpoints;
 using aiguard_api.Services;
+using aiguard_api.Hubs;
 
 namespace aiguard_api.Controllers;
 
@@ -12,8 +15,13 @@ namespace aiguard_api.Controllers;
 public class DevicesController : ControllerBase
 {
     private readonly IDeviceService _deviceService;
+    private readonly IHubContext<EndpointHub> _endpointHub;
 
-    public DevicesController(IDeviceService deviceService) => _deviceService = deviceService;
+    public DevicesController(IDeviceService deviceService, IHubContext<EndpointHub> endpointHub)
+    {
+        _deviceService = deviceService;
+        _endpointHub = endpointHub;
+    }
 
     /// <summary>Get paginated list of protected devices</summary>
     [HttpGet]
@@ -38,6 +46,19 @@ public class DevicesController : ControllerBase
     {
         var ok = await _deviceService.SyncPolicyAsync(id);
         if (!ok) return NotFound(ApiResponse<object>.Fail("Device not found"));
+
+        var tenant = User.FindFirstValue("tenantCode") ?? "DEFAULT";
+        var triggeredBy = User.FindFirstValue(ClaimTypes.Email) ?? User.FindFirstValue("email") ?? "admin";
+
+        await _endpointHub.Clients
+            .Group(NotificationGroups.Device(tenant, id))
+            .SendAsync("PolicyRefresh", new
+            {
+                commandId = Guid.NewGuid(),
+                triggeredBy,
+                triggeredAt = DateTime.UtcNow
+            });
+
         return Ok(ApiResponse<object>.Ok(new { }, "Policy sync triggered"));
     }
 

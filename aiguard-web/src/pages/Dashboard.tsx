@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Activity,
   AlertTriangle,
@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { DataTable } from '../components/ui/DataTable';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
-import { dashboardApi, type DashboardStats, type DepartmentRisk } from '../api/dashboard';
+import { dashboardApi, type AgentRiskResponse, type DashboardStats, type DepartmentRisk, type TrendDataPoint } from '../api/dashboard';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -27,6 +27,8 @@ export const Dashboard: React.FC = () => {
   const { user } = useAuth();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [deptRisks, setDeptRisks] = useState<DepartmentRisk[]>([]);
+  const [trends, setTrends] = useState<TrendDataPoint[]>([]);
+  const [agentRisk, setAgentRisk] = useState<AgentRiskResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -34,12 +36,16 @@ export const Dashboard: React.FC = () => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [statsData, riskData] = await Promise.all([
+        const [statsData, riskData, trendData, agentRiskData] = await Promise.all([
           dashboardApi.getStats(),
           dashboardApi.getDepartmentRisk(),
+          dashboardApi.getTrends(30),
+          dashboardApi.getAgentRisk(),
         ]);
         setStats(statsData);
         setDeptRisks(riskData);
+        setTrends(trendData);
+        setAgentRisk(agentRiskData);
       } catch (err: any) {
         setError(err.message || t('Failed to load dashboard data', 'Không thể tải dữ liệu tổng quan'));
       } finally {
@@ -59,10 +65,58 @@ export const Dashboard: React.FC = () => {
 
   // Calculate trend
   const trend = useMemo(() => {
-    if (!stats) return { direction: 'up' as const, percentage: 0 };
-    // Mock trend data
-    return { direction: 'up' as const, percentage: 12 };
-  }, [stats]);
+    if (trends.length < 2) return { direction: 'up' as const, percentage: 0 };
+    const midpoint = Math.max(1, Math.floor(trends.length / 2));
+    const previous = trends.slice(0, midpoint).reduce((sum, item) =>
+      sum + item.allowCount + item.maskCount + item.blockCount + item.pendingCount, 0);
+    const current = trends.slice(midpoint).reduce((sum, item) =>
+      sum + item.allowCount + item.maskCount + item.blockCount + item.pendingCount, 0);
+    if (previous === 0 && current === 0) return { direction: 'up' as const, percentage: 0 };
+    if (previous === 0) return { direction: 'up' as const, percentage: 100 };
+    const percentage = Math.round(((current - previous) / previous) * 100);
+    return {
+      direction: percentage >= 0 ? 'up' as const : 'down' as const,
+      percentage: Math.abs(percentage),
+    };
+  }, [trends]);
+
+  const exportReport = useCallback(() => {
+    const rows: Array<Array<string | number>> = [
+      ['Section', 'Metric', 'Value'],
+      ['KPI', 'Total prompts checked', stats?.totalPromptsChecked ?? 0],
+      ['KPI', 'Blocked incidents', stats?.blockedIncidents ?? 0],
+      ['KPI', 'Masked detections', stats?.maskedDetections ?? 0],
+      ['KPI', 'Pending approvals', stats?.pendingApprovals ?? 0],
+      ['KPI', 'Active protected devices', stats?.activeProtectedDevices ?? 0],
+      ['KPI', 'Extension active count', stats?.extensionActiveCount ?? 0],
+      ['KPI', 'Failed blockchain batches', stats?.failedBlockchainBatches ?? 0],
+      ['Agent', 'Total agents', agentRisk?.totalAgents ?? 0],
+      ['Agent', 'Total tool calls', agentRisk?.totalToolCalls ?? 0],
+      ['Agent', 'Blocked tool calls', agentRisk?.blockedToolCalls ?? 0],
+      ['Agent', 'Pending tool calls', agentRisk?.pendingToolCalls ?? 0],
+      ...deptRisks.map(item => [
+        'Department',
+        item.departmentName,
+        `users=${item.userCount}; prompts=${item.totalPrompts}; masked=${item.maskedCount}; blocked=${item.blockedCount}; avgRisk=${item.avgRiskScore}; top=${item.topDataType}`,
+      ]),
+      ...trends.map(item => [
+        'Trend',
+        item.date,
+        `allow=${item.allowCount}; mask=${item.maskCount}; block=${item.blockCount}; pending=${item.pendingCount}`,
+      ]),
+    ];
+
+    const csv = rows
+      .map(row => row.map(value => `"${String(value).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+    const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `aiguard-dashboard-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }, [agentRisk, deptRisks, stats, trends]);
 
   if (loading) {
     return (
@@ -100,7 +154,7 @@ export const Dashboard: React.FC = () => {
           <button className="btn-secondary flex items-center gap-2" onClick={() => window.location.reload()}>
             <RefreshCw size={14} /> {t('Refresh', 'Làm mới')}
           </button>
-          <button className="btn-primary flex items-center gap-2">
+          <button className="btn-primary flex items-center gap-2" onClick={exportReport}>
             <Download size={14} /> {t('Export Report', 'Xuất báo cáo')}
           </button>
         </div>

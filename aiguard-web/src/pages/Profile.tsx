@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   BadgeCheck,
@@ -23,6 +23,8 @@ import {
   XCircle
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { myUsageApi } from '../api/myUsage';
+import type { EndpointEventResponse } from '../api/endpoints';
 
 interface SessionItem {
   id: string;
@@ -35,53 +37,15 @@ interface SessionItem {
   active: boolean;
 }
 
-const initialSessions: SessionItem[] = [
-  {
-    id: 'session-current',
-    device: 'Windows Desktop',
-    browser: 'Chrome 126',
-    ip: '127.0.0.1',
-    location: 'Thiết bị hiện tại',
-    lastSeen: 'Đang hoạt động',
-    current: true,
-    active: true
-  },
-  {
-    id: 'session-2',
-    device: 'Laptop công ty',
-    browser: 'Edge 126',
-    ip: '10.10.8.24',
-    location: 'Văn phòng HCM',
-    lastSeen: '2 giờ trước',
-    current: false,
-    active: true
-  },
-  {
-    id: 'session-3',
-    device: 'Mobile',
-    browser: 'Safari iOS',
-    ip: '113.161.10.8',
-    location: 'Hà Nội',
-    lastSeen: '3 ngày trước',
-    current: false,
-    active: false
-  }
-];
-
-const activityLogs = [
-  ['13/06/2026 14:40', 'Đăng nhập thành công', 'Chrome / Windows'],
-  ['13/06/2026 14:32', 'Xác nhận MFA', 'TOTP Authenticator'],
-  ['13/06/2026 13:58', 'Mở trang Business Payment', 'Dashboard'],
-  ['12/06/2026 18:12', 'Tạo policy rule draft', 'Security Governance'],
-  ['12/06/2026 16:45', 'Approve prompt nhạy cảm', 'Approval Center']
-];
-
 export const Profile: React.FC = () => {
   const { user, logout } = useAuth();
+  const profileStorageKey = `aiguard_profile_preferences_${user?.id ?? 'anonymous'}`;
   const [avatarName, setAvatarName] = useState('');
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState('');
-  const [sessions, setSessions] = useState<SessionItem[]>(initialSessions);
+  const [activityEvents, setActivityEvents] = useState<EndpointEventResponse[]>([]);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [activityError, setActivityError] = useState('');
   const [form, setForm] = useState({
     fullName: user?.fullName ?? 'Người dùng AIGuard',
     email: user?.email ?? 'user@aiguard.vn',
@@ -95,6 +59,35 @@ export const Profile: React.FC = () => {
     weeklyReport: true,
     productNews: false
   });
+
+  useEffect(() => {
+    const savedProfile = localStorage.getItem(profileStorageKey);
+    if (!savedProfile) return;
+    try {
+      const parsed = JSON.parse(savedProfile) as Partial<typeof form> & { avatarName?: string };
+      setForm(previous => ({ ...previous, ...parsed }));
+      if (parsed.avatarName) setAvatarName(parsed.avatarName);
+    } catch {
+      localStorage.removeItem(profileStorageKey);
+    }
+  }, [profileStorageKey]);
+
+  const loadActivity = useCallback(async () => {
+    try {
+      setActivityLoading(true);
+      setActivityError('');
+      const result = await myUsageApi.getEvents({ page: 1, pageSize: 5 });
+      setActivityEvents(result.items);
+    } catch (caught: any) {
+      setActivityError(caught?.message || 'Không thể tải hoạt động gần đây');
+    } finally {
+      setActivityLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadActivity();
+  }, [loadActivity]);
 
   const initials = useMemo(() => {
     return form.fullName
@@ -110,8 +103,24 @@ export const Profile: React.FC = () => {
   const authProvider = user?.authProvider ?? 'Local';
   const mfaEnabled = Boolean(user?.mfaEnabled);
   const isActive = user?.isActive ?? true;
+  const sessions = useMemo<SessionItem[]>(() => {
+    const browser = typeof navigator === 'undefined'
+      ? 'Current browser'
+      : navigator.userAgent.split(' ').slice(-2).join(' ');
+    return [{
+      id: 'session-current',
+      device: typeof navigator === 'undefined' ? 'Current device' : navigator.platform || 'Current device',
+      browser,
+      ip: '-',
+      location: 'Trình duyệt hiện tại',
+      lastSeen: new Date().toLocaleString('vi-VN'),
+      current: true,
+      active: true,
+    }];
+  }, []);
 
   const saveProfile = () => {
+    localStorage.setItem(profileStorageKey, JSON.stringify({ ...form, avatarName }));
     setSaved(true);
     window.setTimeout(() => setSaved(false), 1600);
   };
@@ -124,11 +133,6 @@ export const Profile: React.FC = () => {
     });
   };
 
-  const revokeSession = (sessionId: string) => {
-    setSessions(previous => previous.map(session =>
-      session.id === sessionId ? { ...session, active: false, lastSeen: 'Đã thu hồi' } : session
-    ));
-  };
 
   return (
     <div className="profile-page">
@@ -249,7 +253,7 @@ export const Profile: React.FC = () => {
           </div>
           <div className="profile-note">
             <Globe size={16} />
-            <span>Một số text vẫn theo hệ thống đa ngôn ngữ chung. Tuỳ chọn này là UI demo, backend có thể lưu vào user preferences sau.</span>
+            <span>Tuỳ chọn hiển thị được lưu cục bộ theo tài khoản trên trình duyệt này. Khi backend có user preferences API, phần này có thể đồng bộ lên server.</span>
           </div>
         </div>
       </section>
@@ -268,7 +272,6 @@ export const Profile: React.FC = () => {
                 </div>
                 <div className="session-actions">
                   <span className={session.active ? 'active' : 'revoked'}>{session.current ? 'Hiện tại' : session.active ? 'Active' : 'Đã thu hồi'}</span>
-                  {!session.current && session.active && <button onClick={() => revokeSession(session.id)}>Thu hồi</button>}
                 </div>
               </div>
             ))}
@@ -278,18 +281,50 @@ export const Profile: React.FC = () => {
         <div className="card glass profile-panel">
           <PanelTitle icon={<History size={18} />} title="Hoạt động gần đây" />
           <div className="profile-activity-list">
-            {activityLogs.map(([time, title, source]) => (
-              <div key={`${time}-${title}`}>
+            {activityLoading && (
+              <div>
                 <Clock size={14} />
                 <div>
-                  <strong>{title}</strong>
-                  <span>{source}</span>
+                  <strong>Đang tải hoạt động...</strong>
+                  <span>Đang đồng bộ từ backend</span>
                 </div>
-                <time>{time}</time>
+                <time>Now</time>
+              </div>
+            )}
+            {!activityLoading && activityError && (
+              <div>
+                <AlertTriangle size={14} />
+                <div>
+                  <strong>Không thể tải hoạt động</strong>
+                  <span>{activityError}</span>
+                </div>
+                <time>-</time>
+              </div>
+            )}
+            {!activityLoading && !activityError && activityEvents.length === 0 && (
+              <div>
+                <Clock size={14} />
+                <div>
+                  <strong>Chưa có hoạt động DLP</strong>
+                  <span>Khi extension hoặc agent gửi sự kiện, log sẽ xuất hiện tại đây.</span>
+                </div>
+                <time>-</time>
+              </div>
+            )}
+            {!activityLoading && !activityError && activityEvents.map(event => (
+              <div key={event.id}>
+                <Clock size={14} />
+                <div>
+                  <strong>{event.eventType} · {event.decision}</strong>
+                  <span>{event.websiteAi || event.hostname} · {event.riskLevel} · {event.dataTypeMatched || 'N/A'}</span>
+                </div>
+                <time>{new Date(event.createdAt).toLocaleString('vi-VN')}</time>
               </div>
             ))}
           </div>
-          <button className="btn-secondary profile-refresh"><RefreshCw size={14} /> Làm mới hoạt động</button>
+          <button className="btn-secondary profile-refresh" onClick={loadActivity} disabled={activityLoading}>
+            <RefreshCw size={14} /> Làm mới hoạt động
+          </button>
         </div>
       </section>
 
@@ -298,7 +333,7 @@ export const Profile: React.FC = () => {
           <LogOut size={18} />
           <div>
             <strong>Đăng xuất khỏi AIGuard</strong>
-            <span>Đóng phiên hiện tại trên trình duyệt này. Các phiên khác có thể thu hồi ở danh sách thiết bị.</span>
+            <span>Đóng phiên hiện tại trên trình duyệt này và yêu cầu backend thu hồi refresh token đang dùng.</span>
           </div>
         </div>
         <button className="btn-secondary" onClick={logout}><LogOut size={14} /> Đăng xuất</button>

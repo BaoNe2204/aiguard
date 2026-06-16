@@ -20,7 +20,8 @@ import {
   Settings,
   Shield,
   User,
-  Users
+  Users,
+  LogOut
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -45,7 +46,7 @@ const defaultOpenMenus: Record<string, boolean> = {
 };
 
 export const Sidebar: React.FC = () => {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
 
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>(defaultOpenMenus);
 
@@ -118,8 +119,7 @@ export const Sidebar: React.FC = () => {
             subItems: [
               { title: 'Nhật ký kiểm toán', path: '/app/audit/logs' }
             ]
-          },
-          { key: 'profile', title: 'Hồ sơ tài khoản', description: 'Bảo mật đăng nhập', icon: <User size={18} />, path: '/app/profile' }
+          }
         ];
       case 'SecurityAdmin':
         return [
@@ -220,8 +220,7 @@ export const Sidebar: React.FC = () => {
         return [
           { key: 'my_logs', title: 'Nhật ký của tôi', description: 'Lịch sử sử dụng AI', icon: <History size={18} />, path: '/app/my-usage/logs' },
           { key: 'my_requests', title: 'Yêu cầu của tôi', description: 'Theo dõi phê duyệt', icon: <CheckSquare size={18} />, path: '/app/my-usage/approvals' },
-          { key: 'my_score', title: 'Điểm an toàn', description: 'Thói quen bảo mật', icon: <BadgeCheck size={18} />, path: '/app/my-usage/summary' },
-          { key: 'profile', title: 'Hồ sơ cá nhân', description: 'Thông tin tài khoản', icon: <User size={18} />, path: '/app/profile' }
+          { key: 'my_score', title: 'Điểm an toàn', description: 'Thói quen bảo mật', icon: <BadgeCheck size={18} />, path: '/app/my-usage/summary' }
         ];
     }
   }, [user?.role]);
@@ -279,6 +278,23 @@ export const Sidebar: React.FC = () => {
           );
         })}
       </nav>
+
+      <div className="sidebar-footer">
+        <div className="user-info-brief">
+          <NavLink to="/app/profile" className="flex items-center gap-3 flex-1 min-w-0 no-underline hover:opacity-85">
+            <div className="avatar-placeholder">
+              {user?.fullName?.charAt(0).toUpperCase() || 'GB'}
+            </div>
+            <div className="min-w-0">
+              <div className="user-name-brief truncate">{user?.fullName || 'User'}</div>
+              <div className="user-role-brief truncate">{user?.role}</div>
+            </div>
+          </NavLink>
+          <button onClick={logout} className="logout-button ml-auto" title="Đăng xuất">
+            <LogOut size={16} />
+          </button>
+        </div>
+      </div>
     </aside>
   );
 };

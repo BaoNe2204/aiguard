@@ -17,6 +17,7 @@ public interface IApprovalService
     Task<ApprovalResponse> CreateApprovalAsync(
         string requestType, Guid? endpointEventId, Guid? agentActionLogId,
         string requestedByEmail, string? businessJustification = null);
+    Task<(Guid? deviceId, string? tenantCode)> GetEventDeviceInfoAsync(Guid endpointEventId);
 }
 
 public class ApprovalService : IApprovalService
@@ -213,6 +214,20 @@ public class ApprovalService : IApprovalService
         _db.Approvals.Add(approval);
         await _db.SaveChangesAsync();
         return MapToResponse(approval);
+    }
+
+    public async Task<(Guid? deviceId, string? tenantCode)> GetEventDeviceInfoAsync(Guid endpointEventId)
+    {
+        var evt = await _db.EndpointEvents
+            .AsNoTracking()
+            .FirstOrDefaultAsync(e => e.Id == endpointEventId);
+        if (evt == null) return (null, null);
+
+        // Find device by hostname + tenantCode (EndpointEvent stores hostname as a string, not FK)
+        var device = await _db.Devices
+            .AsNoTracking()
+            .FirstOrDefaultAsync(d => d.Hostname == evt.Hostname && d.TenantCode == evt.TenantCode);
+        return (device?.Id, evt.TenantCode);
     }
 
     private static ApprovalResponse MapToResponse(Approval a)

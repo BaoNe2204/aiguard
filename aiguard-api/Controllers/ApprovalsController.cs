@@ -39,14 +39,32 @@ public class ApprovalsController : ControllerBase
         var result = await _approvalService.ProcessApprovalAsync(id, request, approverId);
         if (result == null) return NotFound(ApiResponse<object>.Fail("Approval not found or already processed"));
 
-        // Send realtime notification to the requester
         var tenant = User.FindFirstValue("tenantCode") ?? "DEFAULT";
+
+        // Send to web frontend (user group)
         await _hubContext.Clients.Group(NotificationGroups.User(tenant, result.RequestedByUserEmail)).SendAsync("ApprovalDecided", new
         {
             approvalId = result.Id,
             status = result.Status,
             note = result.ApproverNote
         });
+
+        // Send to browser extension (device group) for the device that created the event
+        if (result.EndpointEventId.HasValue)
+        {
+            var (deviceId, tenantCodeForDevice) = await _approvalService.GetEventDeviceInfoAsync(result.EndpointEventId.Value);
+            if (deviceId.HasValue && !string.IsNullOrEmpty(tenantCodeForDevice))
+            {
+                await _hubContext.Clients.Group(NotificationGroups.Device(tenantCodeForDevice, deviceId.Value))
+                    .SendAsync("ApprovalDecided", new
+                    {
+                        approvalId = result.Id,
+                        status = result.Status,
+                        note = result.ApproverNote,
+                        decision = result.Status == "Approved" ? "Allow" : result.Status == "ApprovedWithMasking" ? "Mask" : "Block"
+                    });
+            }
+        }
 
         return Ok(ApiResponse<ApprovalResponse>.Ok(result));
     }

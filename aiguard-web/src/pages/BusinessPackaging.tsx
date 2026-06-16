@@ -46,6 +46,7 @@ export const BusinessPackaging: React.FC = () => {
   const [addStep, setAddStep] = useState<AddStep>('info');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const createEmptyNewPlan = () => ({
     code: '',
@@ -73,8 +74,8 @@ export const BusinessPackaging: React.FC = () => {
       if (sorted.length > 0 && !selectedPlanId) {
         setSelectedPlanId(sorted[0].id);
       }
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      setNotice({ type: 'error', message: e?.message || 'Không thể tải danh sách gói dịch vụ.' });
     } finally {
       setLoading(false);
     }
@@ -107,13 +108,14 @@ export const BusinessPackaging: React.FC = () => {
     setSaving(true);
     try {
       await platformApi.createPlan(newPlan);
+      setNotice({ type: 'success', message: `Đã tạo gói ${newPlan.name}.` });
       setShowAddForm(false);
       setErrors({});
       setAddStep('info');
       setNewPlan(createEmptyNewPlan());
       await loadPlans();
     } catch (e: any) {
-      alert('Lỗi: ' + (e?.message || e));
+      setNotice({ type: 'error', message: e?.message || 'Không thể tạo gói dịch vụ.' });
     } finally {
       setSaving(false);
     }
@@ -130,6 +132,7 @@ export const BusinessPackaging: React.FC = () => {
     setSaving(true);
     try {
       await platformApi.updatePlan(editingPlanId, newPlan);
+      setNotice({ type: 'success', message: `Đã cập nhật gói ${newPlan.name}.` });
       setShowAddForm(false);
       setEditingPlanId(null);
       setErrors({});
@@ -137,7 +140,7 @@ export const BusinessPackaging: React.FC = () => {
       setNewPlan(createEmptyNewPlan());
       await loadPlans();
     } catch (e: any) {
-      alert('Lỗi: ' + (e?.message || e));
+      setNotice({ type: 'error', message: e?.message || 'Không thể cập nhật gói dịch vụ.' });
     } finally {
       setSaving(false);
     }
@@ -200,7 +203,7 @@ export const BusinessPackaging: React.FC = () => {
         state: { order, plan: targetPlan, purchaseMonths: 1 }
       });
     } catch (e: any) {
-      alert('Lỗi: ' + (e?.message || e));
+      setNotice({ type: 'error', message: e?.message || 'Không thể tạo đơn mua gói.' });
     } finally {
       setBuying(false);
     }
@@ -223,6 +226,14 @@ export const BusinessPackaging: React.FC = () => {
           <button className="btn-primary" onClick={openAddForm}><Plus size={15} /> Tạo gói mới</button>
         </div>}
       </div>
+
+      {notice && (
+        <div className={`business-inline-alert ${notice.type === 'success' ? 'success' : 'danger'}`}>
+          <span>{notice.type === 'success' ? <Check size={16} /> : <AlertCircle size={16} />}</span>
+          <strong>{notice.message}</strong>
+          <button type="button" onClick={() => setNotice(null)}><X size={14} /></button>
+        </div>
+      )}
 
       {isPlatformAdmin && showAddForm && (
         <AddPlanModal
@@ -536,6 +547,8 @@ const AddPlanModal: React.FC<{
   yearlyTotal: number;
   mode?: 'create' | 'edit';
 }> = ({ draft, onChange, onClose, onSave, step, setStep, errors, saving, yearlyTotal, mode = 'create' }) => {
+  const [stepError, setStepError] = useState('');
+
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -587,6 +600,14 @@ const AddPlanModal: React.FC<{
 
         {/* Step-specific Form body */}
         <div className="package-modal-body p-6 flex-1 overflow-y-auto max-h-[60vh] space-y-5">
+          {stepError && (
+            <div className="business-inline-alert danger">
+              <span><AlertCircle size={16} /></span>
+              <strong>{stepError}</strong>
+              <button type="button" onClick={() => setStepError('')}><X size={14} /></button>
+            </div>
+          )}
+
           {step === 'info' && (
             <div className="space-y-4">
               <Field label="Tên gói dịch vụ" required error={errors.name}>

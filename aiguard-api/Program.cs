@@ -212,6 +212,7 @@ app.UseAuthorization();
 
 app.MapControllers();
 app.MapHub<NotificationHub>("/hubs/notifications").RequireAuthorization();
+app.MapHub<EndpointHub>("/hubs/endpoint");
 
 // ── Database Migration & Seed ──
 using (var scope = app.Services.CreateScope())

@@ -7723,3 +7723,56 @@ select {
     flex-direction: column;
   }
 }
+
+.business-inline-alert {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(15, 23, 42, 0.72);
+  color: var(--text-primary);
+}
+
+.business-inline-alert span {
+  display: inline-flex;
+}
+
+.business-inline-alert.success {
+  border-color: rgba(52, 211, 153, 0.28);
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.business-inline-alert.success span {
+  color: var(--accent-emerald);
+}
+
+.business-inline-alert.danger {
+  border-color: rgba(251, 113, 133, 0.28);
+  background: rgba(244, 63, 94, 0.1);
+}
+
+.business-inline-alert.danger span {
+  color: var(--accent-rose);
+}
+
+.business-inline-alert strong {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.business-inline-alert button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary);
+  cursor: pointer;
+}

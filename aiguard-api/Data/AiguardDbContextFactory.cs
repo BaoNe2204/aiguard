@@ -20,6 +20,7 @@ public class AiguardDbContextFactory : IDesignTimeDbContextFactory<AiguardDbCont
         public Guid? DepartmentId => null;
         public bool RestrictToDepartment => false;
         public bool IsPlatformAdmin => false;
+        public string UserRole => string.Empty;
         public void SetEndpointScope(string tenantCode, Guid? departmentId) { }
     }
 }

@@ -11,6 +11,34 @@
   const replayFileInputs = new WeakSet();
   let submitInProgress = false;
 
+  let wsConnection = null;
+  let wsConfig = null;
+  let wsReconnectTimer = null;
+  const RECORD_SEPARATOR = String.fromCharCode(30);
+
+  // Pending approvals: approvalId -> { resolve, reject, expiresAt }
+  const pendingApprovals = new Map();
+
+  // Listen for real-time messages from background script
+  chrome.runtime.onMessage.addListener((message) => {
+    if (!message) return;
+    if (message.type === "AIGUARD_APPROVAL_DECISION") {
+      const { approvalId, status, note, decision } = message;
+      const pending = pendingApprovals.get(approvalId);
+      if (pending) {
+        pendingApprovals.delete(approvalId);
+        pending.resolve({ status, note, decision });
+      }
+    } else if (message.type === "AIGUARD_SHOW_NOTIFICATION") {
+      const { message: text, tone } = message.payload || {};
+      if (text) {
+        notify(text, tone || "info");
+      }
+    } else if (message.type === "AIGUARD_SCAN_REQUEST") {
+      notify("Admin requested a scan.", "info");
+    }
+  });
+
   async function getConfig() {
     return chrome.storage.local.get([
       "apiBaseUrl", "hostname", "endpointKey", "offlineCriticalBlock", "enabled"
@@ -45,7 +73,7 @@
     const config = await getConfig();
     if (config.enabled === false) return { config, result: null, disabled: true };
     if (!config.apiBaseUrl || !config.hostname || !config.endpointKey) {
-      throw new Error("AIGuard chua duoc dang ky");
+      return { config, result: null, disabled: true };
     }
     const result = await sendApi("POST", "/api/dlp/scan", {
       content: text,
@@ -337,10 +365,26 @@
     );
   }
 
-  async function pollApproval(approvalId, expiresAt) {
-    const config = await getConfig();
+  // Wait for approval decision via real-time WebSocket (SignalR), falling back to polling
+  async function waitForApproval(approvalId, expiresAt) {
     const expiration = expiresAt ? new Date(expiresAt).getTime() : Date.now() + 30 * 60 * 1000;
     const deadline = Math.min(expiration, Date.now() + 30 * 60 * 1000);
+
+    // Register pending approval for realtime delivery
+    const realtimePromise = new Promise((resolve) => {
+      pendingApprovals.set(approvalId, { resolve });
+    });
+
+    // Set up deadline timer
+    const timeoutMs = deadline - Date.now();
+    const timeoutPromise = new Promise(resolve => setTimeout(() => resolve({ status: "Expired" }), timeoutMs));
+
+    // Race: realtime signal OR deadline
+    const realtimeResult = await Promise.race([realtimePromise, timeoutPromise]);
+    if (realtimeResult?.status !== "Expired") return realtimeResult;
+
+    // Fallback: poll REST API after deadline expired with no realtime signal
+    const config = await getConfig();
     while (Date.now() < deadline) {
       await new Promise(resolve => setTimeout(resolve, 3000));
       try {
@@ -356,10 +400,133 @@
     return { status: "Expired" };
   }
 
+  function normalizeHubWsUrl(apiBaseUrl) {
+    const url = new URL(apiBaseUrl);
+    const wsProtocol = url.protocol === "https:" ? "wss:" : "ws:";
+    return `${wsProtocol}//${url.host}/hubs/endpoint`;
+  }
+
+  function sendWsRecord(data) {
+    if (!wsConnection || wsConnection.readyState !== WebSocket.OPEN) return;
+    wsConnection.send(JSON.stringify(data) + RECORD_SEPARATOR);
+  }
+
+  async function startSignalRConnection() {
+    if (wsConnection && wsConnection.readyState === WebSocket.OPEN) return;
+    try {
+      const config = await chrome.runtime.sendMessage({ type: "AIGUARD_GET_SIGNALR_CONFIG" });
+      if (!config?.ok) return;
+      wsConfig = config;
+
+      const wsUrl = `${normalizeHubWsUrl(config.hubUrl.replace("/hubs/endpoint", ""))}/hubs/endpoint?access_token=${encodeURIComponent(config.accessToken)}&hostname=${encodeURIComponent(config.hostname)}`;
+      wsConnection = new WebSocket(wsUrl);
+
+      wsConnection.addEventListener("open", () => {
+        // Send SignalR handshake
+        sendWsRecord({ protocol: "json", version: 1 });
+      });
+
+      wsConnection.addEventListener("message", async (event) => {
+        try {
+          const rawData = event.data;
+          if (typeof rawData !== "string") return;
+          const records = rawData.split(RECORD_SEPARATOR);
+          for (const record of records) {
+            if (!record.trim()) continue;
+            const msg = JSON.parse(record);
+            if (msg.type === 1) {
+              // Invocation message
+              const args = msg.arguments?.[0] || {};
+              if (msg.target === "ApprovalDecided") {
+                const { approvalId, status, note, decision } = args;
+                const pending = pendingApprovals.get(approvalId);
+                if (pending) {
+                  pendingApprovals.delete(approvalId);
+                  pending.resolve({ status, note, decision });
+                }
+                // Forward to background for other tabs
+                chrome.runtime.sendMessage({
+                  type: "AIGUARD_APPROVAL_DECIDED",
+                  payload: { approvalId, status, note, decision }
+                }).catch(() => undefined);
+              } else if (msg.target === "ExtensionCommand" || msg.target === "PolicyRefresh" || msg.target === "RequestScan") {
+                // Forward command to background script
+                chrome.runtime.sendMessage({
+                  type: "AIGUARD_EXTENSION_COMMAND",
+                  payload: args
+                }).catch(() => undefined);
+              }
+            } else if (msg.type === undefined && msg.protocol === "json" && msg.version === 1) {
+              // Handshake response - connection established
+            }
+          }
+        } catch {
+          // Ignore parse errors
+        }
+      });
+
+      wsConnection.addEventListener("close", () => {
+        wsConnection = null;
+        scheduleReconnect();
+      });
+
+      wsConnection.addEventListener("error", () => {
+        wsConnection?.close();
+      });
+    } catch {
+      scheduleReconnect();
+    }
+  }
+
+  function scheduleReconnect() {
+    if (wsReconnectTimer) return;
+    wsReconnectTimer = setTimeout(() => {
+      wsReconnectTimer = null;
+      startSignalRConnection();
+    }, 5000);
+  }
+
+  // Start connection early on load
+  startSignalRConnection();
+
+  // Send a SignalR invocation message through the WebSocket
+  function sendSignalRInvocation(method, args) {
+    if (!wsConnection || wsConnection.readyState !== WebSocket.OPEN) return;
+    const id = String(Date.now()) + Math.random().toString(36).slice(2);
+    sendWsRecord({
+      type: 1,
+      invocationId: id,
+      target: method,
+      arguments: [args]
+    });
+  }
+
+  // Push DLP event to backend in real-time via SignalR
+  function pushDlpEvent(eventType, decision, websiteAi, riskScore, riskLevel, dataTypeMatched) {
+    sendSignalRInvocation("SendDlpEvent", {
+      eventType,
+      decision,
+      websiteAi,
+      riskScore,
+      riskLevel,
+      dataTypeMatched
+    });
+  }
+
   async function evaluateText(text, eventType) {
     try {
       const { config, result, disabled } = await scanText(text);
       if (disabled) return { outcome: "allow", content: text };
+
+      // Real-time push DLP event to backend → frontend dashboard
+      pushDlpEvent(
+        eventType,
+        result.decision,
+        SITE,
+        result.riskScore,
+        result.riskLevel,
+        (result.matches || []).map(m => m.dataType).join(", ")
+      );
 
       if (result.decision === "Block") {
         const event = await recordTextEvent(text, result, eventType);
@@ -385,7 +552,7 @@
         const event = await recordTextEvent(text, result, eventType, choice.reason);
         if (!event.approvalId) throw new Error("Backend khong tra ve ma phe duyet.");
         notify("Da gui yeu cau phe duyet. Dang cho quan ly xu ly.", "warning");
-        const approval = await pollApproval(event.approvalId, event.expiresAt);
+        const approval = await waitForApproval(event.approvalId, event.expiresAt);
         if (approval.status === "Approved") {
           notify("Yeu cau da duoc phe duyet.", "success");
           return { outcome: "allow", content: text };
@@ -489,6 +656,9 @@
   async function scanFilesBeforeUpload(input, files) {
     const config = await getConfig();
     if (config.enabled === false) return replayFileSelection(input, files);
+    if (!config.apiBaseUrl || !config.hostname || !config.endpointKey) {
+      return replayFileSelection(input, files);
+    }
     try {
       for (const file of files) {
         if (file.size > MAX_FILE_BYTES) throw new Error(`${file.name} vuot qua 25 MB`);
@@ -497,6 +667,15 @@
           type: file.type,
           base64: arrayBufferToBase64(await file.arrayBuffer())
         });
+        // Real-time push to backend → frontend dashboard
+        pushDlpEvent(
+          result.decision === "Block" ? "FileUploadBlocked" : "FileUploadChecked",
+          result.decision,
+          SITE,
+          result.riskScore,
+          result.riskLevel,
+          file.name
+        );
         if (result.decision === "Block") {
           const event = await recordFileEvent(file, result);
           input.value = "";
@@ -513,7 +692,7 @@
           const event = await recordFileEvent(file, result, choice.reason);
           if (!event.approvalId) throw new Error("Backend khong tra ve ma phe duyet.");
           notify(`Tep ${file.name} dang cho phe duyet.`, "warning");
-          const approval = await pollApproval(event.approvalId, event.expiresAt);
+          const approval = await waitForApproval(event.approvalId, event.expiresAt);
           if (approval.status !== "Approved") {
             notify(`Khong the upload tep: ${approval.status}.`);
             return;
