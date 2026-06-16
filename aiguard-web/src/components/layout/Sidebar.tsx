@@ -54,7 +54,7 @@ export const Sidebar: React.FC = () => {
     setOpenMenus((previous) => ({ ...previous, [key]: !previous[key] }));
   };
 
-  const menuItems = useMemo<SidebarItem[]>(() => {
+  const rawMenuItems = useMemo<SidebarItem[]>(() => {
     switch (user?.role) {
       case 'PlatformAdmin':
         return [
@@ -67,6 +67,8 @@ export const Sidebar: React.FC = () => {
           { key: 'platform_licenses', title: 'License', description: 'Khóa, gia hạn, giới hạn', icon: <KeyRound size={18} />, path: '/app/business/licenses' },
           { key: 'platform_invoices', title: 'Hóa đơn', description: 'Thanh toán và biên lai', icon: <ReceiptText size={18} />, path: '/app/business/invoices' },
           { key: 'platform_support', title: 'Hỗ trợ', description: 'Ticket triển khai', icon: <Headphones size={18} />, path: '/app/business/support' }
+          ,
+          { key: 'agent_lab', title: 'AI Agent Lab', description: 'Dev/test tam thoi', icon: <Cpu size={18} />, path: '/app/dev/ai-agent-lab' }
         ];
       case 'TenantOwner':
         return [
@@ -108,7 +110,46 @@ export const Sidebar: React.FC = () => {
               { title: 'Thiết bị đã triển khai', path: '/app/endpoints/devices' },
               { title: 'Website AI theo dõi', path: '/app/endpoints/ai-websites' },
               { title: 'Theo dõi Agent / DLP', path: '/app/endpoints/events' },
-              { title: 'Cài đặt Agent', path: '/app/endpoints/deployment' }
+              { title: 'aiguard-endpoint-agent', path: '/app/endpoints/agent' },
+              { title: 'aiguard-extension', path: '/app/endpoints/extension' }
+            ]
+          },
+          {
+            key: 'policies',
+            title: 'Chính sách bảo mật',
+            description: 'Luật chặn và bộ phát hiện',
+            icon: <Lock size={18} />,
+            subItems: [
+              { title: 'Quy tắc phòng ban', path: '/app/policies/rules' },
+              { title: 'Bộ phát hiện', path: '/app/policies/detectors' },
+              { title: 'Whitelist & Blacklist', path: '/app/policies/whitelist-blacklist' },
+              { title: 'Phiên bản chính sách', path: '/app/policies/versions' }
+            ]
+          },
+          {
+            key: 'approvals',
+            title: 'Trung tâm phê duyệt',
+            description: 'Prompt, file và agent',
+            icon: <CheckSquare size={18} />,
+            subItems: [
+              { title: 'Duyệt prompt', path: '/app/approvals/prompts' },
+              { title: 'Duyệt Agent', path: '/app/approvals/agents' },
+              { title: 'Lịch sử phê duyệt', path: '/app/approvals/history' }
+            ]
+          },
+          {
+            key: 'agents',
+            title: 'Kiểm soát AI Agent',
+            description: 'Quyền tool-call và runtime',
+            icon: <Cpu size={18} />,
+            subItems: [
+              { title: 'Danh sách Agent', path: '/app/agents' },
+              { title: 'Quyền công cụ', path: '/app/agents/permissions' },
+              { title: 'Giám sát tool-call', path: '/app/agents/monitor' },
+              { title: 'Prompt injection', path: '/app/agents/prompt-injection' },
+              { title: 'Mô phỏng chính sách', path: '/app/agents/simulation' },
+              { title: 'Runtime controls', path: '/app/agents/runtime' },
+              { title: 'Red-team tests', path: '/app/agents/red-team' }
             ]
           },
           {
@@ -134,7 +175,8 @@ export const Sidebar: React.FC = () => {
               { title: 'Thiết bị đã triển khai', path: '/app/endpoints/devices' },
               { title: 'Website AI', path: '/app/endpoints/ai-websites' },
               { title: 'Theo dõi Agent / DLP', path: '/app/endpoints/events' },
-              { title: 'Cài đặt Agent', path: '/app/endpoints/deployment' }
+              { title: 'aiguard-endpoint-agent', path: '/app/endpoints/agent' },
+              { title: 'aiguard-extension', path: '/app/endpoints/extension' }
             ]
           },
           {
@@ -224,6 +266,22 @@ export const Sidebar: React.FC = () => {
         ];
     }
   }, [user?.role]);
+
+  const productionMenuItems = rawMenuItems
+    .filter(item => item.key !== 'agents')
+    .map(item => item.key === 'approvals'
+      ? { ...item, subItems: item.subItems?.filter(subItem => subItem.path !== '/app/approvals/agents') }
+      : item);
+  const securityAgentLabItem: SidebarItem = {
+    key: 'agent_lab',
+    title: 'AI Agent Lab',
+    description: 'Dev/test tam thoi',
+    icon: <Cpu size={18} />,
+    path: '/app/dev/ai-agent-lab'
+  };
+  const menuItems = user?.role === 'SecurityAdmin'
+    ? [productionMenuItems[0], securityAgentLabItem, ...productionMenuItems.slice(1)]
+    : productionMenuItems;
 
   return (
     <aside className="sidebar">

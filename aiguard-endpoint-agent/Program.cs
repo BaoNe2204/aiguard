@@ -1,27 +1,45 @@
 using AIGuard.EndpointAgent;
+using System.Runtime.InteropServices;
 
-if (args.Length > 0 && !args[0].Equals("run", StringComparison.OrdinalIgnoreCase))
+if (args.Length > 0)
 {
-    using var loggerFactory = LoggerFactory.Create(logging =>
+    // Attach to parent console if running in CLI mode (not run as service)
+    if (!args[0].Equals("run", StringComparison.OrdinalIgnoreCase))
     {
-        logging.AddSimpleConsole(options =>
+        AttachConsole(-1);
+        
+        using var loggerFactory = LoggerFactory.Create(logging =>
         {
-            options.SingleLine = true;
-            options.TimestampFormat = "HH:mm:ss ";
+            logging.AddSimpleConsole(options =>
+            {
+                options.SingleLine = true;
+                options.TimestampFormat = "HH:mm:ss ";
+            });
         });
-    });
-    var store = new AgentStateStore();
-    var api = new EndpointApiClient(store);
-    var telemetry = new EndpointTelemetryCollector();
-    var cli = new AgentCli(store, api, telemetry, Console.Out);
-    return await cli.RunAsync(args, CancellationToken.None);
+        var store = new AgentStateStore();
+        var api = new EndpointApiClient(store);
+        var telemetry = new EndpointTelemetryCollector();
+        var cli = new AgentCli(store, api, telemetry, Console.Out);
+        return await cli.RunAsync(args, CancellationToken.None);
+    }
+    else
+    {
+        // Service mode
+        var builder = Host.CreateApplicationBuilder(args);
+        builder.Services.AddWindowsService(options => options.ServiceName = "AIGuard Endpoint Agent");
+        builder.Services.AddSingleton<AgentStateStore>();
+        builder.Services.AddSingleton<EndpointApiClient>();
+        builder.Services.AddSingleton<EndpointTelemetryCollector>();
+        builder.Services.AddHostedService<EndpointWorker>();
+        await builder.Build().RunAsync();
+        return 0;
+    }
 }
 
-var builder = Host.CreateApplicationBuilder(args);
-builder.Services.AddWindowsService(options => options.ServiceName = "AIGuard Endpoint Agent");
-builder.Services.AddSingleton<AgentStateStore>();
-builder.Services.AddSingleton<EndpointApiClient>();
-builder.Services.AddSingleton<EndpointTelemetryCollector>();
-builder.Services.AddHostedService<EndpointWorker>();
-await builder.Build().RunAsync();
+// GUI Mode (no arguments)
+ApplicationConfiguration.Initialize();
+Application.Run(new AgentGuiForm());
 return 0;
+
+[DllImport("kernel32.dll", SetLastError = true)]
+static extern bool AttachConsole(int dwProcessId);

@@ -59,6 +59,131 @@ Gửi telemetry một lần:
 dotnet run -- telemetry-once
 ```
 
+Test luong noi bat: AI coding app doc repo co du lieu nhay cam.
+
+```powershell
+$env:AIGUARD_WORKSPACE_ROOTS="D:\tmp\aiguard-sensitive-test"
+New-Item -ItemType Directory -Force "D:\tmp\aiguard-sensitive-test\.git"
+Set-Content "D:\tmp\aiguard-sensitive-test\.env" "OPENAI_API_KEY=sk-test"
+dotnet run -- telemetry-once
+```
+
+Sau khi chay, vao Control Tower > Bao ve thiet bi > Theo doi Agent / DLP.
+Agent se day cac telemetry moi:
+
+- `AiCodeApp` khi thay Cursor, Codex, VS Code, Copilot, Claude, Windsurf, Trae hoac Tabnine dang chay.
+- `SensitiveWorkspace` khi thay thu muc source code.
+- `DeveloperSecret` khi thay `.env`, private key, certificate hoac file cau hinh nhay cam trong repo.
+
+`DeveloperSecret` duoc cham `Critical`, `AiCodeApp` va `SensitiveWorkspace` duoc cham `High` de admin co the xem audit log,
+quarantine thiet bi hoac remote disable. Day la lop phat hien/canh bao dang chay duoc; chan cung viec process doc file
+can them Windows policy, signed interactive helper, driver hoac tich hop EDR/Intune/GPO.
+
+## Test full theo yeu cau doanh nghiep
+
+Muc tieu luong test:
+
+```text
+Admin tao policy tren web
+-> Agent may con sync policy
+-> Agent phat hien AI code app + repo/file nhay cam
+-> Agent cham risk
+-> Low: Allow
+-> High: PendingApproval/Alert
+-> Critical: Block/KillProcess/Quarantine
+-> Gui telemetry va audit log
+```
+
+### 1. Tao repo gia co secret de test
+
+```powershell
+dotnet run -- create-test-fixture --path "C:\tmp\aiguard-sensitive-test"
+```
+
+Lenh nay tao `.git`, `package.json`, `.env`, va `private.key`.
+
+### 2. Test offline khong can API
+
+```powershell
+dotnet run -- ai-code-check --workspace-roots "C:\tmp\aiguard-sensitive-test"
+```
+
+Ket qua mong doi:
+
+- `AiCodeApp` neu Cursor, Codex, VS Code/Copilot, Claude, Windsurf, Trae hoac Tabnine dang chay.
+- `SensitiveWorkspace` khi thay repo/source.
+- `DeveloperSecret` khi thay `.env`, `private.key`, certificate hoac file secret.
+- `AiCodePolicyDecision` ket luan risk va decision.
+
+Vi du dung:
+
+```text
+[Critical] AiCodePolicyDecision/Blocked
+Risk=Critical; Decision=Block; Enforcement=BlockRequestedProcessKillDisabled
+```
+
+`ProcessKillDisabled` la dung khi test an toan. Agent khong dong app cua ban neu chua bat enforcement.
+
+### 3. Test payload truoc khi gui server
+
+```powershell
+dotnet run -- telemetry-once --dry-run --workspace-roots "C:\tmp\aiguard-sensitive-test"
+```
+
+Lenh nay in telemetry ra console va khong goi API.
+
+### 4. Gui telemetry that len Control Tower
+
+Lay enrollment token o web: `Bao ve thiet bi > aiguard-endpoint-agent`.
+
+```powershell
+$env:AIGUARD_AGENT_HOME="C:\tmp\aiguard-agent-test"
+dotnet run -- configure --api http://127.0.0.1:5185 --token "<enrollment-token>" --email "dev@company.com" --department "Dev" --workspace-roots "C:\tmp\aiguard-sensitive-test" --clear-state
+dotnet run -- enroll
+dotnet run -- telemetry-once
+```
+
+Xem ket qua tren web:
+
+```text
+Bao ve thiet bi -> Theo doi Agent / DLP
+Bao ve thiet bi -> Thiet bi da trien khai
+Audit log
+```
+
+### 5. Test block/kill/quarantine
+
+Mac dinh agent chi bao `BlockRequestedProcessKillDisabled` de test an toan.
+Chi bat kill process khi da chac chan muon agent dong Cursor/Codex/VS Code AI theo policy:
+
+```powershell
+dotnet run -- configure --enable-process-kill true
+dotnet run -- ai-code-check --workspace-roots "C:\tmp\aiguard-sensitive-test" --critical-action Block
+```
+
+Neu policy tren web de `CriticalAction = Block`, khi gui telemetry that backend se tu quarantine thiet bi.
+Neu `--enable-process-kill true`, agent se co gang dong cac process AI code app khop danh sach.
+
+### 6. Lenh cau hinh quan trong
+
+```powershell
+dotnet run -- configure `
+  --api http://127.0.0.1:5185 `
+  --token "<enrollment-token>" `
+  --email "employee@company.com" `
+  --department "Dev" `
+  --workspace-roots "D:\repo1;D:\repo2" `
+  --ai-code-protection true `
+  --enable-process-kill false
+```
+
+Ghi nho:
+
+- `--workspace-roots` giup test dung thu muc, khong quet lan.
+- `--enable-process-kill false` la mac dinh an toan.
+- `--dry-run` chi in ket qua, khong gui API.
+- `ai-code-check` la lenh test nhanh nhat cho tinh nang AI code app protection.
+
 ## Chạy dạng Windows Service
 
 Publish bản self-contained:

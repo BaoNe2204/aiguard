@@ -89,7 +89,6 @@ export const RealtimeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const s = payload as ExtensionOnlineStatus & { disconnectedAt: string };
       setExtensionStatus(prev => {
         const next = new Map(prev);
-        const existing = next.get(s.deviceId);
         next.set(s.deviceId, { ...s, connected: false, lastSeen: s.disconnectedAt });
         return next;
       });

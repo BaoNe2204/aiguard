@@ -29,7 +29,7 @@ public sealed class EndpointWorker : BackgroundService
             {
                 var sync = await _api.HeartbeatAndSyncAsync(config, state, stoppingToken);
                 state = sync.State;
-                await SendTelemetryAsync(config, state, stoppingToken);
+                await SendTelemetryAsync(config, state, sync.Policy, stoppingToken);
             }
             catch (Exception ex)
             {
@@ -39,9 +39,9 @@ public sealed class EndpointWorker : BackgroundService
         }
     }
 
-    private async Task SendTelemetryAsync(AgentConfig config, AgentState state, CancellationToken token)
+    private async Task SendTelemetryAsync(AgentConfig config, AgentState state, PolicyData policy, CancellationToken token)
     {
-        var events = _telemetry.Collect();
+        var events = _telemetry.Collect(policy, config);
         if (events.Count == 0) return;
         await _api.SendTelemetryAsync(config, state, events, token);
     }

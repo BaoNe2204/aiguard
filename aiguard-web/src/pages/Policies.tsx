@@ -82,6 +82,9 @@ export const Policies: React.FC = () => {
     } catch {} finally { setSaveLoading(null); }
   };
 
+  const valueOf = <K extends keyof SecurityPolicyResponse>(policy: SecurityPolicyResponse, field: K) =>
+    (policyEdits[policy.id]?.[field] ?? policy[field]) as SecurityPolicyResponse[K];
+
   const handleRollback = async (id: string) => {
     try {
       await policiesApi.rollback(id);
@@ -153,6 +156,55 @@ export const Policies: React.FC = () => {
                             onChange={e => handlePolicyChange(policy.id, 'sensitivityThreshold', parseInt(e.target.value))}
                             className="w-full accent-indigo-500" />
                           <span className="text-white font-bold">{policyEdits[policy.id]?.sensitivityThreshold ?? policy.sensitivityThreshold}</span>
+                        </div>
+                      </div>
+                      <div className="rounded-lg border border-indigo-500/20 bg-indigo-500/5 p-4">
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <span className="font-semibold text-white block">{t('AI Code App Protection', 'Bảo vệ app AI code')}</span>
+                            <span className="text-xs text-zinc-400">
+                              {t('Agent scores Cursor/Codex/VS Code AI against source repos and developer secrets.', 'Agent chấm rủi ro Cursor/Codex/VS Code AI khi gặp repo source và secret dev.')}
+                            </span>
+                          </div>
+                          <span className="px-2 py-1 rounded bg-rose-500/10 text-rose-300 text-[11px] font-semibold border border-rose-500/20">
+                            {t('Enterprise Guard', 'Chặn doanh nghiệp')}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 mt-4">
+                          <label className="flex items-center justify-between gap-3 text-xs text-zinc-300 rounded border border-zinc-700/60 bg-zinc-950/50 px-3 py-2">
+                            <span>{t('Detect source workspace', 'Phát hiện source code')}</span>
+                            <input type="checkbox" checked={Boolean(valueOf(policy, 'enableSourceCodeDetection'))}
+                              onChange={e => handlePolicyChange(policy.id, 'enableSourceCodeDetection', e.target.checked)} />
+                          </label>
+                          <label className="flex items-center justify-between gap-3 text-xs text-zinc-300 rounded border border-zinc-700/60 bg-zinc-950/50 px-3 py-2">
+                            <span>{t('Detect developer secrets', 'Phát hiện secret dev')}</span>
+                            <input type="checkbox" checked={Boolean(valueOf(policy, 'enablePrivateKeyDetection'))}
+                              onChange={e => handlePolicyChange(policy.id, 'enablePrivateKeyDetection', e.target.checked)} />
+                          </label>
+                          <div>
+                            <label className="block text-zinc-400 font-semibold mb-1 text-xs">{t('High risk action', 'Hành động rủi ro cao')}</label>
+                            <select className="bg-zinc-900 border border-zinc-700 text-white text-sm p-2 rounded w-full"
+                              value={String(valueOf(policy, 'highAction'))}
+                              onChange={e => handlePolicyChange(policy.id, 'highAction', e.target.value)}>
+                              <option value="Allow">Allow</option>
+                              <option value="PendingApproval">PendingApproval</option>
+                              <option value="Block">Block</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-zinc-400 font-semibold mb-1 text-xs">{t('Critical action', 'Hành động nghiêm trọng')}</label>
+                            <select className="bg-zinc-900 border border-zinc-700 text-white text-sm p-2 rounded w-full"
+                              value={String(valueOf(policy, 'criticalAction'))}
+                              onChange={e => handlePolicyChange(policy.id, 'criticalAction', e.target.value)}>
+                              <option value="PendingApproval">PendingApproval</option>
+                              <option value="Block">Block</option>
+                              <option value="Quarantine">Quarantine</option>
+                              <option value="KillProcess">KillProcess</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div className="mt-3 text-xs text-zinc-400">
+                          {t('Logic: AI app + source repo = High. AI app + .env/private key/secrets = Critical. Critical Block closes the AI app and quarantines the device.', 'Logic: App AI + repo source = High. App AI + .env/private key/secrets = Critical. Critical Block sẽ đóng app AI và quarantine thiết bị.')}
                         </div>
                       </div>
                       <div className="flex items-center justify-between">

@@ -69,6 +69,9 @@ public sealed class AgentConfig
     public string UserEmail { get; set; } = "";
     public string DepartmentName { get; set; } = "";
     public int HeartbeatSeconds { get; set; } = 30;
+    public bool EnableAiCodeAppProtection { get; set; } = true;
+    public bool EnableProcessKill { get; set; } = false;
+    public List<string> WorkspaceRoots { get; set; } = new();
 }
 
 public sealed record AgentState(Guid DeviceId, string EndpointKey, string PolicyVersion);

@@ -180,6 +180,14 @@ public sealed class PolicyData
 {
     public string Version { get; set; } = "";
     public int SensitivityThreshold { get; set; }
+    public bool EnableApiKeyDetection { get; set; } = true;
+    public bool EnableDbUrlDetection { get; set; } = true;
+    public bool EnablePrivateKeyDetection { get; set; } = true;
+    public bool EnableSourceCodeDetection { get; set; } = true;
+    public string LowAction { get; set; } = "Allow";
+    public string MediumAction { get; set; } = "Mask";
+    public string HighAction { get; set; } = "PendingApproval";
+    public string CriticalAction { get; set; } = "Block";
     public bool ScanOnPaste { get; set; }
     public bool ScanOnSubmit { get; set; }
     public bool ScanFileUpload { get; set; }

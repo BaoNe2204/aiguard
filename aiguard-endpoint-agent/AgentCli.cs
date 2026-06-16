@@ -41,7 +41,9 @@ public sealed class AgentCli
                 "status" => await StatusAsync(token),
                 "scan" => await ScanTextAsync(options, token),
                 "scan-file" => await ScanFileAsync(options, token),
-                "telemetry-once" => await TelemetryOnceAsync(token),
+                "telemetry-once" => await TelemetryOnceAsync(options, token),
+                "ai-code-check" => AiCodeCheck(options),
+                "create-test-fixture" => CreateTestFixture(options),
                 "reset-state" => ResetState(),
                 _ => Unknown(command)
             };
@@ -64,7 +66,10 @@ public sealed class AgentCli
             DepartmentName = Value(options, "department") ?? existing?.DepartmentName ?? "",
             HeartbeatSeconds = int.TryParse(Value(options, "heartbeat"), out var seconds)
                 ? seconds
-                : existing?.HeartbeatSeconds ?? 30
+                : existing?.HeartbeatSeconds ?? 30,
+            EnableAiCodeAppProtection = BoolValue(options, "ai-code-protection", existing?.EnableAiCodeAppProtection ?? true),
+            EnableProcessKill = BoolValue(options, "enable-process-kill", existing?.EnableProcessKill ?? false),
+            WorkspaceRoots = ListValue(options, "workspace-roots") ?? existing?.WorkspaceRoots ?? new()
         };
 
         if (options.ContainsKey("clear-state")) _store.ClearState();
@@ -76,6 +81,9 @@ public sealed class AgentCli
         _output.WriteLine($"User: {config.UserEmail}");
         _output.WriteLine($"Department: {config.DepartmentName}");
         _output.WriteLine($"Heartbeat: {config.HeartbeatSeconds}s");
+        _output.WriteLine($"AI code protection: {config.EnableAiCodeAppProtection}");
+        _output.WriteLine($"Process kill enforcement: {config.EnableProcessKill}");
+        _output.WriteLine($"Workspace roots: {(config.WorkspaceRoots.Count == 0 ? "auto" : string.Join(", ", config.WorkspaceRoots))}");
         _output.WriteLine($"Enrollment token: {(string.IsNullOrWhiteSpace(config.EnrollmentToken) ? "missing" : "configured")}");
         return 0;
     }
@@ -149,13 +157,53 @@ public sealed class AgentCli
         return 0;
     }
 
-    private async Task<int> TelemetryOnceAsync(CancellationToken token)
+    private async Task<int> TelemetryOnceAsync(Dictionary<string, string?> options, CancellationToken token)
     {
         var config = _store.LoadConfig();
+        ApplyRuntimeOverrides(config, options);
+        var policy = LocalPolicy(options);
+        if (options.ContainsKey("dry-run"))
+        {
+            _output.WriteLine("Dry-run telemetry. Nothing will be sent to the API.");
+            PrintEvents(_telemetry.Collect(policy, config));
+            return 0;
+        }
+
         var state = await EnsureStateAsync(config, token);
         var sync = await _api.HeartbeatAndSyncAsync(config, state, token);
-        var count = await _api.SendTelemetryAsync(config, sync.State, _telemetry.Collect(), token);
+        var events = _telemetry.Collect(sync.Policy, config);
+        PrintEvents(events);
+        var count = await _api.SendTelemetryAsync(config, sync.State, events, token);
         _output.WriteLine($"Telemetry sent: {count}");
+        return 0;
+    }
+
+    private int AiCodeCheck(Dictionary<string, string?> options)
+    {
+        var config = TryLoadConfig() ?? new AgentConfig();
+        ApplyRuntimeOverrides(config, options);
+        var policy = LocalPolicy(options);
+        _output.WriteLine("AIGuard AI code app protection check");
+        _output.WriteLine($"Workspace roots: {(config.WorkspaceRoots.Count == 0 ? "auto" : string.Join(", ", config.WorkspaceRoots))}");
+        _output.WriteLine($"Critical action: {policy.CriticalAction}");
+        _output.WriteLine($"Process kill enforcement: {config.EnableProcessKill}");
+        PrintEvents(_telemetry.Collect(policy, config));
+        return 0;
+    }
+
+    private int CreateTestFixture(Dictionary<string, string?> options)
+    {
+        var root = Value(options, "path") ?? Path.Combine(Path.GetTempPath(), "aiguard-sensitive-test");
+        Directory.CreateDirectory(root);
+        Directory.CreateDirectory(Path.Combine(root, ".git"));
+        File.WriteAllText(Path.Combine(root, "package.json"), """{"name":"aiguard-sensitive-test","private":true}""");
+        File.WriteAllText(Path.Combine(root, ".env"), "OPENAI_API_KEY=sk-test\nDATABASE_URL=Server=prod;Password=secret\n");
+        File.WriteAllText(Path.Combine(root, "private.key"), "-----BEGIN PRIVATE KEY-----\nTEST\n-----END PRIVATE KEY-----\n");
+        _output.WriteLine("Created AI code protection test fixture.");
+        _output.WriteLine($"Path: {root}");
+        _output.WriteLine("Run:");
+        _output.WriteLine($"  dotnet run -- ai-code-check --workspace-roots \"{root}\"");
+        _output.WriteLine($"  dotnet run -- telemetry-once --dry-run --workspace-roots \"{root}\"");
         return 0;
     }
 
@@ -205,6 +253,22 @@ public sealed class AgentCli
         _output.WriteLine($"Receipt: {(string.IsNullOrWhiteSpace(result.Receipt) ? "missing" : "issued")}");
     }
 
+    private void PrintEvents(IReadOnlyList<AgentTelemetryItem> events)
+    {
+        if (events.Count == 0)
+        {
+            _output.WriteLine("No telemetry events detected.");
+            return;
+        }
+
+        _output.WriteLine($"Telemetry events: {events.Count}");
+        foreach (var item in events)
+        {
+            _output.WriteLine($"[{item.Severity}] {item.Category}/{item.EventType}");
+            _output.WriteLine($"  {item.Detail}");
+        }
+    }
+
     private void PrintHelp()
     {
         _output.WriteLine("""
@@ -222,10 +286,18 @@ public sealed class AgentCli
           scan --path C:\tmp\prompt.txt
           scan-file --path C:\tmp\report.pdf
           telemetry-once
+          telemetry-once --dry-run --workspace-roots C:\repo
+          ai-code-check --workspace-roots C:\repo
+          create-test-fixture --path C:\tmp\aiguard-sensitive-test
           reset-state
 
         Optional:
           --heartbeat 30
+          --workspace-roots C:\repo1;C:\repo2
+          --ai-code-protection true
+          --critical-action Block
+          --high-action PendingApproval
+          --enable-process-kill false
           --clear-state
           enroll --force
 
@@ -245,6 +317,49 @@ public sealed class AgentCli
 
     private static string? Value(Dictionary<string, string?> options, string key) =>
         options.TryGetValue(key, out var value) ? value : null;
+
+    private static bool BoolValue(Dictionary<string, string?> options, string key, bool fallback)
+    {
+        if (!options.TryGetValue(key, out var raw)) return fallback;
+        if (raw == null) return true;
+        return bool.TryParse(raw, out var parsed) ? parsed : fallback;
+    }
+
+    private static List<string>? ListValue(Dictionary<string, string?> options, string key)
+    {
+        var raw = Value(options, key);
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        return raw
+            .Split([';', '|'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static void ApplyRuntimeOverrides(AgentConfig config, Dictionary<string, string?> options)
+    {
+        if (options.ContainsKey("workspace-roots"))
+            config.WorkspaceRoots = ListValue(options, "workspace-roots") ?? new();
+        config.EnableAiCodeAppProtection = BoolValue(options, "ai-code-protection", config.EnableAiCodeAppProtection);
+        config.EnableProcessKill = BoolValue(options, "enable-process-kill", config.EnableProcessKill);
+    }
+
+    private static PolicyData LocalPolicy(Dictionary<string, string?> options) => new()
+    {
+        Version = "local-test-policy",
+        EnableApiKeyDetection = BoolValue(options, "api-key-detection", true),
+        EnableDbUrlDetection = BoolValue(options, "db-url-detection", true),
+        EnablePrivateKeyDetection = BoolValue(options, "private-key-detection", true),
+        EnableSourceCodeDetection = BoolValue(options, "source-code-detection", true),
+        LowAction = Value(options, "low-action") ?? "Allow",
+        MediumAction = Value(options, "medium-action") ?? "Mask",
+        HighAction = Value(options, "high-action") ?? "PendingApproval",
+        CriticalAction = Value(options, "critical-action") ?? "Block",
+        ScanOnPaste = true,
+        ScanOnSubmit = true,
+        ScanFileUpload = true,
+        ClipboardWarning = true,
+        OfflineCriticalBlock = true
+    };
 
     private static Dictionary<string, string?> Parse(IEnumerable<string> args)
     {

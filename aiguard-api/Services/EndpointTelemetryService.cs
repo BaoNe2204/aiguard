@@ -17,7 +17,8 @@ public class EndpointTelemetryService : IEndpointTelemetryService
     private static readonly HashSet<string> Categories = new(StringComparer.OrdinalIgnoreCase)
     {
         "RemovableStorage", "NetworkShare", "RdpClient", "EmailClient",
-        "PrintService", "Clipboard", "AgentHealth"
+        "PrintService", "Clipboard", "AgentHealth", "AiCodeApp",
+        "SensitiveWorkspace", "DeveloperSecret", "AiCodePolicyDecision"
     };
     private static readonly HashSet<string> Severities = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -56,6 +57,7 @@ public class EndpointTelemetryService : IEndpointTelemetryService
             };
         }).ToList();
         _db.EndpointTelemetryEvents.AddRange(records);
+        ApplyAutomaticDeviceControls(device, records);
         await _db.SaveChangesAsync();
 
         foreach (var item in records.Where(x => x.Severity is "High" or "Critical"))
@@ -71,6 +73,24 @@ public class EndpointTelemetryService : IEndpointTelemetryService
                 new { device.Id, device.Hostname, item.Category, item.EventType, item.Detail, item.OccurredAt });
         }
         return records.Count;
+    }
+
+    private static void ApplyAutomaticDeviceControls(Device device, List<EndpointTelemetryEvent> records)
+    {
+        var shouldQuarantine = records.Any(item =>
+            item.Category.Equals("AiCodePolicyDecision", StringComparison.OrdinalIgnoreCase) &&
+            item.Severity.Equals("Critical", StringComparison.OrdinalIgnoreCase) &&
+            (item.EventType.Equals("Blocked", StringComparison.OrdinalIgnoreCase) ||
+                (item.Detail?.Contains("Decision=Block", StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (item.Detail?.Contains("Decision=Quarantine", StringComparison.OrdinalIgnoreCase) ?? false)));
+
+        if (!shouldQuarantine) return;
+
+        device.IsQuarantined = true;
+        device.QuarantinedAt = DateTime.UtcNow;
+        device.QuarantineReason = "AI code app policy blocked access to sensitive developer data.";
+        device.RiskStatus = "Critical";
+        device.AgentStatus = "BlockedByAiCodePolicy";
     }
 
     public async Task<PagedResult<EndpointTelemetryResponse>> GetAsync(PagedQuery query, string? category)

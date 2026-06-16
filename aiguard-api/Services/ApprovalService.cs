@@ -111,6 +111,35 @@ public class ApprovalService : IApprovalService
             .Include(a => a.AgentActionLog)
             .Include(a => a.AssignedApprover)
             .FirstAsync(a => a.Id == id);
+
+        if (request.AddToWhitelist && (status == "Approved" || status == "ApprovedWithMasking"))
+        {
+            if (updated.EndpointEvent != null)
+            {
+                var isKeyword = !string.IsNullOrWhiteSpace(request.WhitelistKeyword);
+                var value = isKeyword ? request.WhitelistKeyword!.Trim() : updated.EndpointEvent.OriginalHash;
+                var entryType = isKeyword ? "Keyword" : "ContentHash";
+
+                var exists = await _db.PolicyListEntries
+                    .AnyAsync(e => e.ListType == "Whitelist" && e.EntryType == entryType && e.Value == value && e.TenantCode == updated.TenantCode);
+
+                if (!exists)
+                {
+                    _db.PolicyListEntries.Add(new PolicyListEntry
+                    {
+                        ListType = "Whitelist",
+                        EntryType = entryType,
+                        Value = value,
+                        TenantCode = updated.TenantCode,
+                        Source = $"Approval {updated.Id}",
+                        IsActive = true,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                    await _db.SaveChangesAsync();
+                }
+            }
+        }
+
         return MapToResponse(updated);
     }
 

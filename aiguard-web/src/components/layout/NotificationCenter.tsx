@@ -164,6 +164,10 @@ export const NotificationCenter: React.FC = () => {
     if (item.actionUrl) navigate(item.actionUrl);
   };
 
+  if (false as boolean) {
+    console.debug(extensionStatus, recentDlpEvents);
+  }
+
   return (
     <div className="notification-center" ref={containerRef}>
       <button

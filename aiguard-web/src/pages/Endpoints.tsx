@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useLocation } from 'react-router-dom';
-import { Activity, Download, MonitorCheck, RefreshCw, Plus, Search, Copy, X, AlertTriangle, WifiOff } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
+import { Activity, Download, MonitorCheck, RefreshCw, Plus, Search, Copy, X, AlertTriangle, WifiOff, Puzzle, TerminalSquare } from 'lucide-react';
 import { DataTable } from '../components/ui/DataTable';
 import { RiskBadge } from '../components/ui/RiskBadge';
 import { DecisionBadge } from '../components/ui/DecisionBadge';
@@ -18,8 +18,16 @@ import {
 import { useLanguage } from '../contexts/LanguageContext';
 import { useRealtimeExtension } from '../contexts/RealtimeContext';
 
-type TabType = 'overview' | 'devices' | 'websites' | 'events' | 'deployment';
+type TabType = 'overview' | 'devices' | 'websites' | 'events' | 'agent' | 'extension' | 'deployment';
 
+const endpointTabs: Array<{ key: TabType; path: string; label: string }> = [
+  { key: 'overview', path: '/app/endpoints', label: 'Tổng quan' },
+  { key: 'devices', path: '/app/endpoints/devices', label: 'Thiết bị đã triển khai' },
+  { key: 'websites', path: '/app/endpoints/ai-websites', label: 'Website AI theo dõi' },
+  { key: 'events', path: '/app/endpoints/events', label: 'Theo dõi Agent / DLP' },
+  { key: 'agent', path: '/app/endpoints/agent', label: 'aiguard-endpoint-agent' },
+  { key: 'extension', path: '/app/endpoints/extension', label: 'aiguard-extension' }
+];
 
 
 function isDeviceOnline(lastSeen?: string | null) {
@@ -41,6 +49,8 @@ export const Endpoints: React.FC = () => {
   const activeTab: TabType = location.pathname.endsWith('/devices') ? 'devices'
     : location.pathname.endsWith('/events') ? 'events'
     : location.pathname.endsWith('/ai-websites') ? 'websites'
+    : location.pathname.endsWith('/agent') ? 'agent'
+    : location.pathname.endsWith('/extension') ? 'extension'
     : location.pathname.endsWith('/deployment') ? 'deployment'
     : 'overview';
 
@@ -74,6 +84,8 @@ export const Endpoints: React.FC = () => {
   // ── Deployment state ──
   const [deployToken, setDeployToken] = useState<DeploymentTokenResponse | null>(null);
   const [deployLoading, setDeployLoading] = useState(false);
+  const [rotatingKeyFor, setRotatingKeyFor] = useState<'agent' | 'extension' | null>(null);
+  const [lastRotatedKeyFor, setLastRotatedKeyFor] = useState<'agent' | 'extension' | null>(null);
   const [copiedCommand, setCopiedCommand] = useState<'agent' | 'extension' | 'url' | null>(null);
 
   // ── Overview stats (reuse from devices) ──
@@ -173,6 +185,10 @@ export const Endpoints: React.FC = () => {
     else if (activeTab === 'devices') fetchDevices();
     else if (activeTab === 'events') fetchEvents();
     else if (activeTab === 'websites') fetchWebsites();
+    else if (activeTab === 'agent' || activeTab === 'extension') {
+      fetchDeployment();
+      fetchDevices();
+    }
     else if (activeTab === 'deployment') fetchDeployment();
   }, [activeTab, fetchDevices, fetchEvents, fetchWebsites, fetchDeployment, fetchOverview]);
 
@@ -265,12 +281,16 @@ export const Endpoints: React.FC = () => {
     }
   };
 
-  const handleRotateToken = async () => {
+  const handleRotateToken = async (target: 'agent' | 'extension' = 'agent') => {
+    setRotatingKeyFor(target);
     try {
       const result = await endpointsApi.rotateDeploymentToken(deployToken?.tenantCode);
       setDeployToken(result);
+      setLastRotatedKeyFor(target);
     } catch (err: any) {
       setError(err.message);
+    } finally {
+      setRotatingKeyFor(null);
     }
   };
 
@@ -315,7 +335,13 @@ export const Endpoints: React.FC = () => {
         </div>
       </div>
 
-
+      <nav className="endpoint-tab-menu" aria-label="Endpoint management">
+        {endpointTabs.map(tab => (
+          <Link key={tab.key} to={tab.path} className={activeTab === tab.key ? 'active' : ''}>
+            {tab.label}
+          </Link>
+        ))}
+      </nav>
 
       {error && (
         <div className="card glass p-3 mb-4 flex items-center gap-2 border border-rose-500/20 bg-rose-500/5">
@@ -526,6 +552,134 @@ export const Endpoints: React.FC = () => {
           </div>
         )}
 
+        {activeTab === 'agent' && (
+          deployLoading ? <LoadingSpinner text={t('Loading deployment info...', 'Đang tải thông tin triển khai...')} /> : (
+            <div className="endpoint-manager-grid">
+              <section className="card glass endpoint-manager-card">
+                <div className="endpoint-manager-title">
+                  <span><TerminalSquare size={20} /></span>
+                  <div>
+                    <h2>aiguard-endpoint-agent</h2>
+                    <p>Quản lý bộ cài Desktop Agent, token đăng ký và lệnh cài đặt cho máy Windows.</p>
+                  </div>
+                </div>
+                <div className="endpoint-manager-actions">
+                  <a href="/aiguard-endpoint-agent.exe" download="aiguard-endpoint-agent.exe" className="btn-primary">
+                    <Download size={14} /> Tải agent EXE
+                  </a>
+                  <button className="btn-secondary" type="button" onClick={() => void handleRotateToken('agent')} disabled={rotatingKeyFor === 'agent'}>
+                    <RefreshCw size={14} /> {rotatingKeyFor === 'agent' ? 'Đang reset...' : 'Reset Agent Key'}
+                  </button>
+                </div>
+                <div className={`endpoint-token-card ${lastRotatedKeyFor === 'agent' ? 'fresh' : ''}`}>
+                  <span>Agent enrollment key</span>
+                  <strong>{deployToken?.token ? deployToken.token : 'Token chỉ hiển thị khi tạo lại'}</strong>
+                  <small>Reset riêng cho Desktop Agent · Tenant: {deployToken?.tenantCode || '-'} · Hết hạn: {deployToken?.expiresAt ? new Date(deployToken.expiresAt).toLocaleDateString(locale) : '-'}</small>
+                </div>
+                <div className="endpoint-command-box">
+                  <div>
+                    <strong>Lệnh cài Desktop Agent</strong>
+                    <button className="btn-action text-xs" type="button" onClick={() => copyToClipboard('agent', deployToken?.installCommand)}>
+                      {copiedCommand === 'agent' ? 'Đã copy' : <><Copy size={13} /> Copy</>}
+                    </button>
+                  </div>
+                  <code>{deployToken?.installCommand || 'Tạo lại token để sinh lệnh cài đặt Desktop Agent.'}</code>
+                </div>
+              </section>
+
+              <section className="card glass endpoint-manager-card">
+                <div className="endpoint-manager-title">
+                  <span><MonitorCheck size={20} /></span>
+                  <div>
+                    <h2>Trạng thái Desktop Agent</h2>
+                    <p>Xem nhanh máy nào đã cài agent và còn gửi heartbeat trong 5 phút gần nhất.</p>
+                  </div>
+                </div>
+                <div className="deployed-device-kpis compact">
+                  <div><MonitorCheck size={18} /><strong>{deviceStats.total}</strong><span>Thiết bị đã cài</span></div>
+                  <div className="ok"><Activity size={18} /><strong>{deviceStats.online}</strong><span>Agent online</span></div>
+                  <div className="warn"><WifiOff size={18} /><strong>{deviceStats.offline}</strong><span>Mất heartbeat</span></div>
+                </div>
+                <Link className="btn-secondary endpoint-wide-link" to="/app/endpoints/devices">
+                  Xem danh sách thiết bị đã triển khai
+                </Link>
+              </section>
+            </div>
+          )
+        )}
+
+        {activeTab === 'extension' && (
+          deployLoading ? <LoadingSpinner text={t('Loading deployment info...', 'Đang tải thông tin triển khai...')} /> : (
+            <div className="endpoint-manager-grid">
+              <section className="card glass endpoint-manager-card">
+                <div className="endpoint-manager-title">
+                  <span><Puzzle size={20} /></span>
+                  <div>
+                    <h2>aiguard-extension</h2>
+                    <p>Quản lý extension Chrome/Edge, link setup và lệnh cấu hình cho trình duyệt.</p>
+                  </div>
+                </div>
+                <div className="endpoint-manager-actions">
+                  <a href="/aiguard-extension.zip" download="aiguard-extension.zip" className="btn-primary">
+                    <Download size={14} /> Tải extension ZIP
+                  </a>
+                  <button className="btn-secondary" type="button" onClick={() => void handleRotateToken('extension')} disabled={rotatingKeyFor === 'extension'}>
+                    <RefreshCw size={14} /> {rotatingKeyFor === 'extension' ? 'Đang reset...' : 'Reset Extension Key'}
+                  </button>
+                  <button className="btn-secondary" type="button" onClick={() => copyToClipboard('url', deployToken?.extensionSetupUrl)}>
+                    {copiedCommand === 'url' ? 'Đã copy URL' : <><Copy size={14} /> Copy setup URL</>}
+                  </button>
+                </div>
+                <div className={`endpoint-token-card ${lastRotatedKeyFor === 'extension' ? 'fresh' : ''}`}>
+                  <span>Extension enrollment key</span>
+                  <strong>{deployToken?.token ? deployToken.token : 'Token chỉ hiển thị khi reset Extension Key'}</strong>
+                  <small>Reset riêng cho Browser Extension · Tenant: {deployToken?.tenantCode || '-'} · Hết hạn: {deployToken?.expiresAt ? new Date(deployToken.expiresAt).toLocaleDateString(locale) : '-'}</small>
+                </div>
+                <div className="endpoint-command-box">
+                  <div>
+                    <strong>Lệnh setup Browser Extension</strong>
+                    <button className="btn-action text-xs" type="button" onClick={() => copyToClipboard('extension', deployToken?.extensionSetupCommand)}>
+                      {copiedCommand === 'extension' ? 'Đã copy' : <><Copy size={13} /> Copy</>}
+                    </button>
+                  </div>
+                  <code>{deployToken?.extensionSetupCommand || 'Tạo lại token để sinh lệnh setup Browser Extension.'}</code>
+                </div>
+                <div className="endpoint-command-box">
+                  <div><strong>Setup URL</strong></div>
+                  <code>{deployToken?.extensionSetupUrl || 'Chưa có setup URL.'}</code>
+                </div>
+              </section>
+
+              <section className="card glass endpoint-manager-card">
+                <div className="endpoint-manager-title">
+                  <span><Activity size={20} /></span>
+                  <div>
+                    <h2>Theo dõi extension realtime</h2>
+                    <p>Extension gửi heartbeat và DLP event về giao diện quản trị.</p>
+                  </div>
+                </div>
+                <div className="deployed-device-kpis compact">
+                  <div className="ok"><Puzzle size={18} /><strong>{deviceStats.extensionActive}</strong><span>Extension đang bật</span></div>
+                  <div><Activity size={18} /><strong>{extensionEvents.length}</strong><span>Sự kiện realtime</span></div>
+                  <div><MonitorCheck size={18} /><strong>{extensionStatus.size}</strong><span>Thiết bị realtime</span></div>
+                </div>
+                <div className="extension-event-list">
+                  {extensionEvents.slice(0, 5).map((event, index) => (
+                    <div key={`${event.createdAt}-${index}`}>
+                      <strong>{event.hostname}</strong>
+                      <span>{event.websiteAi} · {event.decision} · {new Date(event.createdAt).toLocaleTimeString(locale)}</span>
+                    </div>
+                  ))}
+                  {extensionEvents.length === 0 && <p>Chưa có sự kiện realtime từ extension.</p>}
+                </div>
+                <Link className="btn-secondary endpoint-wide-link" to="/app/endpoints/events">
+                  Xem nhật ký DLP / extension
+                </Link>
+              </section>
+            </div>
+          )
+        )}
+
         {activeTab === 'deployment' && (
           deployLoading ? <LoadingSpinner text={t('Loading deployment info...', 'Đang tải thông tin triển khai...')} /> : (
             <div className="deployment-tab grid grid-cols-2 gap-6">
@@ -555,7 +709,7 @@ export const Endpoints: React.FC = () => {
                   <div className="mt-4 p-4 rounded-lg bg-zinc-800/40 border border-zinc-700/30">
                     <div className="flex justify-between items-center mb-2">
                       <h3 className="font-bold text-white">{t('Enrollment Token', 'Mã đăng ký thiết bị')}</h3>
-                      <button className="btn-action text-xs flex items-center gap-1" onClick={handleRotateToken}>
+                      <button className="btn-action text-xs flex items-center gap-1" onClick={() => void handleRotateToken('agent')}>
                         <RefreshCw size={12} /> {t('Rotate Token', 'Tạo lại mã')}
                       </button>
                     </div>

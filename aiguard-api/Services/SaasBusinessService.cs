@@ -251,6 +251,7 @@ public class SaasBusinessService : ISaasBusinessService
             EnrollmentTokenId = enrollment.Id
         });
         await _db.SaveChangesAsync();
+        await SeedTenantDefaultDataAsync(code, _db);
         await transaction.CommitAsync();
 
         return new TrialProvisioningResponse
@@ -375,6 +376,7 @@ public class SaasBusinessService : ISaasBusinessService
         });
 
         await _db.SaveChangesAsync();
+        await SeedTenantDefaultDataAsync(code, _db);
         await transaction.CommitAsync();
 
         return new PublicTrialSignupResponse
@@ -1639,5 +1641,89 @@ public class SaasBusinessService : ISaasBusinessService
     private void EnsurePlatformAdmin()
     {
         if (!_scope.IsPlatformAdmin) throw new UnauthorizedAccessException();
+    }
+
+    private async Task SeedTenantDefaultDataAsync(string code, AiguardDbContext db)
+    {
+        // ── Departments ──
+        var deptEng = new Department { Name = "Engineering / Phát triển", Code = "ENG", TenantCode = code };
+        var deptHr = new Department { Name = "Human Resources / Nhân sự", Code = "HR", TenantCode = code };
+        var deptSales = new Department { Name = "Sales / Kinh doanh", Code = "SALES", TenantCode = code };
+        var deptFin = new Department { Name = "Finance / Tài chính", Code = "FIN", TenantCode = code };
+        var deptLegal = new Department { Name = "Legal / Pháp chế", Code = "LEGAL", TenantCode = code };
+
+        db.Departments.AddRange(deptEng, deptHr, deptSales, deptFin, deptLegal);
+        await db.SaveChangesAsync();
+
+        // ── Security Policies ──
+        db.SecurityPolicies.AddRange(
+            new SecurityPolicy { Name = "Global Default Policy", DepartmentId = null, SensitivityThreshold = 70, Version = "p-global-1.0.0", TenantCode = code },
+            new SecurityPolicy { Name = "Engineering Policy", DepartmentId = deptEng.Id, SensitivityThreshold = 70, Version = "p-eng-1.0.0", TenantCode = code },
+            new SecurityPolicy { Name = "HR Policy", DepartmentId = deptHr.Id, SensitivityThreshold = 50, Version = "p-hr-1.0.0", TenantCode = code },
+            new SecurityPolicy { Name = "Sales Policy", DepartmentId = deptSales.Id, SensitivityThreshold = 60, Version = "p-sales-1.0.0", TenantCode = code },
+            new SecurityPolicy { Name = "Finance Policy", DepartmentId = deptFin.Id, SensitivityThreshold = 60, EnableFinancialDetection = true, Version = "p-fin-1.0.0", TenantCode = code },
+            new SecurityPolicy { Name = "Legal Policy", DepartmentId = deptLegal.Id, SensitivityThreshold = 55, Version = "p-legal-1.0.0", TenantCode = code }
+        );
+
+        // ── Policy List Entries ──
+        db.PolicyListEntries.AddRange(
+            new PolicyListEntry { ListType = "Whitelist", EntryType = "Keyword", Value = "company-test-db", TenantCode = code },
+            new PolicyListEntry { ListType = "Whitelist", EntryType = "Keyword", Value = "sandbox-api-token", TenantCode = code },
+            new PolicyListEntry { ListType = "Blacklist", EntryType = "Keyword", Value = "prod-db-password", TenantCode = code },
+            new PolicyListEntry { ListType = "Blacklist", EntryType = "Keyword", Value = "revenue-q4-leak", TenantCode = code }
+        );
+
+        // ── Retention Policy ──
+        db.RetentionPolicies.Add(new RetentionPolicy
+        {
+            EndpointEventDays = 90,
+            AuditLogDays = 365,
+            NotificationDays = 30,
+            IncidentDays = 730,
+            StoreOriginalContent = false,
+            EncryptSensitivePreview = true,
+            TenantCode = code
+        });
+
+        // ── Policy Rules ──
+        db.PolicyRules.AddRange(
+            new PolicyRule
+            {
+                Name = "Block HR identity data on public AI",
+                Priority = 10,
+                DepartmentId = deptHr.Id,
+                DataType = "CCCD",
+                WebsitePattern = "*",
+                Action = "Block",
+                Status = "Published",
+                Version = "rule-seed-hr-1",
+                PublishedAt = DateTime.UtcNow,
+                TenantCode = code
+            },
+            new PolicyRule
+            {
+                Name = "Require approval for engineering source code",
+                Priority = 20,
+                DepartmentId = deptEng.Id,
+                DataType = "Source Code",
+                WebsitePattern = "*",
+                Action = "PendingApproval",
+                Status = "Published",
+                Version = "rule-seed-eng-1",
+                PublishedAt = DateTime.UtcNow,
+                TenantCode = code
+            }
+        );
+
+        // ── AI Websites ──
+        db.AiWebsites.AddRange(
+            new AiWebsite { Name = "ChatGPT", DomainPattern = "*.openai.com", IsActive = true, Mode = "Block", TenantCode = code },
+            new AiWebsite { Name = "Google Gemini", DomainPattern = "gemini.google.com", IsActive = true, Mode = "Mask", TenantCode = code },
+            new AiWebsite { Name = "GitHub Copilot", DomainPattern = "*.github.com/copilot*", IsActive = true, Mode = "PendingApproval", TenantCode = code },
+            new AiWebsite { Name = "Claude", DomainPattern = "claude.ai", IsActive = true, Mode = "Block", TenantCode = code },
+            new AiWebsite { Name = "DeepSeek", DomainPattern = "*.deepseek.com", IsActive = true, Mode = "Block", TenantCode = code }
+        );
+
+        await db.SaveChangesAsync();
     }
 }

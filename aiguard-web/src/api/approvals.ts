@@ -27,10 +27,16 @@ export const approvalsApi = {
     );
   },
 
-  processApproval(id: string, action: string, note?: string): Promise<ApprovalResponse> {
+  processApproval(
+    id: string,
+    action: string,
+    note?: string,
+    addToWhitelist?: boolean,
+    whitelistKeyword?: string
+  ): Promise<ApprovalResponse> {
     return apiRequest<ApprovalResponse>(`/approvals/${id}/action`, {
       method: 'POST',
-      body: JSON.stringify({ action, note }),
+      body: JSON.stringify({ action, note, addToWhitelist, whitelistKeyword }),
     });
   },
 

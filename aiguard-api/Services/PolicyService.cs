@@ -57,7 +57,22 @@ public class PolicyService : IPolicyService
             ?? await _db.SecurityPolicies.Include(p => p.Department).FirstOrDefaultAsync(p => p.IsActive && p.DepartmentId == null)
             ?? await _db.SecurityPolicies.Include(p => p.Department).FirstOrDefaultAsync(p => p.IsActive);
 
-        return policy == null ? null : MapToResponse(policy);
+        if (policy == null)
+        {
+            policy = new SecurityPolicy
+            {
+                Name = "Global Default Policy",
+                DepartmentId = null,
+                SensitivityThreshold = 70,
+                Version = "p-global-1.0.0",
+                TenantCode = _scope.TenantCode,
+                IsActive = true
+            };
+            _db.SecurityPolicies.Add(policy);
+            await _db.SaveChangesAsync();
+        }
+
+        return MapToResponse(policy);
     }
 
     public async Task<SecurityPolicyResponse?> UpdatePolicyAsync(

@@ -15,6 +15,8 @@ export const Approvals: React.FC = () => {
     : location.pathname.endsWith('/history') ? 'history'
     : 'prompts';
   const [selectedApproval, setSelectedApproval] = useState<ApprovalResponse | null>(null);
+  const [addToWhitelist, setAddToWhitelist] = useState(false);
+  const [whitelistKeyword, setWhitelistKeyword] = useState('');
 
   // Pending prompts
   const [prompts, setPrompts] = useState<ApprovalResponse[]>([]);
@@ -75,11 +77,17 @@ export const Approvals: React.FC = () => {
     else if (activeTab === 'history') fetchHistory();
   }, [activeTab, fetchPrompts, fetchAgents, fetchHistory]);
 
-  const handleAction = async (id: string, action: string, note?: string) => {
+  const handleCloseModal = () => {
+    setSelectedApproval(null);
+    setAddToWhitelist(false);
+    setWhitelistKeyword('');
+  };
+
+  const handleAction = async (id: string, action: string, note?: string, addWl?: boolean, wlKeyword?: string) => {
     setActionLoading(id);
     try {
-      await approvalsApi.processApproval(id, action, note);
-      setSelectedApproval(null);
+      await approvalsApi.processApproval(id, action, note, addWl, wlKeyword);
+      handleCloseModal();
       // Refresh current tab
       if (activeTab === 'prompts') fetchPrompts();
       else if (activeTab === 'agents') fetchAgents();
@@ -203,7 +211,7 @@ export const Approvals: React.FC = () => {
           <div className="modal-card max-w-2xl w-full glass">
             <div className="modal-header">
               <h2>{t('Approval Details', 'Chi tiết phê duyệt')}</h2>
-              <button className="text-zinc-400 hover:text-white" onClick={() => setSelectedApproval(null)}><X size={18} /></button>
+              <button className="text-zinc-400 hover:text-white" onClick={handleCloseModal}><X size={18} /></button>
             </div>
             <div className="modal-body flex flex-col gap-4 text-sm">
               <div>
@@ -242,17 +250,53 @@ export const Approvals: React.FC = () => {
                   <span className="text-zinc-300">{selectedApproval.reason}</span>
                 </div>
               )}
+              {selectedApproval.requestType === 'EndpointDLP' && (
+                <div className="mt-4 p-4 rounded bg-zinc-800/60 border border-zinc-700/50 flex flex-col gap-3">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="addToWhitelist"
+                      checked={addToWhitelist}
+                      onChange={(e) => {
+                        setAddToWhitelist(e.target.checked);
+                        if (!e.target.checked) setWhitelistKeyword('');
+                      }}
+                      className="rounded bg-zinc-900 border-zinc-700 text-indigo-500 focus:ring-indigo-500/30"
+                    />
+                    <label htmlFor="addToWhitelist" className="font-semibold text-white cursor-pointer select-none">
+                      {t('Add to Whitelist (bypass future checks)', 'Đồng thời thêm vào Whitelist (bỏ qua kiểm tra sau này)')}
+                    </label>
+                  </div>
+                  {addToWhitelist && (
+                    <div className="flex flex-col gap-1.5 pl-5">
+                      <label className="text-xs text-zinc-400 font-semibold">
+                        {t('Whitelist Excluded Keyword (Optional)', 'Từ khóa loại trừ Whitelist (Tùy chọn)')}
+                      </label>
+                      <input
+                        type="text"
+                        value={whitelistKeyword}
+                        onChange={(e) => setWhitelistKeyword(e.target.value)}
+                        placeholder={t(
+                          "Enter a specific word, or leave blank to whitelist the exact content hash...",
+                          "Nhập từ khóa cụ thể, hoặc để trống để whitelist theo mã Hash của nội dung..."
+                        )}
+                        className="bg-zinc-900 border border-zinc-700 text-white text-xs p-2 rounded w-full placeholder-zinc-500"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             <div className="modal-footer flex justify-end gap-2 mt-4">
-              <button className="btn-action px-3 py-1.5" onClick={() => setSelectedApproval(null)}>{t('Close', 'Đóng')}</button>
+              <button className="btn-action px-3 py-1.5" onClick={handleCloseModal}>{t('Close', 'Đóng')}</button>
               <button className="btn-action px-3 py-1.5 text-sky-400 border border-sky-500/20 bg-sky-500/5 hover:bg-sky-500/10"
                 disabled={actionLoading === selectedApproval.id}
-                onClick={() => handleAction(selectedApproval.id, 'ApproveWithMasking')}>
+                onClick={() => handleAction(selectedApproval.id, 'ApproveWithMasking', undefined, addToWhitelist, whitelistKeyword)}>
                 {t('Approve with Masking', 'Phê duyệt sau khi che dữ liệu')}
               </button>
               <button className="btn-action px-3 py-1.5 text-emerald-400 border border-emerald-500/20 bg-emerald-500/5 hover:bg-emerald-500/10"
                 disabled={actionLoading === selectedApproval.id}
-                onClick={() => handleAction(selectedApproval.id, 'Approve')}>
+                onClick={() => handleAction(selectedApproval.id, 'Approve', undefined, addToWhitelist, whitelistKeyword)}>
                 {t('Approve Raw', 'Phê duyệt dữ liệu gốc')}
               </button>
               <button className="btn-action px-3 py-1.5 text-rose-400 border border-rose-500/20 bg-rose-500/5 hover:bg-rose-500/10"

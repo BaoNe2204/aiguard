@@ -2652,6 +2652,160 @@ input:checked + .slider:before {
   color: #fcd34d;
 }
 
+.endpoint-manager-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
+  gap: 18px;
+}
+
+.endpoint-manager-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 22px;
+}
+
+.endpoint-manager-title {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.endpoint-manager-title > span {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgba(125, 211, 252, 0.24);
+  border-radius: 8px;
+  background: rgba(14, 165, 233, 0.1);
+  color: #7dd3fc;
+}
+
+.endpoint-manager-title h2 {
+  margin: 0;
+  color: #f8fafc;
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.endpoint-manager-title p {
+  margin: 5px 0 0;
+  color: #a9b8ca;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.endpoint-manager-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.endpoint-token-card,
+.endpoint-command-box {
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.48);
+}
+
+.endpoint-token-card.fresh {
+  border-color: rgba(52, 211, 153, 0.34);
+  background: linear-gradient(135deg, rgba(52, 211, 153, 0.11), rgba(15, 23, 42, 0.48));
+  box-shadow: 0 0 0 2px rgba(52, 211, 153, 0.08);
+}
+
+.endpoint-token-card span,
+.endpoint-token-card small {
+  display: block;
+  color: #9fb0c4;
+  font-size: 12px;
+}
+
+.endpoint-token-card strong {
+  display: block;
+  margin: 6px 0;
+  color: #dbeafe;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.endpoint-command-box {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.endpoint-command-box > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.endpoint-command-box strong {
+  color: #f8fafc;
+  font-size: 13px;
+}
+
+.endpoint-command-box code {
+  display: block;
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
+  background: rgba(2, 6, 23, 0.66);
+  color: #bfdbfe;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.deployed-device-kpis.compact {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 0;
+}
+
+.endpoint-wide-link {
+  justify-content: center;
+  text-decoration: none;
+}
+
+.extension-event-list {
+  display: grid;
+  gap: 9px;
+}
+
+.extension-event-list div,
+.extension-event-list p {
+  margin: 0;
+  padding: 11px;
+  border: 1px solid rgba(148, 163, 184, 0.13);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.028);
+}
+
+.extension-event-list strong,
+.extension-event-list span {
+  display: block;
+}
+
+.extension-event-list strong {
+  color: #f8fafc;
+  font-size: 13px;
+}
+
+.extension-event-list span,
+.extension-event-list p {
+  color: #9fb0c4;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 /* Payment checkout */
 .payment-page {
   display: flex;
@@ -4275,6 +4429,7 @@ input:checked + .slider:before {
   .business-grid,
   .business-hero,
   .endpoint-hero,
+  .endpoint-manager-grid,
   .payment-grid,
   .payment-hero,
   .bizops-split,

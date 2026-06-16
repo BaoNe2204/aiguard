@@ -35,6 +35,10 @@ public class ApprovalActionRequest
     public string Action { get; set; } = string.Empty; // Approve, Reject, ApproveWithMasking
 
     public string? Note { get; set; }
+
+    public bool AddToWhitelist { get; set; } = false;
+
+    public string? WhitelistKeyword { get; set; }
 }
 
 public class ApprovalJustificationRequest
