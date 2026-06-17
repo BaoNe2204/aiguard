@@ -434,46 +434,129 @@ const FalsePositiveTab = ({ reports, refresh, run }: { reports: FalsePositive[] 
 };
 
 const IncidentTab = ({ incidents, refresh, run }: { incidents: Incident[] } & AsyncActions) => {
+  const { user } = useAuth();
+  const canManage = user?.role === 'SecurityAdmin' || user?.role === 'TenantOwner' || user?.role === 'PlatformAdmin';
   const [form, setForm] = useState({ title: '', severity: 'High', summary: '' });
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (submitting) return;
+    setSubmitting(true);
+    await run(async () => {
+      await governanceApi.createIncident({ ...form, sourceType: 'Manual' });
+      setForm({ title: '', severity: 'High', summary: '' });
+      await refresh();
+    }, 'Đã tạo incident thành công.');
+    setSubmitting(false);
+  };
+
+  const handleUpdateStatus = async (id: string, status: string, resolution?: string) => {
+    if (updatingId) return;
+    setUpdatingId(id);
+    await run(async () => {
+      await governanceApi.updateIncident(id, { status, resolution });
+      await refresh();
+    }, `Đã chuyển trạng thái sự cố thành: ${status === 'Resolved' ? 'Đã đóng' : 'Đang điều tra'}`);
+    setUpdatingId(null);
+  };
+
   return <section className="card glass governance-section incident-management-section">
     <div className="incident-section-title">
       <h2><AlertTriangle size={18} /> Incident Management</h2>
       <p>Tạo và theo dõi sự cố bảo mật cần xử lý.</p>
     </div>
-    <form className="governance-form grid-2 incident-create-form" onSubmit={event => {
-      event.preventDefault();
-      void run(async () => {
-        await governanceApi.createIncident({ ...form, sourceType: 'Manual' });
-        setForm({ title: '', severity: 'High', summary: '' }); await refresh();
-      }, 'Đã tạo incident.');
-    }}>
-      <div className="incident-main-fields">
-        <input required placeholder="Tiêu đề sự cố" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} />
-        <textarea placeholder="Tóm tắt điều tra" value={form.summary} onChange={e => setForm({ ...form, summary: e.target.value })} />
+    
+    {canManage ? (
+      <form className="governance-form grid-2 incident-create-form" onSubmit={handleSubmit}>
+        <div className="incident-main-fields">
+          <input required placeholder="Tiêu đề sự cố" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} disabled={submitting} />
+          <textarea placeholder="Tóm tắt điều tra" value={form.summary} onChange={e => setForm({ ...form, summary: e.target.value })} disabled={submitting} />
+        </div>
+        <div className="incident-side-fields">
+          <label>
+            Mức độ
+            <select value={form.severity} onChange={e => setForm({ ...form, severity: e.target.value })} disabled={submitting}>
+              {['Low', 'Medium', 'High', 'Critical'].map(value => <option key={value}>{value}</option>)}
+            </select>
+          </label>
+          <button className="btn-primary incident-submit-button" type="submit" disabled={submitting}>
+            {submitting ? 'Đang tạo...' : <><Plus size={14} /> Tạo incident</>}
+          </button>
+        </div>
+      </form>
+    ) : (
+      <div className="governance-alert info" style={{ marginBottom: '20px' }}>
+        Tài khoản của bạn chỉ có quyền xem danh sách sự cố. Việc tạo và xử lý sự cố yêu cầu vai trò Quản trị viên Bảo mật.
       </div>
-      <div className="incident-side-fields">
-        <label>
-          Mức độ
-          <select value={form.severity} onChange={e => setForm({ ...form, severity: e.target.value })}>
-            {['Low', 'Medium', 'High', 'Critical'].map(value => <option key={value}>{value}</option>)}
-          </select>
-        </label>
-        <button className="btn-primary incident-submit-button" type="submit"><Plus size={14} /> Tạo incident</button>
-      </div>
-    </form>
+    )}
+
     <div className="governance-table-wrap"><table className="governance-table">
       <thead><tr><th>Ma</th><th>Tiêu đề</th><th>Severity</th><th>Status</th><th>Cập nhật</th></tr></thead>
-      <tbody>{incidents.map(item => <tr key={item.id}>
-        <td>{item.incidentNumber}</td><td><strong>{item.title}</strong><small>{item.summary || '-'}</small></td>
-        <td>{item.severity}</td><td>{item.status}</td><td><div className="row-actions">
-          <button className="table-action" onClick={() => void run(async () => {
-            await governanceApi.updateIncident(item.id, { status: 'Investigating' }); await refresh();
-          })}>Điều tra</button>
-          <button className="table-action safe" onClick={() => void run(async () => {
-            await governanceApi.updateIncident(item.id, { status: 'Resolved', resolution: 'Resolved from Control Tower' }); await refresh();
-          })}>Đóng</button>
-        </div></td>
-      </tr>)}</tbody>
+      <tbody>{incidents.map(item => (
+        <tr key={item.id}>
+          <td>{item.incidentNumber}</td>
+          <td><strong>{item.title}</strong><small>{item.summary || '-'}</small></td>
+          <td>
+            <span className={`severity-badge ${item.severity.toLowerCase()}`}>
+              {item.severity}
+            </span>
+          </td>
+          <td>
+            {item.status === 'Resolved' ? (
+              <span className="incident-status-badge resolved">
+                <ShieldCheck size={12} /> Đã đóng
+              </span>
+            ) : item.status === 'Investigating' ? (
+              <span className="incident-status-badge investigating">
+                <span className="pulse-dot"></span> Đang điều tra
+              </span>
+            ) : (
+              <span className="incident-status-badge new">
+                Mới
+              </span>
+            )}
+          </td>
+          <td>
+            <div className="row-actions">
+              {canManage ? (
+                <>
+                  {item.status !== 'Investigating' && item.status !== 'Resolved' && (
+                    <button
+                      className="table-action"
+                      disabled={updatingId !== null}
+                      onClick={() => void handleUpdateStatus(item.id, 'Investigating')}
+                    >
+                      {updatingId === item.id ? 'Đang xử lý...' : 'Điều tra'}
+                    </button>
+                  )}
+                  {item.status !== 'Resolved' && (
+                    <button
+                      className="table-action safe"
+                      disabled={updatingId !== null}
+                      onClick={() => void handleUpdateStatus(item.id, 'Resolved', 'Resolved from Control Tower')}
+                    >
+                      {updatingId === item.id ? 'Đang xử lý...' : 'Đóng'}
+                    </button>
+                  )}
+                  {item.status === 'Resolved' && (
+                    <button
+                      className="table-action"
+                      disabled={updatingId !== null}
+                      onClick={() => void handleUpdateStatus(item.id, 'Investigating')}
+                    >
+                      {updatingId === item.id ? 'Đang xử lý...' : 'Mở lại'}
+                    </button>
+                  )}
+                </>
+              ) : (
+                <span className="only-view-label">Chỉ xem</span>
+              )}
+            </div>
+          </td>
+        </tr>
+      ))}</tbody>
     </table></div>
   </section>;
 };

@@ -16,6 +16,7 @@ public interface IDlpScannerService
 public class DlpScannerService : IDlpScannerService
 {
     private readonly AiguardDbContext _db;
+    private readonly IAiSecurityEngineClient _aiSecurityEngine;
 
     private static readonly IReadOnlyList<DetectorRule> Detectors =
     [
@@ -66,7 +67,11 @@ public class DlpScannerService : IDlpScannerService
         ,["Azure Storage Key"] = "[AZURE_STORAGE_KEY]"
     };
 
-    public DlpScannerService(AiguardDbContext db) => _db = db;
+    public DlpScannerService(AiguardDbContext db, IAiSecurityEngineClient aiSecurityEngine)
+    {
+        _db = db;
+        _aiSecurityEngine = aiSecurityEngine;
+    }
 
     public async Task<DlpScanResponse> ScanContentAsync(DlpScanRequest request)
     {
@@ -153,6 +158,53 @@ public class DlpScannerService : IDlpScannerService
             });
         }
 
+        var aiResult = await _aiSecurityEngine.ScanAsync(request.Content);
+        var aiEngineUsed = aiResult.Available;
+        if (aiResult.Available)
+        {
+            totalScore = Math.Max(totalScore, aiResult.RiskScore);
+
+            foreach (var group in aiResult.Findings
+                .Where(f => !string.IsNullOrWhiteSpace(f.DataType))
+                .GroupBy(f => NormalizeAiDataType(f.DataType), StringComparer.OrdinalIgnoreCase))
+            {
+                var locations = group
+                    .Where(f => f.StartIndex >= 0 && f.EndIndex > f.StartIndex && f.EndIndex <= request.Content.Length)
+                    .Take(20)
+                    .Select(f => Locate(request.Content, f.StartIndex, f.EndIndex))
+                    .ToList();
+
+                var weight = group.Max(f => Math.Clamp(f.RiskWeight, 0, 100));
+                var dataType = group.Key;
+                matches.Add(new DetectionMatch
+                {
+                    DataType = dataType,
+                    Weight = weight,
+                    Count = group.Count(),
+                    Sample = MaskLabels.TryGetValue(dataType, out var label) ? label : "[AI_DETECTED]",
+                    Reason = $"AI security engine detected {group.Count()} match(es) for {dataType}.",
+                    Locations = locations
+                });
+            }
+
+            foreach (var category in aiResult.TriggeredCategories)
+            {
+                totalScore = Math.Max(totalScore, Math.Max(aiResult.RiskScore, 60));
+                matches.Add(new DetectionMatch
+                {
+                    DataType = "Prompt Injection",
+                    Weight = Math.Max(aiResult.RiskScore, 60),
+                    Count = 1,
+                    Sample = "[PROMPT_INJECTION]",
+                    Reason = $"AI security engine triggered category: {category}."
+                });
+            }
+
+            var aiMasked = await _aiSecurityEngine.MaskAsync(request.Content, aiResult.Findings.ToList());
+            if (!string.IsNullOrWhiteSpace(aiMasked) && aiMasked != request.Content)
+                maskedContent = maskedContent == request.Content ? aiMasked : MergeMaskedContent(maskedContent, aiMasked);
+        }
+
         var riskScore = Math.Min(100, totalScore);
         var riskLevel = riskScore switch
         {
@@ -183,7 +235,8 @@ public class DlpScannerService : IDlpScannerService
             PolicyVersion = matchedRule?.Version ?? policy.Version,
             PolicyReason = matchedRule != null
                 ? $"Rule '{matchedRule.Name}' matched. Effective action is {decision}; rules cannot weaken the risk decision."
-                : $"Risk level {riskLevel} uses action {decision} from policy {policy.Name}.",
+                : $"Risk level {riskLevel} uses action {decision} from policy {policy.Name}." +
+                  (aiEngineUsed ? " AI security engine was included in scoring." : " Local scanner fallback was used."),
             MatchedRuleId = matchedRule?.Id,
             MatchedRuleName = matchedRule?.Name
         };
@@ -228,7 +281,12 @@ public class DlpScannerService : IDlpScannerService
 
     private static DetectionLocation Locate(string content, Match match)
     {
-        var before = content.AsSpan(0, match.Index);
+        return Locate(content, match.Index, match.Index + match.Length);
+    }
+
+    private static DetectionLocation Locate(string content, int startIndex, int endIndex)
+    {
+        var before = content.AsSpan(0, startIndex);
         var line = 1;
         var lastLineStart = 0;
         for (var index = 0; index < before.Length; index++)
@@ -239,11 +297,28 @@ public class DlpScannerService : IDlpScannerService
         }
         return new DetectionLocation
         {
-            StartIndex = match.Index,
-            EndIndex = match.Index + match.Length,
+            StartIndex = startIndex,
+            EndIndex = endIndex,
             Line = line,
-            Column = match.Index - lastLineStart + 1
+            Column = startIndex - lastLineStart + 1
         };
+    }
+
+    private static string NormalizeAiDataType(string dataType) => dataType.Trim() switch
+    {
+        "APIKey" => "API Key",
+        "DBUrl" => "Database URL",
+        "JWTToken" => "JWT Token",
+        "Phone" => "Phone",
+        "Email" => "Email",
+        "CCCD" => "CCCD",
+        _ => dataType.Trim()
+    };
+
+    private static string MergeMaskedContent(string localMasked, string aiMasked)
+    {
+        // Prefer the output that hides more content without keeping raw sensitive matches.
+        return aiMasked.Length <= localMasked.Length ? aiMasked : localMasked;
     }
 
     private static bool WildcardMatch(string? value, string pattern)

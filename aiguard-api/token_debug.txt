@@ -78,3 +78,23 @@ Computed Hash: ae5ebafee64304727319c37027c71d76f3174cc1e73fd729b44dc70e047b1976
 Received Raw: [/FkOyZ+4de00VzRL6Lv3nRwEz36UJdUeQnzy/JVFbxjcU6nlJ+L6M80pu9zS0zVy]
 Computed Hash: bddfe85d08d5d83dff4de03d60cc8107a416f1d7ea5fec4b11d7502212aaea12
 ---
+
+[06/17/2026 5:20:14 PM] FAILED TOKEN:
+Received Raw: [invalid-token]
+Computed Hash: 644d0c3b82bfe5e0665a116b2eb139d6abd6c9083ede0891237b1723e0010a14
+---
+
+[06/17/2026 5:20:53 PM] FAILED TOKEN:
+Received Raw: [invalid-token]
+Computed Hash: 644d0c3b82bfe5e0665a116b2eb139d6abd6c9083ede0891237b1723e0010a14
+---
+
+[06/17/2026 5:21:21 PM] FAILED TOKEN:
+Received Raw: [invalid-token]
+Computed Hash: 644d0c3b82bfe5e0665a116b2eb139d6abd6c9083ede0891237b1723e0010a14
+---
+
+[06/17/2026 5:23:09 PM] FAILED TOKEN:
+Received Raw: [invalid-token]
+Computed Hash: 644d0c3b82bfe5e0665a116b2eb139d6abd6c9083ede0891237b1723e0010a14
+---

@@ -72,11 +72,11 @@ public class AuthService : IAuthService
         if (!await TenantAllowsLoginAsync(user)) return null;
         ResetFailedLogin(user);
 
-        // if (user.MfaRequired || user.MfaEnabled)
-        // {
-        //     await _db.SaveChangesAsync();
-        //     return await CreateMfaChallengeAsync(user);
-        // }
+        if (user.MfaRequired || user.MfaEnabled)
+        {
+            await _db.SaveChangesAsync();
+            return await CreateMfaChallengeAsync(user);
+        }
 
         var response = IssueTokens(user);
         user.LastLoginAt = now;
@@ -460,7 +460,12 @@ public class AuthService : IAuthService
 
         var normalizedTenant = NormalizeTenant(requestedTenantCode ?? "DEFAULT");
         if (normalizedTenant != "DEFAULT")
-            return normalizedTenant;
+        {
+            var exists = await _db.Users.IgnoreQueryFilters()
+                .AnyAsync(x => x.Email == email && x.TenantCode == normalizedTenant && x.IsActive);
+            if (exists)
+                return normalizedTenant;
+        }
 
         var matchingTenants = await _db.Users.IgnoreQueryFilters()
             .Where(x => x.Email == email && x.IsActive)

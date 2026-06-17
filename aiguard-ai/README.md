@@ -43,3 +43,12 @@ pytest
 docker build -t aiguard-ai .
 docker run -p 8000:8000 aiguard-ai
 ```
+
+## Ghi chú dependency
+
+`requirements.txt` chỉ chứa các gói nhẹ cần để chạy demo FastAPI scanner.
+Các gói ML nặng để load Llama Guard thật được tách sang:
+
+```bash
+pip install -r requirements-ml.txt
+```
