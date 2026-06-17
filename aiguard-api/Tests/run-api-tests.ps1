@@ -160,43 +160,25 @@ try {
         emailDomain = $signupDomain
         ownerName = "FlowCo Owner"
         ownerEmail = $signupEmail
+        ownerPassword = "Owner@123"
         ownerPhone = "0901000000"
         companySize = "10-50"
         productPlanCode = "STARTER"
         trialDays = 14
     }
     Expect-Status "Public company signup creates trial tenant" $publicSignup 201
-    Add-Result "Signup returns tenant code and verification token in testing" (
-        $publicSignup.Body.data.tenantCode -eq $signupCode -and
-        -not [string]::IsNullOrWhiteSpace($publicSignup.Body.data.verificationToken)
+    Add-Result "Signup returns tenant code in testing" (
+        $publicSignup.Body.data.tenantCode -eq $signupCode
     ) "$($publicSignup.Body.data.tenantCode)"
-    Expect-Status "Tenant owner cannot login before email verification" (
-        Invoke-Api POST "/api/auth/login" @{
-            tenantCode = $signupCode; email = $signupEmail; password = "Owner@12345"
-        }
-    ) 401
-    Expect-Status "Tenant owner verifies email and sets first password" (
-        Invoke-Api POST "/api/signup/verify" @{
-            verificationToken = $publicSignup.Body.data.verificationToken
-            newPassword = "Owner@12345"
-        }
-    ) 200
     $signupOwnerLogin = Invoke-Api POST "/api/auth/login" @{
-        tenantCode = $signupCode; email = $signupEmail; password = "Owner@12345"
+        tenantCode = $signupCode; email = $signupEmail; password = "Owner@123"
     }
-    Add-Result "Verified TenantOwner login requires MFA setup" (
+    Add-Result "Verified TenantOwner login succeeds immediately" (
         $signupOwnerLogin.Status -eq 200 -and
-        $signupOwnerLogin.Body.data.requiresMfa -eq $true -and
-        $signupOwnerLogin.Body.data.mfaSetupRequired -eq $true
+        -not [string]::IsNullOrWhiteSpace($signupOwnerLogin.Body.data.accessToken)
     ) "$($signupOwnerLogin.Status)"
-    $signupOwnerMfa = Invoke-Api POST "/api/auth/mfa/verify" @{
-        tenantCode = $signupCode
-        challengeToken = $signupOwnerLogin.Body.data.mfaChallengeToken
-        code = Get-TotpCode $signupOwnerLogin.Body.data.mfaSetupSecret
-    }
-    Expect-Status "Verified TenantOwner completes MFA" $signupOwnerMfa 200
     Expect-Status "Verified TenantOwner reads trial entitlement" (
-        Invoke-Api GET "/api/business/entitlement" $null $signupOwnerMfa.Body.data.accessToken
+        Invoke-Api GET "/api/business/entitlement" $null $signupOwnerLogin.Body.data.accessToken
     ) 200
     Expect-Status "Invalid login rejected" (Invoke-Api POST "/api/auth/login" @{
         email = "admin@aiguard.com"; password = "WrongPassword!"

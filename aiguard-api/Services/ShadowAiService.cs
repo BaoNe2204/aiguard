@@ -49,7 +49,7 @@ public class ShadowAiService : IShadowAiService
         var domain = uri.IdnHost.ToLowerInvariant();
         var rules = await _db.AiWebsites.Where(x => x.IsActive).ToListAsync();
         var matched = rules.FirstOrDefault(rule => DomainMatches(domain, rule.DomainPattern));
-        var decision = matched?.Mode ?? "Monitor";
+        var decision = matched?.Mode ?? "Block";
         var now = DateTime.UtcNow;
         var item = await _db.ShadowAiDiscoveryEvents.FirstOrDefaultAsync(x =>
             x.DeviceId == device.Id && x.Domain == domain);

@@ -18,6 +18,11 @@ appsettings.Development.json
 
 node_modules/
 
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+
 *.log
 aiguard-web-beta/
 .DS_Store
