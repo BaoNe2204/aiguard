@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Plus, Save, X, RotateCcw, Search, Shield, ShieldAlert, CheckCircle, AlertTriangle, Trash2 } from 'lucide-react';
-import { DataTable } from '../components/ui/DataTable';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { policiesApi, type SecurityPolicyResponse, type PolicyVersionResponse, type WhitelistBlacklistResponse } from '../api/policies';
 import { dlpApi, type AiSecurityHealthResult, type DlpScanResponse } from '../api/dlp';

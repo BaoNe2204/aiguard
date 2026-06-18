@@ -1,0 +1,10 @@
+{
+  "ApiBaseUrl": "http://localhost:5185",
+  "EnrollmentToken": "T7fvkstXVWb2oP8d0AHH4gjiTcNGvr6gVbWyqmfciDBvG6vgI08E3t8zJTsI8y5y",
+  "UserEmail": "hiendeptrai@gmail.com",
+  "DepartmentName": "Engineering / Ph\u00E1t tri\u1EC3n",
+  "HeartbeatSeconds": 30,
+  "EnableAiCodeAppProtection": true,
+  "EnableProcessKill": true,
+  "WorkspaceRoots": []
+}

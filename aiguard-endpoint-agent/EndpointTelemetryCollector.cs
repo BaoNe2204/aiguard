@@ -40,7 +40,10 @@ public sealed class EndpointTelemetryCollector
     private HashSet<string> _previous = new(StringComparer.OrdinalIgnoreCase);
     private bool _initialized;
 
-    public IReadOnlyList<AgentTelemetryItem> Collect(PolicyData? policy = null, AgentConfig? config = null)
+    public IReadOnlyList<AgentTelemetryItem> Collect(
+        PolicyData? policy = null,
+        AgentConfig? config = null,
+        EndpointAiPolicyData? aiPolicy = null)
     {
         var now = DateTime.UtcNow;
         var current = Snapshot(policy, config);
@@ -65,6 +68,7 @@ public sealed class EndpointTelemetryCollector
 
         if (config?.EnableAiCodeAppProtection ?? true)
             events.AddRange(EvaluateAiCodePolicy(current, policy, config, now));
+        events.AddRange(EvaluateBlockedDesktopApps(aiPolicy, config, now));
         _previous = current;
         return events;
     }
@@ -253,6 +257,102 @@ public sealed class EndpointTelemetryCollector
         return string.Join(" | ", compacted) + suffix;
     }
 
+    private static IEnumerable<AgentTelemetryItem> EvaluateBlockedDesktopApps(
+        EndpointAiPolicyData? aiPolicy,
+        AgentConfig? config,
+        DateTime occurredAt)
+    {
+        var blockedApps = ResolveBlockedDesktopApps(aiPolicy).ToList();
+        if (blockedApps.Count == 0) yield break;
+
+        var runningProcesses = GetRunningProcesses();
+        foreach (var app in blockedApps)
+        {
+            var matches = app.ProcessNames
+                .Where(name => runningProcesses.Contains(name))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (matches.Count == 0) continue;
+
+            var enforcement = "BlockRequestedProcessKillDisabled";
+            if (config?.EnableProcessKill == true)
+            {
+                var killed = KillProcesses(matches);
+                enforcement = killed.Count == 0
+                    ? "BlockRequestedNoMatchingProcess"
+                    : $"KilledProcesses={string.Join(",", killed)}";
+            }
+
+            yield return new AgentTelemetryItem(
+                "DesktopAppPolicyDecision",
+                "Blocked",
+                string.Join("; ", [
+                    $"App={app.DisplayName}",
+                    $"Decision={app.Mode}",
+                    $"Enforcement={enforcement}",
+                    $"MatchedProcesses={string.Join(",", matches)}",
+                    $"SourceRule={app.SourceRule}"
+                ]),
+                "Critical",
+                occurredAt);
+        }
+    }
+
+    private static IEnumerable<DesktopAppBlockRule> ResolveBlockedDesktopApps(EndpointAiPolicyData? aiPolicy)
+    {
+        foreach (var rule in aiPolicy?.Websites ?? [])
+        {
+            if (!rule.IsActive || !IsBlockDecision(rule.Mode)) continue;
+
+            var key = $"{rule.Name} {rule.DomainPattern}".ToLowerInvariant();
+            string[] processNames = key switch
+            {
+                var value when value.Contains("cursor") => ["cursor", "cursor helper"],
+                var value when value.Contains("claude") => ["claude", "claude desktop"],
+                var value when value.Contains("chatgpt") || value.Contains("openai") => ["chatgpt"],
+                var value when value.Contains("codex") => ["codex", "openai-codex"],
+                var value when value.Contains("copilot") => ["github copilot", "copilot"],
+                var value when value.Contains("windsurf") => ["windsurf"],
+                var value when value.Contains("trae") => ["trae"],
+                var value when value.Contains("tabnine") => ["tabnine"],
+                var value when value.Contains("deepseek") => ["deepseek"],
+                var value when value.Contains("gemini") => ["gemini"],
+                var value when value.Contains("antigravity") => ["antigravity", "antigravity ide"],
+                var value when value.Contains("perplexity") => ["perplexity"],
+                _ => []
+            };
+
+            if (processNames.Length == 0) continue;
+            yield return new DesktopAppBlockRule(
+                string.IsNullOrWhiteSpace(rule.Name) ? rule.DomainPattern : rule.Name,
+                processNames,
+                rule.Mode,
+                $"{rule.Name} ({rule.DomainPattern})");
+        }
+    }
+
+    private static HashSet<string> GetRunningProcesses()
+    {
+        var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var process in Process.GetProcesses())
+        {
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(process.ProcessName))
+                    result.Add(process.ProcessName);
+            }
+            catch
+            {
+                // Ignore protected or exiting processes.
+            }
+            finally
+            {
+                process.Dispose();
+            }
+        }
+        return result;
+    }
+
     private static List<string> KillAiCodeProcesses()
     {
         var killed = new List<string>();
@@ -261,6 +361,32 @@ public sealed class EndpointTelemetryCollector
             "github copilot", "copilot", "claude", "claude desktop", "windsurf", "trae", "tabnine"
         ], StringComparer.OrdinalIgnoreCase);
 
+        foreach (var process in Process.GetProcesses())
+        {
+            try
+            {
+                if (!names.Contains(process.ProcessName)) continue;
+                var name = process.ProcessName;
+                process.Kill(entireProcessTree: true);
+                killed.Add(name);
+            }
+            catch
+            {
+                // Some processes are protected or already exiting; backend still receives the block decision.
+            }
+            finally
+            {
+                process.Dispose();
+            }
+        }
+
+        return killed.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    private static List<string> KillProcesses(IEnumerable<string> processNames)
+    {
+        var names = processNames.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var killed = new List<string>();
         foreach (var process in Process.GetProcesses())
         {
             try
@@ -430,4 +556,10 @@ public sealed class EndpointTelemetryCollector
         };
         return new AgentTelemetryItem(category, eventType, detail, severity, occurredAt);
     }
+
+    private sealed record DesktopAppBlockRule(
+        string DisplayName,
+        string[] ProcessNames,
+        string Mode,
+        string SourceRule);
 }

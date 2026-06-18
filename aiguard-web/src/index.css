@@ -7863,6 +7863,296 @@ select {
   background: rgba(148, 163, 184, 0.42);
 }
 
+/* Desktop Agent capability cards */
+.endpoint-agent-brief,
+.endpoint-agent-limits {
+  grid-column: 1 / -1;
+}
+
+.endpoint-agent-capabilities {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.endpoint-agent-capabilities > div,
+.endpoint-limit-list > div {
+  display: grid;
+  gap: 7px;
+  padding: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 12px;
+  background: rgba(8, 13, 20, 0.46);
+}
+
+.endpoint-agent-capabilities strong,
+.endpoint-limit-list b {
+  color: #f8fafc;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.endpoint-agent-capabilities span,
+.endpoint-limit-list span {
+  color: #aab8ca;
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.endpoint-limit-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.endpoint-limit-list > div {
+  position: relative;
+  padding-left: 44px;
+}
+
+.endpoint-limit-list > div::before {
+  position: absolute;
+  top: 17px;
+  left: 16px;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.endpoint-limit-list .blocked {
+  border-color: rgba(248, 113, 113, 0.22);
+  background: rgba(127, 29, 29, 0.12);
+}
+
+.endpoint-limit-list .blocked::before {
+  content: "!";
+  background: rgba(248, 113, 113, 0.18);
+  color: #fca5a5;
+}
+
+.endpoint-limit-list .allowed {
+  border-color: rgba(52, 211, 153, 0.22);
+  background: rgba(6, 78, 59, 0.12);
+}
+
+.endpoint-limit-list .allowed::before {
+  content: "✓";
+  background: rgba(52, 211, 153, 0.18);
+  color: #6ee7b7;
+}
+
+/* AI Agent governance brief */
+.agent-control-brief {
+  display: grid;
+  gap: 18px;
+  margin-bottom: 22px;
+  padding: 24px !important;
+  border-radius: 12px !important;
+  background: linear-gradient(180deg, rgba(17, 24, 35, 0.92), rgba(10, 16, 25, 0.94)) !important;
+}
+
+.agent-control-brief-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.agent-control-brief-head > span {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.32), rgba(34, 211, 238, 0.22));
+  color: #a5b4fc;
+}
+
+.agent-control-brief-head h2 {
+  margin: 0;
+  color: #f8fafc;
+  font-size: 20px;
+  line-height: 1.25;
+}
+
+.agent-control-brief-head p {
+  margin: 5px 0 0;
+  max-width: 920px;
+  color: #aab8ca;
+  font-size: 13.5px;
+  line-height: 1.58;
+}
+
+.agent-control-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.agent-control-grid > div {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 7px 10px;
+  align-items: start;
+  padding: 15px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 12px;
+  background: rgba(8, 13, 20, 0.46);
+}
+
+.agent-control-grid > div > svg {
+  grid-row: span 2;
+  width: 28px;
+  height: 28px;
+  padding: 6px;
+  border-radius: 9px;
+  background: rgba(15, 23, 42, 0.88);
+  color: #7dd3fc;
+  box-sizing: border-box;
+}
+
+.agent-control-grid strong {
+  color: #f8fafc;
+  font-size: 13.5px;
+  line-height: 1.35;
+}
+
+.agent-control-grid span {
+  color: #aab8ca;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.agent-control-grid .highlight {
+  border-color: rgba(52, 211, 153, 0.24);
+  background: rgba(6, 78, 59, 0.13);
+}
+
+.agent-control-grid .highlight > svg {
+  color: #6ee7b7;
+}
+
+.agent-reality-brief {
+  display: grid;
+  gap: 18px;
+  margin-bottom: 22px;
+  padding: 24px !important;
+  border-radius: 12px !important;
+  background: linear-gradient(180deg, rgba(17, 24, 35, 0.9), rgba(9, 14, 23, 0.94)) !important;
+}
+
+.agent-gating-story {
+  display: grid;
+  grid-template-columns: 1.25fr 1fr 1fr;
+  gap: 14px;
+}
+
+.agent-gating-story > div,
+.agent-reality-card,
+.agent-roadmap > div {
+  display: grid;
+  gap: 7px;
+  padding: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 12px;
+  background: rgba(8, 13, 20, 0.46);
+}
+
+.agent-gating-story strong,
+.agent-reality-card strong,
+.agent-roadmap strong {
+  color: #f8fafc;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.agent-gating-story span,
+.agent-reality-card span,
+.agent-roadmap span {
+  color: #aab8ca;
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.agent-gating-story > div:first-child {
+  border-color: rgba(52, 211, 153, 0.22);
+  background: rgba(6, 78, 59, 0.12);
+}
+
+.agent-reality-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.agent-reality-card.warn {
+  border-color: rgba(251, 191, 36, 0.22);
+  background: rgba(113, 63, 18, 0.13);
+}
+
+.agent-reality-card.ok {
+  border-color: rgba(52, 211, 153, 0.22);
+  background: rgba(6, 78, 59, 0.13);
+}
+
+.agent-roadmap {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.agent-roadmap b {
+  width: fit-content;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: rgba(99, 102, 241, 0.16);
+  color: #c7d2fe;
+  font-size: 11px;
+  line-height: 1;
+}
+
+@media (max-width: 1180px) {
+  .agent-control-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .agent-gating-story,
+  .agent-reality-grid,
+  .agent-roadmap {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .agent-control-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-gating-story,
+  .agent-reality-grid,
+  .agent-roadmap {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1180px) {
+  .endpoint-agent-capabilities,
+  .endpoint-limit-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .endpoint-agent-capabilities,
+  .endpoint-limit-list {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Governance incident form refinement */
 .incident-management-section {
   padding: 26px !important;
@@ -8468,4 +8758,4 @@ select {
   height: 100%;
   border-radius: 3px;
   transition: width 1s ease-out;
-}
+}

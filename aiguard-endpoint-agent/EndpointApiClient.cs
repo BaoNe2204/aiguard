@@ -57,10 +57,23 @@ public sealed class EndpointApiClient
             token);
         policyResponse.EnsureSuccessStatusCode();
         var policy = await ReadDataAsync<PolicyData>(policyResponse, token);
+        EndpointAiPolicyData? aiPolicy = null;
+        try
+        {
+            var aiPolicyResponse = await client.GetAsync(
+                $"/api/endpoints/shadow-ai/policy?hostname={Uri.EscapeDataString(Environment.MachineName)}",
+                token);
+            aiPolicyResponse.EnsureSuccessStatusCode();
+            aiPolicy = await ReadDataAsync<EndpointAiPolicyData>(aiPolicyResponse, token);
+        }
+        catch
+        {
+            // Older API builds may not expose endpoint AI policy yet; regular DLP policy still applies.
+        }
 
         var nextState = state with { PolicyVersion = policy.Version };
         _store.SaveState(nextState);
-        return new EndpointSyncResult(nextState, device, policy);
+        return new EndpointSyncResult(nextState, device, policy, aiPolicy);
     }
 
     public async Task<int> SendTelemetryAsync(
@@ -161,7 +174,11 @@ public sealed class EndpointApiClient
     }
 }
 
-public sealed record EndpointSyncResult(AgentState State, DeviceData Device, PolicyData Policy);
+public sealed record EndpointSyncResult(
+    AgentState State,
+    DeviceData Device,
+    PolicyData Policy,
+    EndpointAiPolicyData? AiPolicy);
 
 public sealed class DeviceData
 {
@@ -225,4 +242,20 @@ public sealed class DetectionLocationData
     public int EndIndex { get; set; }
     public int Line { get; set; }
     public int Column { get; set; }
+}
+
+public sealed class EndpointAiPolicyData
+{
+    public List<AiWebsiteRuleData> Websites { get; set; } = new();
+    public bool BlockUnknownAi { get; set; }
+}
+
+public sealed class AiWebsiteRuleData
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = "";
+    public string DomainPattern { get; set; } = "";
+    public bool IsActive { get; set; }
+    public string Mode { get; set; } = "";
+    public DateTime LastUpdated { get; set; }
 }
