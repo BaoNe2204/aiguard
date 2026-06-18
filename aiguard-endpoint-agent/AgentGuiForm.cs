@@ -524,7 +524,9 @@ public sealed class AgentGuiForm : Form
                 EnrollmentToken = _txtToken.Text.Trim(),
                 UserEmail = _txtEmail.Text.Trim(),
                 DepartmentName = _txtDepartment.Text.Trim(),
-                HeartbeatSeconds = 30
+                HeartbeatSeconds = 30,
+                EnableAiCodeAppProtection = true,
+                EnableProcessKill = true
             };
             
             _store.SaveConfig(config);
@@ -571,7 +573,8 @@ public sealed class AgentGuiForm : Form
                 return;
             }
 
-            var events = _telemetry.Collect();
+            var syncResult = await Task.Run(() => _api.HeartbeatAndSyncAsync(config, state, CancellationToken.None));
+            var events = _telemetry.Collect(syncResult.Policy, config, syncResult.AiPolicy);
             Log($"Found {events.Count} local events to transmit.", ColorText);
             
             var sentCount = await Task.Run(() => _api.SendTelemetryAsync(config, state, events, CancellationToken.None));
@@ -637,6 +640,7 @@ public sealed class AgentGuiForm : Form
             if (!silent) Log("Synchronizing connection and active policies...", ColorText);
             
             var syncResult = await Task.Run(() => _api.HeartbeatAndSyncAsync(config, state, CancellationToken.None));
+            await SendProtectionTelemetryAsync(config, syncResult, silent);
             
             // Update labels
             _lblPolicyValue.Text = syncResult.Policy.Version;
@@ -674,6 +678,30 @@ public sealed class AgentGuiForm : Form
             _lblStatusText.Text = "Connection Error";
             _lblStatusText.ForeColor = ColorRed;
             UpdateTrayIcon(ColorRed);
+        }
+    }
+
+    private async Task SendProtectionTelemetryAsync(AgentConfig config, EndpointSyncResult syncResult, bool silent)
+    {
+        try
+        {
+            var events = _telemetry.Collect(syncResult.Policy, config, syncResult.AiPolicy);
+            if (events.Count == 0) return;
+
+            var sentCount = await Task.Run(() =>
+                _api.SendTelemetryAsync(config, syncResult.State, events, CancellationToken.None));
+
+            foreach (var item in events.Where(x => x.Category == "DesktopAppPolicyDecision"))
+            {
+                Log($"Desktop app blocked by enterprise policy: {item.Detail}", ColorRed);
+            }
+
+            if (!silent)
+                Log($"Protection telemetry synced. {sentCount} events sent.", ColorGreen);
+        }
+        catch (Exception ex)
+        {
+            if (!silent) Log($"Protection telemetry failed: {ex.Message}", ColorRed);
         }
     }
 }
