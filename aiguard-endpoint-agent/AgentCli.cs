@@ -171,7 +171,7 @@ public sealed class AgentCli
 
         var state = await EnsureStateAsync(config, token);
         var sync = await _api.HeartbeatAndSyncAsync(config, state, token);
-        var events = _telemetry.Collect(sync.Policy, config);
+        var events = _telemetry.Collect(sync.Policy, config, sync.AiPolicy);
         PrintEvents(events);
         var count = await _api.SendTelemetryAsync(config, sync.State, events, token);
         _output.WriteLine($"Telemetry sent: {count}");

@@ -839,6 +839,49 @@ export const Endpoints: React.FC = () => {
                   Xem danh sách thiết bị đã triển khai
                 </Link>
               </section>
+
+              <section className="card glass endpoint-agent-brief">
+                <div className="endpoint-manager-title">
+                  <span><Activity size={20} /></span>
+                  <div>
+                    <h2>Năng lực Desktop Agent</h2>
+                    <p>Giám sát endpoint Windows, phát hiện AI coding app và bảo vệ workspace có source code hoặc developer secrets.</p>
+                  </div>
+                </div>
+                <div className="endpoint-agent-capabilities">
+                  <div>
+                    <strong>Enroll & policy sync</strong>
+                    <span>Đăng ký bằng enrollment token, lưu endpoint key an toàn, heartbeat định kỳ và đồng bộ security policy.</span>
+                  </div>
+                  <div>
+                    <strong>AI coding app protection</strong>
+                    <span>Phát hiện Cursor, Copilot, VS Code AI, Claude Desktop, Codex, Windsurf, Trae, Tabnine khi chạy trong workspace nhạy cảm.</span>
+                  </div>
+                  <div>
+                    <strong>Developer secret detection</strong>
+                    <span>Nhận diện .env, private key, appsettings production, certificate, source workspace và chấm risk score.</span>
+                  </div>
+                  <div>
+                    <strong>DLP & telemetry</strong>
+                    <span>Scan prompt/file qua DLP API, gửi telemetry USB, network share, RDP, email client, print spooler và trạng thái AI coding app.</span>
+                  </div>
+                </div>
+              </section>
+
+              <section className="card glass endpoint-agent-limits">
+                <div className="endpoint-manager-title">
+                  <span><AlertTriangle size={20} /></span>
+                  <div>
+                    <h2>Giới hạn Desktop Agent</h2>
+                    <p>Một số tác vụ cần helper ký số, driver, GPO hoặc Intune để chặn ở mức hệ điều hành.</p>
+                  </div>
+                </div>
+                <div className="endpoint-limit-list">
+                  <div className="blocked"><b>Không chặn clipboard interactive</b><span>Cần helper ký số hoặc driver để can thiệp sâu.</span></div>
+                  <div className="blocked"><b>Không chặn USB/print ở kernel level</b><span>Cần GPO, Intune hoặc driver chuyên dụng.</span></div>
+                  <div className="allowed"><b>Giám sát và gửi telemetry</b><span>Admin xem log, nhận cảnh báo và quyết định hành động phù hợp.</span></div>
+                </div>
+              </section>
             </div>
           )
         )}
