@@ -80,9 +80,11 @@ export const Sidebar: React.FC = () => {
             subItems: [
               { title: 'Onboarding', path: '/app/business/onboarding' },
               { title: 'Gói dịch vụ', path: '/app/business/packages' },
+              { title: 'Gói & Subscription', path: '/app/business/subscriptions' },
               { title: 'Đơn hàng', path: '/app/business/orders' },
               { title: 'Lịch sử thanh toán', path: '/app/business/payments' },
               { title: 'License', path: '/app/business/licenses' },
+              { title: 'Báo giá & Hợp đồng', path: '/app/business/quotations' },
               { title: 'Cấu hình công ty', path: '/app/business/company' },
               { title: 'Hỗ trợ', path: '/app/business/support' }
             ]

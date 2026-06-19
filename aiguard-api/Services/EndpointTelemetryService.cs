@@ -18,7 +18,8 @@ public class EndpointTelemetryService : IEndpointTelemetryService
     {
         "RemovableStorage", "NetworkShare", "RdpClient", "EmailClient",
         "PrintService", "Clipboard", "AgentHealth", "AiCodeApp",
-        "SensitiveWorkspace", "DeveloperSecret", "AiCodePolicyDecision"
+        "SensitiveWorkspace", "DeveloperSecret", "AiCodePolicyDecision",
+        "ExtensionMonitor", "NetworkSharePolicy", "TamperProtection"
     };
     private static readonly HashSet<string> Severities = new(StringComparer.OrdinalIgnoreCase)
     {

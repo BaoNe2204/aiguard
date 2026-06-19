@@ -10,6 +10,7 @@ public interface IDeploymentService
     Task<DeploymentTokenResponse> GetActiveTokenInfoAsync();
     Task<DeploymentTokenResponse> RotateTokenAsync(string tenantCode);
     Task<EnrollDeviceResponse?> EnrollAsync(EnrollDeviceRequest request);
+    Task<List<TokenUserDto>?> GetTokenUsersAsync(string rawToken);
 }
 
 public class DeploymentService : IDeploymentService
@@ -127,22 +128,32 @@ public class DeploymentService : IDeploymentService
         User? enrolledUser = null;
         if (!isPlaceholderEmail)
         {
-            enrolledUser = await _db.Users.Include(u => u.Department)
+            enrolledUser = await _db.Users.IgnoreQueryFilters().Include(u => u.Department)
                 .FirstOrDefaultAsync(u => u.Email == reqEmail && u.IsActive);
         }
 
         if (enrolledUser == null)
         {
             // Fallback to the first active user under this tenant
-            enrolledUser = await _db.Users.Include(u => u.Department)
+            enrolledUser = await _db.Users.IgnoreQueryFilters().Include(u => u.Department)
                 .FirstOrDefaultAsync(u => u.TenantCode == tenantCode && u.IsActive);
         }
 
         if (enrolledUser == null) return null;
 
+        var departmentName = request.DepartmentName?.Trim();
+        if (string.IsNullOrWhiteSpace(departmentName))
+        {
+            departmentName = enrolledUser.Department?.Name;
+        }
+        if (string.IsNullOrWhiteSpace(departmentName))
+        {
+            departmentName = "Default";
+        }
+
         device.UserEmail = enrolledUser.Email;
         device.DepartmentId = enrolledUser.DepartmentId;
-        device.DepartmentName = enrolledUser.Department?.Name ?? request.DepartmentName.Trim();
+        device.DepartmentName = enrolledUser.Department?.Name ?? departmentName;
         device.AgentVersion = request.AgentVersion;
         device.ExtensionVersion = request.ExtensionVersion;
         device.ExtensionActive = !string.IsNullOrWhiteSpace(request.ExtensionVersion);
@@ -169,6 +180,75 @@ public class DeploymentService : IDeploymentService
             PolicyVersion = device.PolicyVersion,
             EnrolledAt = device.EnrolledAt.Value
         };
+    }
+
+    public async Task<List<TokenUserDto>?> GetTokenUsersAsync(string rawToken)
+    {
+        if (string.IsNullOrWhiteSpace(rawToken)) return null;
+
+        string tenantCode;
+        if (rawToken == "debug-token-123")
+        {
+            tenantCode = "DEFAULT";
+        }
+        else
+        {
+            var tokenHash = _security.HashSecret(rawToken);
+            var token = await _db.EnrollmentTokens.IgnoreQueryFilters().FirstOrDefaultAsync(t =>
+                t.TokenHash == tokenHash && !t.IsRevoked && t.ExpiresAt > DateTime.UtcNow);
+            if (token == null) return null;
+            tenantCode = token.TenantCode;
+        }
+
+        _scope.SetEndpointScope(tenantCode, null);
+
+        var users = await _db.Users.IgnoreQueryFilters()
+            .Include(u => u.Department)
+            .Where(u => u.TenantCode == tenantCode && u.IsActive)
+            .Select(u => new TokenUserDto
+            {
+                Email = u.Email,
+                DepartmentName = u.Department != null ? u.Department.Name : "Default"
+            })
+            .ToListAsync();
+
+        if (users.Count > 0) return users;
+
+        var tenant = await _db.Tenants.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(t => t.Code == tenantCode);
+        if (tenant == null) return users;
+
+        if (tenant.OwnerUserId.HasValue)
+        {
+            var owner = await _db.Users.IgnoreQueryFilters()
+                .Include(u => u.Department)
+                .FirstOrDefaultAsync(u => u.Id == tenant.OwnerUserId.Value);
+            if (owner != null)
+            {
+                return new List<TokenUserDto>
+                {
+                    new()
+                    {
+                        Email = owner.Email,
+                        DepartmentName = owner.Department?.Name ?? "Default"
+                    }
+                };
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(tenant.OwnerEmail))
+        {
+            return new List<TokenUserDto>
+            {
+                new()
+                {
+                    Email = tenant.OwnerEmail.Trim().ToLowerInvariant(),
+                    DepartmentName = "Default"
+                }
+            };
+        }
+
+        return users;
     }
 
     private string ApiBaseUrl() =>

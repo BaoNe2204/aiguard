@@ -126,6 +126,7 @@ function App() {
                 <Route path="business/company" element={<ProtectedRoute allowedRoles={BUSINESS_ROLES}><BusinessOperations /></ProtectedRoute>} />
                 <Route path="business/quotations" element={<ProtectedRoute allowedRoles={BUSINESS_ROLES}><BusinessOperations /></ProtectedRoute>} />
                 <Route path="business/support" element={<ProtectedRoute allowedRoles={BUSINESS_ROLES}><BusinessOperations /></ProtectedRoute>} />
+                <Route path="business/subscriptions" element={<ProtectedRoute allowedRoles={BUSINESS_ROLES}><BusinessOperations /></ProtectedRoute>} />
 
                 {/* My Usage portal subroutes */}
                 <Route path="my-usage" element={<MyUsage />} />

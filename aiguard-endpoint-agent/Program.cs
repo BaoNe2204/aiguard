@@ -3,6 +3,30 @@ using System.Runtime.InteropServices;
 
 if (args.Length > 0)
 {
+    if (args[0].Equals("clipboard-helper", StringComparison.OrdinalIgnoreCase))
+    {
+        var exitCode = 0;
+        var helperThread = new Thread(() =>
+        {
+            try
+            {
+                ApplicationConfiguration.Initialize();
+                var store = new AgentStateStore();
+                var api = new EndpointApiClient(store);
+                Application.Run(new ClipboardProtectionContext(store, api));
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"Clipboard helper failed: {ex.Message}");
+                exitCode = 1;
+            }
+        });
+        helperThread.SetApartmentState(ApartmentState.STA);
+        helperThread.Start();
+        helperThread.Join();
+        return exitCode;
+    }
+
     // Attach to parent console if running in CLI mode (not run as service)
     if (!args[0].Equals("run", StringComparison.OrdinalIgnoreCase))
     {
@@ -30,6 +54,8 @@ if (args.Length > 0)
         builder.Services.AddSingleton<AgentStateStore>();
         builder.Services.AddSingleton<EndpointApiClient>();
         builder.Services.AddSingleton<EndpointTelemetryCollector>();
+        builder.Services.AddSingleton<EndpointPolicyCache>();
+        builder.Services.AddSingleton<OfflineTelemetryQueue>();
         builder.Services.AddHostedService<EndpointWorker>();
         await builder.Build().RunAsync();
         return 0;

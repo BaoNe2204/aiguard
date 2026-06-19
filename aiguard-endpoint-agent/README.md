@@ -6,7 +6,7 @@ prompt/file trước khi dữ liệu đi ra ngoài.
 
 ## Chức năng đã nối API
 
-- Enroll thiết bị bằng enrollment token từ Control Tower.
+- Enroll thiết bị bằng enrollment key từ Control Tower.
 - Lưu endpoint key bằng Windows DPAPI `LocalMachine`.
 - Heartbeat về `/api/endpoints/devices/heartbeat`.
 - Đồng bộ policy từ `/api/policies/current`.
@@ -26,7 +26,7 @@ $env:AIGUARD_AGENT_HOME="G:\Dự Án\DuAn2026\aiguard-endpoint-agent\.local-agen
 Cấu hình agent:
 
 ```powershell
-dotnet run -- configure --api http://127.0.0.1:5185 --token "<enrollment-token>" --email "employee@company.com" --department "Dev" --clear-state
+dotnet run -- configure --api http://127.0.0.1:5185 --token "<enrollment-key>" --email "employee@company.com" --department "Dev" --clear-state
 ```
 
 Enroll thiết bị:
@@ -134,11 +134,11 @@ Lenh nay in telemetry ra console va khong goi API.
 
 ### 4. Gui telemetry that len Control Tower
 
-Lay enrollment token o web: `Bao ve thiet bi > aiguard-endpoint-agent`.
+Lay enrollment key o web: `Bao ve thiet bi > aiguard-endpoint-agent`.
 
 ```powershell
 $env:AIGUARD_AGENT_HOME="C:\tmp\aiguard-agent-test"
-dotnet run -- configure --api http://127.0.0.1:5185 --token "<enrollment-token>" --email "dev@company.com" --department "Dev" --workspace-roots "C:\tmp\aiguard-sensitive-test" --clear-state
+dotnet run -- configure --api http://127.0.0.1:5185 --token "<enrollment-key>" --email "dev@company.com" --department "Dev" --workspace-roots "C:\tmp\aiguard-sensitive-test" --clear-state
 dotnet run -- enroll
 dotnet run -- telemetry-once
 ```
@@ -169,7 +169,7 @@ Neu `--enable-process-kill true`, agent se co gang dong cac process AI code app 
 ```powershell
 dotnet run -- configure `
   --api http://127.0.0.1:5185 `
-  --token "<enrollment-token>" `
+  --token "<enrollment-key>" `
   --email "employee@company.com" `
   --department "Dev" `
   --workspace-roots "D:\repo1;D:\repo2" `
@@ -201,7 +201,7 @@ C:\Program Files\AIGuard\
 Cấu hình lần đầu:
 
 ```powershell
-.\aiguard-endpoint-agent.exe configure --api https://api.your-aiguard.vn --token "<enrollment-token>" --email "employee@company.com" --department "Dev" --clear-state
+.\aiguard-endpoint-agent.exe configure --api https://api.your-aiguard.vn --token "<enrollment-key>" --email "employee@company.com" --department "Dev" --clear-state
 .\aiguard-endpoint-agent.exe enroll
 ```
 

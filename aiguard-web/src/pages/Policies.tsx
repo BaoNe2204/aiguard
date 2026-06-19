@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Plus, Save, X, RotateCcw, Search, Shield, ShieldAlert, CheckCircle, AlertTriangle, Trash2 } from 'lucide-react';
+import { Plus, Save, X, RotateCcw, Search, Shield, ShieldAlert, CheckCircle, AlertTriangle, Trash2, Upload, Download, AlertCircle, Sparkles } from 'lucide-react';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { policiesApi, type SecurityPolicyResponse, type PolicyVersionResponse, type WhitelistBlacklistResponse } from '../api/policies';
 import { dlpApi, type AiSecurityHealthResult, type DlpScanResponse } from '../api/dlp';
@@ -31,6 +31,11 @@ export const Policies: React.FC = () => {
   const [newBlacklistItem, setNewBlacklistItem] = useState('');
   const [whitelistSearch, setWhitelistSearch] = useState('');
   const [blacklistSearch, setBlacklistSearch] = useState('');
+
+  // Redesign state additions
+  const [importMode, setImportMode] = useState<'none' | 'whitelist' | 'blacklist'>('none');
+  const [bulkInput, setBulkInput] = useState('');
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
 
   // AI Security health/test
   const [aiHealth, setAiHealth] = useState<AiSecurityHealthResult | null>(null);
@@ -120,24 +125,144 @@ export const Policies: React.FC = () => {
     } catch {}
   };
 
+  const showToast = useCallback((message: string, type: 'success' | 'info' | 'error' = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  }, []);
+
+  const checkRegex = (text: string) => {
+    const isRegex = /[\\^$.*+?()[\]{}|]/.test(text);
+    if (!isRegex) return { isRegex: false, isValid: true };
+    try {
+      new RegExp(text);
+      return { isRegex: true, isValid: true };
+    } catch (e: any) {
+      return { isRegex: true, isValid: false, error: e.message || 'Invalid syntax' };
+    }
+  };
+
+  const getAutoClassification = (item: string) => {
+    const isRegex = /[\\^$.*+?()[\]{}|]/.test(item);
+    if (isRegex) return 'regex';
+    if (item.includes('@') && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(item.replace(/[\*\?]/g, 'a'))) return 'email';
+    if (/(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)/.test(item)) return 'ip';
+    if (/jdbc:|mongodb:|host=|port=|password=|username=|uid=|pwd=/i.test(item)) return 'db';
+    return 'keyword';
+  };
+
+  const handleExport = (listType: 'whitelist' | 'blacklist') => {
+    const items = wbData[listType] || [];
+    const content = items.join('\n');
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${listType}-rules.txt`;
+    link.click();
+    URL.revokeObjectURL(url);
+    showToast(t(`Exported ${listType} list successfully`, `Đã xuất danh sách ${listType === 'whitelist' ? 'trắng' : 'đen'} thành công`), 'success');
+  };
+
+  const toggleImportMode = (mode: 'whitelist' | 'blacklist') => {
+    setBulkInput('');
+    setImportMode(prev => prev === mode ? 'none' : mode);
+  };
+
+  const handleBulkImport = async (listType: 'whitelist' | 'blacklist') => {
+    if (!bulkInput.trim()) return;
+    const items = bulkInput
+      .split(/[\n,]/)
+      .map(i => i.trim())
+      .filter(i => i.length > 0);
+    
+    if (items.length === 0) return;
+
+    // Check regex compile status for items that look like regexes
+    const invalidItems = items.filter(item => {
+      const check = checkRegex(item);
+      return check.isRegex && !check.isValid;
+    });
+
+    if (invalidItems.length > 0) {
+      showToast(t('Cannot import: contains invalid regex patterns', 'Không thể nhập: có chứa biểu thức Regex lỗi cú pháp'), 'error');
+      return;
+    }
+
+    const currentList = wbData[listType] || [];
+    const merged = Array.from(new Set([...currentList, ...items]));
+
+    try {
+      await policiesApi.updateWhitelistBlacklist({
+        whitelist: listType === 'whitelist' ? merged : wbData.whitelist,
+        blacklist: listType === 'blacklist' ? merged : wbData.blacklist
+      });
+      setBulkInput('');
+      setImportMode('none');
+      showToast(t(`Imported ${items.length} rules successfully`, `Đã nhập thành công ${items.length} quy tắc`), 'success');
+      fetchWB();
+    } catch {
+      showToast(t('Error during bulk import', 'Lỗi trong quá trình nhập hàng loạt'), 'error');
+    }
+  };
+
+  const handleClearAll = async (listType: 'whitelist' | 'blacklist') => {
+    const count = wbData[listType]?.length || 0;
+    if (count === 0) return;
+    
+    const confirmed = window.confirm(
+      t(
+        `Are you sure you want to delete all ${count} items in the ${listType}?`,
+        `Bạn có chắc chắn muốn xóa toàn bộ ${count} mục trong danh sách ${listType === 'whitelist' ? 'trắng' : 'đen'} không?`
+      )
+    );
+    if (!confirmed) return;
+
+    try {
+      await policiesApi.updateWhitelistBlacklist({
+        whitelist: listType === 'whitelist' ? [] : wbData.whitelist,
+        blacklist: listType === 'blacklist' ? [] : wbData.blacklist
+      });
+      showToast(t(`Cleared ${listType} successfully`, `Đã xóa sạch danh sách ${listType === 'whitelist' ? 'trắng' : 'đen'} thành công`), 'success');
+      fetchWB();
+    } catch {
+      showToast(t('Error clearing list', 'Lỗi khi xóa danh sách'), 'error');
+    }
+  };
+
   const addWhitelistItem = async () => {
     if (!newWhitelistItem.trim()) return;
+    const check = checkRegex(newWhitelistItem);
+    if (check.isRegex && !check.isValid) {
+      showToast(t('Invalid regex pattern syntax', 'Cú pháp biểu thức Regex bị lỗi'), 'error');
+      return;
+    }
     const updated = [...wbData.whitelist, newWhitelistItem.trim()];
     try {
       await policiesApi.updateWhitelistBlacklist({ whitelist: updated, blacklist: wbData.blacklist });
       setNewWhitelistItem('');
+      showToast(t('Rule added', 'Đã thêm quy tắc thành công'), 'success');
       fetchWB();
-    } catch {}
+    } catch {
+      showToast(t('Error adding rule', 'Lỗi khi thêm quy tắc'), 'error');
+    }
   };
 
   const addBlacklistItem = async () => {
     if (!newBlacklistItem.trim()) return;
+    const check = checkRegex(newBlacklistItem);
+    if (check.isRegex && !check.isValid) {
+      showToast(t('Invalid regex pattern syntax', 'Cú pháp biểu thức Regex bị lỗi'), 'error');
+      return;
+    }
     const updated = [...wbData.blacklist, newBlacklistItem.trim()];
     try {
       await policiesApi.updateWhitelistBlacklist({ whitelist: wbData.whitelist, blacklist: updated });
       setNewBlacklistItem('');
+      showToast(t('Rule added', 'Đã thêm quy tắc thành công'), 'success');
       fetchWB();
-    } catch {}
+    } catch {
+      showToast(t('Error adding rule', 'Lỗi khi thêm quy tắc'), 'error');
+    }
   };
 
   const removeItem = async (list: 'whitelist' | 'blacklist', item: string) => {
@@ -147,8 +272,11 @@ export const Policies: React.FC = () => {
         whitelist: list === 'whitelist' ? updated : wbData.whitelist,
         blacklist: list === 'blacklist' ? updated : wbData.blacklist,
       });
+      showToast(t('Rule removed', 'Đã xóa quy tắc thành công'), 'info');
       fetchWB();
-    } catch {}
+    } catch {
+      showToast(t('Error removing rule', 'Lỗi khi xóa quy tắc'), 'error');
+    }
   };
 
   const runAiScanTest = async () => {
@@ -495,224 +623,428 @@ export const Policies: React.FC = () => {
 
         {activeTab === 'whitelist' && (
           wbLoading ? <LoadingSpinner text={t('Loading whitelist/blacklist...', 'Đang tải danh sách trắng và đen...')} /> : (
-            <div className="whitelist-tab grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Whitelist Card */}
-              <div className="card glass p-6 flex flex-col min-h-[550px] h-[600px] border border-zinc-800 bg-zinc-900/20 backdrop-blur-xl rounded-xl">
-                <div className="flex justify-between items-center mb-4 border-b border-zinc-800/80 pb-3">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                      <Shield size={18} />
-                    </div>
-                    <div>
-                      <h2 className="text-base font-bold text-white leading-tight m-0">{t('Exclude Keywords / Whitelist', 'Từ khóa loại trừ / Danh sách trắng')}</h2>
-                      <p className="text-[11px] text-zinc-500 font-medium m-0 mt-0.5">{t('Safe terms allowed to bypass DLP checks', 'Từ khóa an toàn được bỏ qua quét DLP')}</p>
-                    </div>
+            <div className="flex flex-col gap-6">
+              {/* Stats Banner */}
+              <div className="wb-stats-container">
+                <div className="wb-stat-card whitelist-stat">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                    <Shield size={20} />
                   </div>
-                  <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono">
-                    {wbData.whitelist.length} {t('Rules', 'Quy tắc')}
-                  </span>
-                </div>
-
-                <div className="flex flex-col gap-3 mb-4">
-                  {/* Search bar */}
-                  <div className="relative">
-                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                      <Search size={14} className="text-zinc-500" />
+                  <div>
+                    <span className="text-xs text-zinc-400 block font-medium">{t('Whitelist Rules', 'Danh sách trắng')}</span>
+                    <span className="text-2xl font-extrabold text-white leading-none mt-1 block tracking-tight font-sans">
+                      {wbData.whitelist?.length || 0} <span className="text-xs font-normal text-zinc-500">{t('items', 'mục')}</span>
                     </span>
-                    <input
-                      type="text"
-                      value={whitelistSearch}
-                      onChange={e => setWhitelistSearch(e.target.value)}
-                      placeholder={t('Search whitelist keywords...', 'Tìm kiếm từ khóa danh sách trắng...')}
-                      className="w-full bg-zinc-950 border border-zinc-800 text-white text-xs pl-9 pr-3 py-2 rounded-lg focus:border-emerald-500/40 focus:ring-1 focus:ring-emerald-500/20 transition-all outline-none"
-                    />
-                    {whitelistSearch && (
-                      <button 
-                        onClick={() => setWhitelistSearch('')}
-                        className="absolute inset-y-0 right-0 flex items-center pr-2.5 text-zinc-500 hover:text-zinc-300"
-                      >
-                        <X size={12} />
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Add Input and button */}
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={newWhitelistItem}
-                      onChange={e => setNewWhitelistItem(e.target.value)}
-                      placeholder={t('Add whitelist keyword...', 'Thêm từ khóa danh sách trắng...')}
-                      className="bg-zinc-950 border border-zinc-800 text-white text-xs p-2 rounded-lg flex-1 focus:border-emerald-500/40 focus:ring-1 focus:ring-emerald-500/20 transition-all outline-none"
-                      onKeyDown={e => e.key === 'Enter' && addWhitelistItem()}
-                    />
-                    <button 
-                      className="btn-primary text-xs flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 border border-emerald-500 hover:bg-emerald-500 text-white transition-all cursor-pointer shadow-md shadow-emerald-900/10" 
-                      onClick={addWhitelistItem}
-                    >
-                      <Plus size={14} />
-                      <span>{t('Add', 'Thêm')}</span>
-                    </button>
                   </div>
                 </div>
-
-                {/* Vertical Scrollable List */}
-                <div className="flex-1 overflow-y-auto pr-1 space-y-2 mt-2 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
-                  {filteredWhitelist.map((item, idx) => {
-                    const isRegex = /[\\^$.*+?()[\]{}|]/.test(item);
-                    return (
-                      <div 
-                        key={idx} 
-                        className="flex items-center justify-between p-3 rounded-lg bg-zinc-900/40 border border-zinc-800/80 hover:border-emerald-500/20 hover:bg-zinc-900/80 transition-all duration-200 group"
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-emerald-500/5 text-emerald-400 border border-emerald-500/10 shrink-0">
-                            <CheckCircle size={14} />
-                          </div>
-                          <div className="flex flex-col min-w-0">
-                            <span className="text-xs font-mono font-bold text-zinc-100 select-all leading-tight break-all pr-2">
-                              {item}
-                            </span>
-                            <div className="flex items-center gap-2 mt-1 shrink-0 flex-wrap">
-                              <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider ${isRegex ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' : 'bg-zinc-800/80 text-zinc-400 border border-zinc-700/50'}`}>
-                                {isRegex ? t('Regex Pattern', 'Biểu thức Regex') : t('Exact Keyword', 'Từ khóa cố định')}
-                              </span>
-                              <span className="text-[9px] text-zinc-500 font-semibold">
-                                • {t('Scope: Global', 'Phạm vi: Toàn cục')}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                        
-                        <button
-                          onClick={() => removeItem('whitelist', item)}
-                          className="p-1.5 rounded-md text-zinc-500 hover:text-rose-400 hover:bg-rose-500/5 border border-transparent hover:border-rose-500/10 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all duration-150 shrink-0"
-                          title={t('Delete keyword', 'Xóa từ khóa')}
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    );
-                  })}
-
-                  {filteredWhitelist.length === 0 && (
-                    <div className="flex flex-col items-center justify-center py-16 text-center border border-dashed border-zinc-800 rounded-lg bg-zinc-950/20">
-                      <Shield size={28} className="text-zinc-700 mb-2.5 opacity-40" />
-                      <p className="text-xs text-zinc-500 font-medium px-4">
-                        {newWhitelistItem || whitelistSearch ? t('No matches found', 'Không tìm thấy từ khóa phù hợp') : t('No whitelist keywords configured', 'Chưa cấu hình từ khóa danh sách trắng')}
-                      </p>
-                    </div>
-                  )}
+                <div className="wb-stat-card blacklist-stat">
+                  <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400">
+                    <ShieldAlert size={20} />
+                  </div>
+                  <div>
+                    <span className="text-xs text-zinc-400 block font-medium">{t('Blacklist Rules', 'Danh sách đen')}</span>
+                    <span className="text-2xl font-extrabold text-white leading-none mt-1 block tracking-tight font-sans">
+                      {wbData.blacklist?.length || 0} <span className="text-xs font-normal text-zinc-500">{t('items', 'mục')}</span>
+                    </span>
+                  </div>
+                </div>
+                <div className="wb-stat-card total-stat">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+                    <Sparkles size={20} />
+                  </div>
+                  <div>
+                    <span className="text-xs text-zinc-400 block font-medium">{t('Total Inspected Rules', 'Tổng quy tắc')}</span>
+                    <span className="text-2xl font-extrabold text-white leading-none mt-1 block tracking-tight font-sans">
+                      {(wbData.whitelist?.length || 0) + (wbData.blacklist?.length || 0)} <span className="text-xs font-normal text-zinc-500">{t('items', 'mục')}</span>
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              {/* Blacklist Card */}
-              <div className="card glass p-6 flex flex-col min-h-[550px] h-[600px] border border-zinc-800 bg-zinc-900/20 backdrop-blur-xl rounded-xl">
-                <div className="flex justify-between items-center mb-4 border-b border-zinc-800/80 pb-3">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-rose-500/10 text-rose-400 border border-rose-500/20">
-                      <ShieldAlert size={18} />
+              {/* Lists Split Grid */}
+              <div className="whitelist-tab grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Whitelist Card */}
+                <div className="card glass p-6 flex flex-col min-h-[580px] h-[620px] border border-zinc-800 bg-zinc-900/20 backdrop-blur-xl rounded-xl wb-card-container whitelist-card">
+                  <div className="flex justify-between items-center mb-4 border-b border-zinc-800/80 pb-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        <Shield size={18} />
+                      </div>
+                      <div>
+                        <h2 className="text-base font-bold text-white leading-tight m-0">{t('Exclude Keywords / Whitelist', 'Từ khóa loại trừ / Danh sách trắng')}</h2>
+                        <p className="text-[11px] text-zinc-500 font-medium m-0 mt-0.5">{t('Safe terms allowed to bypass DLP checks', 'Từ khóa an toàn được bỏ qua quét DLP')}</p>
+                      </div>
                     </div>
-                    <div>
-                      <h2 className="text-base font-bold text-white leading-tight m-0">{t('Forbidden Keywords / Blacklist', 'Từ khóa cấm / Danh sách đen')}</h2>
-                      <p className="text-[11px] text-zinc-500 font-medium m-0 mt-0.5">{t('Restricted terms flagged by DLP checks', 'Từ khóa nhạy cảm bị ngăn chặn bởi DLP')}</p>
-                    </div>
-                  </div>
-                  <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20 font-mono">
-                    {wbData.blacklist.length} {t('Rules', 'Quy tắc')}
-                  </span>
-                </div>
-
-                <div className="flex flex-col gap-3 mb-4">
-                  {/* Search bar */}
-                  <div className="relative">
-                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                      <Search size={14} className="text-zinc-500" />
-                    </span>
-                    <input
-                      type="text"
-                      value={blacklistSearch}
-                      onChange={e => setBlacklistSearch(e.target.value)}
-                      placeholder={t('Search blacklist keywords...', 'Tìm kiếm từ khóa danh sách đen...')}
-                      className="w-full bg-zinc-950 border border-zinc-800 text-white text-xs pl-9 pr-3 py-2 rounded-lg focus:border-rose-500/40 focus:ring-1 focus:ring-rose-500/20 transition-all outline-none"
-                    />
-                    {blacklistSearch && (
+                    <div className="flex items-center gap-2">
                       <button 
-                        onClick={() => setBlacklistSearch('')}
-                        className="absolute inset-y-0 right-0 flex items-center pr-2.5 text-zinc-500 hover:text-zinc-300"
+                        onClick={() => toggleImportMode('whitelist')} 
+                        className={`action-icon-btn ${importMode === 'whitelist' ? 'active' : ''}`}
+                        title={t('Bulk Import', 'Nhập hàng loạt')}
                       >
-                        <X size={12} />
+                        <Upload size={14} />
                       </button>
-                    )}
-                  </div>
-
-                  {/* Add Input and button */}
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={newBlacklistItem}
-                      onChange={e => setNewBlacklistItem(e.target.value)}
-                      placeholder={t('Add blacklist keyword...', 'Thêm từ khóa danh sách đen...')}
-                      className="bg-zinc-950 border border-zinc-800 text-white text-xs p-2 rounded-lg flex-1 focus:border-rose-500/40 focus:ring-1 focus:ring-rose-500/20 transition-all outline-none"
-                      onKeyDown={e => e.key === 'Enter' && addBlacklistItem()}
-                    />
-                    <button 
-                      className="btn-primary text-xs flex items-center gap-1.5 px-3 py-2 rounded-lg bg-rose-600 border border-rose-500 hover:bg-rose-500 text-white transition-all cursor-pointer shadow-md shadow-rose-900/10" 
-                      onClick={addBlacklistItem}
-                    >
-                      <Plus size={14} />
-                      <span>{t('Add', 'Thêm')}</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Vertical Scrollable List */}
-                <div className="flex-1 overflow-y-auto pr-1 space-y-2 mt-2 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
-                  {filteredBlacklist.map((item, idx) => {
-                    const isRegex = /[\\^$.*+?()[\]{}|]/.test(item);
-                    return (
-                      <div 
-                        key={idx} 
-                        className="flex items-center justify-between p-3 rounded-lg bg-zinc-900/40 border border-zinc-800/80 hover:border-rose-500/20 hover:bg-zinc-900/80 transition-all duration-200 group"
+                      <button 
+                        onClick={() => handleExport('whitelist')} 
+                        className="action-icon-btn"
+                        title={t('Export List', 'Xuất danh sách')}
                       >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-rose-500/5 text-rose-400 border border-rose-500/10 shrink-0">
-                            <AlertTriangle size={14} />
-                          </div>
-                          <div className="flex flex-col min-w-0">
-                            <span className="text-xs font-mono font-bold text-rose-300 select-all leading-tight break-all pr-2">
-                              {item}
-                            </span>
-                            <div className="flex items-center gap-2 mt-1 shrink-0 flex-wrap">
-                              <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider ${isRegex ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' : 'bg-zinc-800/80 text-zinc-400 border border-zinc-700/50'}`}>
-                                {isRegex ? t('Regex Pattern', 'Biểu thức Regex') : t('Exact Keyword', 'Từ khóa cố định')}
-                              </span>
-                              <span className="text-[9px] text-rose-500 font-semibold">
-                                • {t('Action: Block', 'Hành vi: Chặn')}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                        
-                        <button
-                          onClick={() => removeItem('blacklist', item)}
-                          className="p-1.5 rounded-md text-zinc-500 hover:text-rose-400 hover:bg-rose-500/5 border border-transparent hover:border-rose-500/10 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all duration-150 shrink-0"
-                          title={t('Delete keyword', 'Xóa từ khóa')}
-                        >
-                          <Trash2 size={13} />
+                        <Download size={14} />
+                      </button>
+                      <button 
+                        onClick={() => handleClearAll('whitelist')} 
+                        className="action-icon-btn hover:text-rose-400 hover:border-rose-500/30"
+                        title={t('Clear All', 'Xóa tất cả')}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                      <span className="ml-1 px-2.5 py-1 text-xs font-semibold rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono">
+                        {wbData.whitelist?.length || 0}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Bulk Import Panel for Whitelist */}
+                  {importMode === 'whitelist' && (
+                    <div className="utility-panel mb-4">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-xs font-bold text-emerald-400">{t('Bulk Import Whitelist', 'Nhập danh sách trắng hàng loạt')}</span>
+                        <button onClick={() => setImportMode('none')} className="text-zinc-500 hover:text-zinc-300">
+                          <X size={14} />
                         </button>
                       </div>
-                    );
-                  })}
-
-                  {filteredBlacklist.length === 0 && (
-                    <div className="flex flex-col items-center justify-center py-16 text-center border border-dashed border-zinc-800 rounded-lg bg-zinc-950/20">
-                      <ShieldAlert size={28} className="text-zinc-700 mb-2.5 opacity-40" />
-                      <p className="text-xs text-zinc-500 font-medium px-4">
-                        {newBlacklistItem || blacklistSearch ? t('No matches found', 'Không tìm thấy từ khóa phù hợp') : t('No blacklist keywords configured', 'Chưa cấu hình từ khóa danh sách đen')}
+                      <p className="text-[10px] text-zinc-500 mb-2">
+                        {t('Enter keywords or regex patterns, separated by commas or newlines.', 'Nhập các từ khóa hoặc biểu thức Regex, phân tách bằng dấu phẩy hoặc xuống dòng.')}
                       </p>
+                      <textarea
+                        value={bulkInput}
+                        onChange={e => setBulkInput(e.target.value)}
+                        placeholder="keyword1, keyword2, ^regex3.*"
+                        className="utility-textarea mb-2"
+                      />
+                      <div className="flex justify-end gap-2">
+                        <button onClick={() => setImportMode('none')} className="btn-secondary text-[10px] px-2.5 py-1">
+                          {t('Cancel', 'Hủy')}
+                        </button>
+                        <button onClick={() => handleBulkImport('whitelist')} className="btn-primary text-[10px] px-2.5 py-1 bg-emerald-600 border-emerald-500 hover:bg-emerald-500">
+                          {t('Import', 'Nhập')}
+                        </button>
+                      </div>
                     </div>
                   )}
+
+                  <div className="flex flex-col gap-3 mb-4">
+                    {/* Search bar */}
+                    <div className="relative flex items-center">
+                      <span className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-zinc-500 z-10">
+                        <Search size={14} />
+                      </span>
+                      <input
+                        type="text"
+                        value={whitelistSearch}
+                        onChange={e => setWhitelistSearch(e.target.value)}
+                        placeholder={t('Search whitelist keywords...', 'Tìm kiếm từ khóa danh sách trắng...')}
+                        className="w-full bg-zinc-950 border border-zinc-800 text-white text-xs py-2.5 rounded-xl focus:border-emerald-500/40 focus:ring-1 focus:ring-emerald-500/20 transition-all outline-none wb-glass-input wb-search-input"
+                      />
+                      {whitelistSearch && (
+                        <button 
+                          onClick={() => setWhitelistSearch('')}
+                          className="absolute inset-y-0 right-3 flex items-center text-zinc-500 hover:text-zinc-300 z-10"
+                        >
+                          <X size={12} />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Add Input and button */}
+                    <div className="flex flex-col gap-1">
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={newWhitelistItem}
+                          onChange={e => setNewWhitelistItem(e.target.value)}
+                          placeholder={t('Add whitelist keyword...', 'Thêm từ khóa danh sách trắng...')}
+                          className="bg-zinc-950 border border-zinc-800 text-white text-xs py-2.5 px-3.5 rounded-xl flex-1 focus:border-emerald-500/40 focus:ring-1 focus:ring-emerald-500/20 transition-all outline-none wb-glass-input"
+                          onKeyDown={e => e.key === 'Enter' && addWhitelistItem()}
+                        />
+                        <button 
+                          className="btn-primary text-xs flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-600 border border-emerald-500 hover:bg-emerald-500 text-white transition-all cursor-pointer shadow-md shadow-emerald-900/10" 
+                          onClick={addWhitelistItem}
+                          disabled={!newWhitelistItem.trim() || (checkRegex(newWhitelistItem).isRegex && !checkRegex(newWhitelistItem).isValid)}
+                        >
+                          <Plus size={14} />
+                          <span>{t('Add', 'Thêm')}</span>
+                        </button>
+                      </div>
+                      
+                      {/* Regex live validation display */}
+                      {newWhitelistItem && checkRegex(newWhitelistItem).isRegex && (
+                        <div className={`validation-badge ${checkRegex(newWhitelistItem).isValid ? 'valid' : 'invalid'}`}>
+                          {checkRegex(newWhitelistItem).isValid ? (
+                            <><CheckCircle size={10} /> {t('Valid Regex Pattern', 'Biểu thức Regex hợp lệ')}</>
+                          ) : (
+                            <><AlertCircle size={10} /> {t('Invalid Regex Syntax: ', 'Lỗi cú pháp Regex: ') + checkRegex(newWhitelistItem).error}</>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Vertical Scrollable List */}
+                  <div className="flex-1 overflow-y-auto pr-1 space-y-2 mt-2 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent wb-rules-list">
+                    {filteredWhitelist.map((item, idx) => {
+                      const category = getAutoClassification(item);
+                      let badgeClass = 'tag-keyword';
+                      let badgeText = t('Keyword', 'Từ khóa');
+                      if (category === 'regex') {
+                        badgeClass = 'tag-regex';
+                        badgeText = t('Regex', 'Biểu thức');
+                      } else if (category === 'email') {
+                        badgeClass = 'tag-email';
+                        badgeText = 'Email';
+                      } else if (category === 'ip') {
+                        badgeClass = 'tag-ip';
+                        badgeText = 'IP Address';
+                      } else if (category === 'db') {
+                        badgeClass = 'tag-db';
+                        badgeText = 'Database';
+                      }
+                      
+                      return (
+                        <div 
+                          key={idx} 
+                          className="flex items-center justify-between p-3.5 rounded-xl group rule-entry-row"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0 shadow-sm shadow-emerald-500/5 transition-all duration-300 group-hover:bg-emerald-500/20 group-hover:border-emerald-500/30">
+                              <CheckCircle size={14} />
+                            </div>
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-[13px] font-mono font-semibold text-zinc-200 select-all leading-relaxed break-all pr-2 group-hover:text-white transition-colors duration-200">
+                                {item}
+                              </span>
+                              <div className="flex items-center gap-2 mt-1.5 shrink-0 flex-wrap">
+                                <span className={`cat-tag ${badgeClass}`}>
+                                  {badgeText}
+                                </span>
+                                <span className="text-[10px] text-zinc-500 font-medium group-hover:text-zinc-400 transition-colors duration-200">
+                                  • {t('Scope: Global', 'Phạm vi: Toàn cục')}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <button
+                            onClick={() => removeItem('whitelist', item)}
+                            className="wb-delete-btn opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all duration-150 shrink-0"
+                            title={t('Delete keyword', 'Xóa từ khóa')}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      );
+                    })}
+
+                    {filteredWhitelist.length === 0 && (
+                      <div className="flex flex-col items-center justify-center py-16 text-center border border-dashed border-zinc-800 rounded-lg bg-zinc-950/20">
+                        <Shield size={28} className="text-zinc-700 mb-2.5 opacity-40" />
+                        <p className="text-xs text-zinc-500 font-medium px-4">
+                          {newWhitelistItem || whitelistSearch ? t('No matches found', 'Không tìm thấy từ khóa phù hợp') : t('No whitelist keywords configured', 'Chưa cấu hình từ khóa danh sách trắng')}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Blacklist Card */}
+                <div className="card glass p-6 flex flex-col min-h-[580px] h-[620px] border border-zinc-800 bg-zinc-900/20 backdrop-blur-xl rounded-xl wb-card-container blacklist-card">
+                  <div className="flex justify-between items-center mb-4 border-b border-zinc-800/80 pb-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                        <ShieldAlert size={18} />
+                      </div>
+                      <div>
+                        <h2 className="text-base font-bold text-white leading-tight m-0">{t('Forbidden Keywords / Blacklist', 'Từ khóa cấm / Danh sách đen')}</h2>
+                        <p className="text-[11px] text-zinc-500 font-medium m-0 mt-0.5">{t('Restricted terms flagged by DLP checks', 'Từ khóa nhạy cảm bị ngăn chặn bởi DLP')}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button 
+                        onClick={() => toggleImportMode('blacklist')} 
+                        className={`action-icon-btn ${importMode === 'blacklist' ? 'active' : ''}`}
+                        title={t('Bulk Import', 'Nhập hàng loạt')}
+                      >
+                        <Upload size={14} />
+                      </button>
+                      <button 
+                        onClick={() => handleExport('blacklist')} 
+                        className="action-icon-btn"
+                        title={t('Export List', 'Xuất danh sách')}
+                      >
+                        <Download size={14} />
+                      </button>
+                      <button 
+                        onClick={() => handleClearAll('blacklist')} 
+                        className="action-icon-btn hover:text-rose-400 hover:border-rose-500/30"
+                        title={t('Clear All', 'Xóa tất cả')}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                      <span className="ml-1 px-2.5 py-1 text-xs font-semibold rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20 font-mono">
+                        {wbData.blacklist?.length || 0}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Bulk Import Panel for Blacklist */}
+                  {importMode === 'blacklist' && (
+                    <div className="utility-panel mb-4">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-xs font-bold text-rose-400">{t('Bulk Import Blacklist', 'Nhập danh sách đen hàng loạt')}</span>
+                        <button onClick={() => setImportMode('none')} className="text-zinc-500 hover:text-zinc-300">
+                          <X size={14} />
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-zinc-500 mb-2">
+                        {t('Enter keywords or regex patterns, separated by commas or newlines.', 'Nhập các từ khóa hoặc biểu thức Regex, phân tách bằng dấu phẩy hoặc xuống dòng.')}
+                      </p>
+                      <textarea
+                        value={bulkInput}
+                        onChange={e => setBulkInput(e.target.value)}
+                        placeholder="keyword1, keyword2, ^regex3.*"
+                        className="utility-textarea mb-2"
+                      />
+                      <div className="flex justify-end gap-2">
+                        <button onClick={() => setImportMode('none')} className="btn-secondary text-[10px] px-2.5 py-1">
+                          {t('Cancel', 'Hủy')}
+                        </button>
+                        <button onClick={() => handleBulkImport('blacklist')} className="btn-primary text-[10px] px-2.5 py-1 bg-rose-600 border-rose-500 hover:bg-rose-500">
+                          {t('Import', 'Nhập')}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex flex-col gap-3 mb-4">
+                    {/* Search bar */}
+                    <div className="relative flex items-center">
+                      <span className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-zinc-500 z-10">
+                        <Search size={14} />
+                      </span>
+                      <input
+                        type="text"
+                        value={blacklistSearch}
+                        onChange={e => setBlacklistSearch(e.target.value)}
+                        placeholder={t('Search blacklist keywords...', 'Tìm kiếm từ khóa danh sách đen...')}
+                        className="w-full bg-zinc-950 border border-zinc-800 text-white text-xs py-2.5 rounded-xl focus:border-rose-500/40 focus:ring-1 focus:ring-rose-500/20 transition-all outline-none wb-glass-input wb-search-input"
+                      />
+                      {blacklistSearch && (
+                        <button 
+                          onClick={() => setBlacklistSearch('')}
+                          className="absolute inset-y-0 right-3 flex items-center text-zinc-500 hover:text-zinc-300 z-10"
+                        >
+                          <X size={12} />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Add Input and button */}
+                    <div className="flex flex-col gap-1">
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={newBlacklistItem}
+                          onChange={e => setNewBlacklistItem(e.target.value)}
+                          placeholder={t('Add blacklist keyword...', 'Thêm từ khóa danh sách đen...')}
+                          className="bg-zinc-950 border border-zinc-800 text-white text-xs py-2.5 px-3.5 rounded-xl flex-1 focus:border-rose-500/40 focus:ring-1 focus:ring-rose-500/20 transition-all outline-none wb-glass-input"
+                          onKeyDown={e => e.key === 'Enter' && addBlacklistItem()}
+                        />
+                        <button 
+                          className="btn-primary text-xs flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-rose-600 border border-rose-500 hover:bg-rose-500 text-white transition-all cursor-pointer shadow-md shadow-rose-900/10" 
+                          onClick={addBlacklistItem}
+                          disabled={!newBlacklistItem.trim() || (checkRegex(newBlacklistItem).isRegex && !checkRegex(newBlacklistItem).isValid)}
+                        >
+                          <Plus size={14} />
+                          <span>{t('Add', 'Thêm')}</span>
+                        </button>
+                      </div>
+                      
+                      {/* Regex live validation display */}
+                      {newBlacklistItem && checkRegex(newBlacklistItem).isRegex && (
+                        <div className={`validation-badge ${checkRegex(newBlacklistItem).isValid ? 'valid' : 'invalid'}`}>
+                          {checkRegex(newBlacklistItem).isValid ? (
+                            <><CheckCircle size={10} /> {t('Valid Regex Pattern', 'Biểu thức Regex hợp lệ')}</>
+                          ) : (
+                            <><AlertCircle size={10} /> {t('Invalid Regex Syntax: ', 'Lỗi cú pháp Regex: ') + checkRegex(newBlacklistItem).error}</>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Vertical Scrollable List */}
+                  <div className="flex-1 overflow-y-auto pr-1 space-y-2 mt-2 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent wb-rules-list">
+                    {filteredBlacklist.map((item, idx) => {
+                      const category = getAutoClassification(item);
+                      let badgeClass = 'tag-keyword';
+                      let badgeText = t('Keyword', 'Từ khóa');
+                      if (category === 'regex') {
+                        badgeClass = 'tag-regex';
+                        badgeText = t('Regex', 'Biểu thức');
+                      } else if (category === 'email') {
+                        badgeClass = 'tag-email';
+                        badgeText = 'Email';
+                      } else if (category === 'ip') {
+                        badgeClass = 'tag-ip';
+                        badgeText = 'IP Address';
+                      } else if (category === 'db') {
+                        badgeClass = 'tag-db';
+                        badgeText = 'Database';
+                      }
+                      
+                      return (
+                        <div 
+                          key={idx} 
+                          className="flex items-center justify-between p-3.5 rounded-xl group rule-entry-row"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-rose-500/10 text-rose-400 border border-rose-500/20 shrink-0 shadow-sm shadow-rose-500/5 transition-all duration-300 group-hover:bg-rose-500/20 group-hover:border-rose-500/30">
+                              <AlertTriangle size={14} />
+                            </div>
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-[13px] font-mono font-semibold text-rose-300 select-all leading-relaxed break-all pr-2 group-hover:text-rose-200 transition-colors duration-200">
+                                {item}
+                              </span>
+                              <div className="flex items-center gap-2 mt-1.5 shrink-0 flex-wrap">
+                                <span className={`cat-tag ${badgeClass}`}>
+                                  {badgeText}
+                                </span>
+                                <span className="text-[10px] text-rose-500/60 font-medium group-hover:text-rose-500/80 transition-colors duration-200">
+                                  • {t('Action: Block', 'Hành vi: Chặn')}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <button
+                            onClick={() => removeItem('blacklist', item)}
+                            className="wb-delete-btn opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all duration-150 shrink-0"
+                            title={t('Delete keyword', 'Xóa từ khóa')}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      );
+                    })}
+
+                    {filteredBlacklist.length === 0 && (
+                      <div className="flex flex-col items-center justify-center py-16 text-center border border-dashed border-zinc-800 rounded-lg bg-zinc-950/20">
+                        <ShieldAlert size={28} className="text-zinc-700 mb-2.5 opacity-40" />
+                        <p className="text-xs text-zinc-500 font-medium px-4">
+                          {newBlacklistItem || blacklistSearch ? t('No matches found', 'Không tìm thấy từ khóa phù hợp') : t('No blacklist keywords configured', 'Chưa cấu hình từ khóa danh sách đen')}
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -785,6 +1117,16 @@ export const Policies: React.FC = () => {
           )
         )}
       </div>
+      {toast && (
+        <div className={`inline-toast ${toast.type}`}>
+          <div className="flex items-center gap-2">
+            {toast.type === 'success' && <CheckCircle size={16} className="text-emerald-400" />}
+            {toast.type === 'info' && <Shield size={16} className="text-indigo-400" />}
+            {toast.type === 'error' && <AlertTriangle size={16} className="text-rose-400" />}
+            <span>{toast.message}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

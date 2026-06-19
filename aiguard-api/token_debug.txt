@@ -123,3 +123,8 @@ Computed Hash: ca54bd049c7665f18a8730dcd092288d13b79c53c46146d40835ac510bb10596
 Received Raw: [TOKEN_TREN_WEB]
 Computed Hash: ca54bd049c7665f18a8730dcd092288d13b79c53c46146d40835ac510bb10596
 ---
+
+[06/19/2026 9:44:30 AM] FAILED TOKEN:
+Received Raw: [invalid-token]
+Computed Hash: 644d0c3b82bfe5e0665a116b2eb139d6abd6c9083ede0891237b1723e0010a14
+---

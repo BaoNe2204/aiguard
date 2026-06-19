@@ -172,6 +172,24 @@ public sealed class EndpointApiClient
         public string EndpointKey { get; set; } = "";
         public string PolicyVersion { get; set; } = "";
     }
+
+    public async Task<List<TokenUserDto>> GetTokenUsersAsync(string apiUrl, string token, CancellationToken cancellationToken)
+    {
+        using var client = new HttpClient { BaseAddress = new Uri(apiUrl.TrimEnd('/')) };
+        var response = await client.GetAsync($"/api/endpoints/deployment/token-users?token={Uri.EscapeDataString(token)}", cancellationToken);
+        response.EnsureSuccessStatusCode();
+        var envelope = await JsonSerializer.DeserializeAsync<ApiEnvelope<List<TokenUserDto>>>(
+            await response.Content.ReadAsStreamAsync(cancellationToken),
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true },
+            cancellationToken);
+        return envelope?.Data ?? new List<TokenUserDto>();
+    }
+}
+
+public sealed class TokenUserDto
+{
+    public string Email { get; set; } = "";
+    public string DepartmentName { get; set; } = "";
 }
 
 public sealed record EndpointSyncResult(

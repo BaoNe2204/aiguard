@@ -31,6 +31,16 @@ public class DeploymentController : ControllerBase
         return Ok(ApiResponse<DeploymentTokenResponse>.Ok(response, "Token rotated"));
     }
 
+    /// <summary>Get list of employees (email & department) for a valid enrollment token</summary>
+    [HttpGet("token-users")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetTokenUsers([FromQuery] string token)
+    {
+        var users = await _deploymentService.GetTokenUsersAsync(token);
+        if (users == null) return BadRequest(ApiResponse<object>.Fail("Invalid or expired enrollment token"));
+        return Ok(ApiResponse<List<TokenUserDto>>.Ok(users));
+    }
+
     [HttpPost("enroll")]
     [AllowAnonymous]
     public async Task<IActionResult> Enroll([FromBody] EnrollDeviceRequest request)

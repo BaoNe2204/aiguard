@@ -40,7 +40,7 @@ async function loadStatus() {
     setProtectionState(
       "error",
       "Chưa đăng ký",
-      status.lastEnrollmentError || "Mở cấu hình và nhập enrollment token."
+      status.lastEnrollmentError || "Mở cấu hình và nhập key đăng ký."
     );
   } else if (!status.enabled) {
     setProtectionState("disabled", "Bảo vệ đang tắt", "Prompt và file sẽ không được quét.");

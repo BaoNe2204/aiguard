@@ -22,6 +22,7 @@ public sealed class AgentGuiForm : Form
     private readonly AgentStateStore _store = new();
     private readonly EndpointApiClient _api;
     private readonly EndpointTelemetryCollector _telemetry = new();
+    private List<TokenUserDto> _tokenUsers = new();
     
     // UI Controls
     private Label _lblStatusLight = null!;
@@ -31,11 +32,12 @@ public sealed class AgentGuiForm : Form
     private Label _lblPolicyValue = null!;
     private Label _lblLastSeenValue = null!;
 
-    private TextBox _txtQuickPaste = null!;
     private TextBox _txtApiUrl = null!;
     private TextBox _txtToken = null!;
-    private TextBox _txtEmail = null!;
+    private ComboBox _txtEmail = null!;
     private TextBox _txtDepartment = null!;
+    private Label _lblApiUrl = null!;
+    private Label _lblDepartment = null!;
 
     private Button _btnEnroll = null!;
     private Button _btnSync = null!;
@@ -162,35 +164,35 @@ public sealed class AgentGuiForm : Form
         grpStatus.Controls.Add(_lblStatusText);
 
         // Configuration Card inside Left Container
-        var grpConfig = CreateSectionGroup("Configuration Settings", 15, 205, 360, 395, panelLeft);
+        var grpConfig = CreateSectionGroup("Configuration Settings", 15, 205, 360, 355, panelLeft);
 
-        CreateLabel("Quick Setup Paste (Dán nhanh lệnh):", 15, 30, grpConfig);
-        _txtQuickPaste = CreateTextBox("", 15, 50, 330, grpConfig);
-        _txtQuickPaste.TextChanged += OnQuickPasteChanged;
+        _lblApiUrl = CreateLabel("API Base URL:", 15, 30, grpConfig);
+        _txtApiUrl = CreateTextBox("http://127.0.0.1:5185", 15, 50, 330, grpConfig);
 
-        CreateLabel("API Base URL:", 15, 90, grpConfig);
-        _txtApiUrl = CreateTextBox("http://127.0.0.1:5185", 15, 110, 330, grpConfig);
+        CreateLabel("Enrollment Token:", 15, 100, grpConfig);
+        _txtToken = CreateTextBox("", 15, 120, 330, grpConfig);
+        _txtToken.TextChanged += OnTokenTextChanged;
 
-        CreateLabel("Enrollment Token:", 15, 150, grpConfig);
-        _txtToken = CreateTextBox("", 15, 170, 330, grpConfig);
+        CreateLabel("User Email:", 15, 170, grpConfig);
+        _txtEmail = CreateComboBox("", 15, 190, 330, grpConfig);
+        _txtEmail.TextChanged += OnEmailTextChanged;
 
-        CreateLabel("User Email:", 15, 210, grpConfig);
-        _txtEmail = CreateTextBox("", 15, 230, 160, grpConfig);
-
-        CreateLabel("Department:", 190, 210, grpConfig);
-        _txtDepartment = CreateTextBox("", 190, 230, 155, grpConfig);
+        _lblDepartment = CreateLabel("Department:", 15, 240, grpConfig);
+        _txtDepartment = CreateTextBox("", 15, 260, 330, grpConfig);
+        _txtDepartment.ReadOnly = true;
+        _txtDepartment.Visible = false;
 
         // Action Buttons inside Config Card
-        _btnEnroll = CreateStyledButton("Save & Register Device", 15, 285, 330, 35, ColorAccent, ColorText, grpConfig);
+        _btnEnroll = CreateStyledButton("Save & Register Device", 15, 305, 330, 35, ColorAccent, ColorText, grpConfig);
         _btnEnroll.Click += OnEnrollClick;
 
-        _btnSync = CreateStyledButton("Sync Policy Now", 15, 335, 105, 32, ColorCard, ColorText, grpConfig);
+        _btnSync = CreateStyledButton("Sync Policy Now", 15, 355, 105, 32, ColorCard, ColorText, grpConfig);
         _btnSync.Click += OnSyncClick;
 
-        _btnTelemetry = CreateStyledButton("Send Telemetry", 127, 335, 105, 32, ColorCard, ColorText, grpConfig);
+        _btnTelemetry = CreateStyledButton("Send Telemetry", 127, 355, 105, 32, ColorCard, ColorText, grpConfig);
         _btnTelemetry.Click += OnTelemetryClick;
 
-        _btnReset = CreateStyledButton("Clear State", 239, 335, 106, 32, ColorCard, ColorRed, grpConfig);
+        _btnReset = CreateStyledButton("Clear State", 239, 355, 106, 32, ColorCard, ColorRed, grpConfig);
         _btnReset.Click += OnResetClick;
 
         // Terminal Log inside Right Container
@@ -274,7 +276,7 @@ public sealed class AgentGuiForm : Form
         return container;
     }
 
-    private void CreateLabel(string text, int x, int y, Control parent)
+    private Label CreateLabel(string text, int x, int y, Control parent)
     {
         var label = new Label
         {
@@ -285,6 +287,7 @@ public sealed class AgentGuiForm : Form
             Font = new Font("Segoe UI", 9F, FontStyle.Bold)
         };
         parent.Controls.Add(label);
+        return label;
     }
 
     private Label CreateValueLabel(string text, int x, int y, Control parent)
@@ -318,6 +321,22 @@ public sealed class AgentGuiForm : Form
         return tb;
     }
 
+    private ComboBox CreateComboBox(string text, int x, int y, int width, Control parent)
+    {
+        var cb = new ComboBox
+        {
+            Text = text,
+            Location = new Point(x, y),
+            Width = width,
+            BackColor = ColorTerminal,
+            ForeColor = ColorText,
+            FlatStyle = FlatStyle.Flat,
+            Font = new Font("Segoe UI", 9.5F, FontStyle.Regular)
+        };
+        parent.Controls.Add(cb);
+        return cb;
+    }
+
     private Button CreateStyledButton(string text, int x, int y, int width, int height, Color backColor, Color foreColor, Control parent)
     {
         var btn = new Button
@@ -339,6 +358,10 @@ public sealed class AgentGuiForm : Form
     private async void OnFormLoad(object? sender, EventArgs e)
     {
         Log("AIGuard Endpoint Agent GUI Console started.", ColorGreen);
+        _txtApiUrl.Visible = false;
+        _lblApiUrl.Visible = false;
+        _lblDepartment.Visible = false;
+        _txtDepartment.Visible = false;
         LoadConfigData();
         await SyncStatusAsync();
         _syncTimer.Start();
@@ -441,55 +464,90 @@ public sealed class AgentGuiForm : Form
         _txtLog.ScrollToCaret();
     }
 
-    private void OnQuickPasteChanged(object? sender, EventArgs e)
+    private async void OnTokenTextChanged(object? sender, EventArgs e)
     {
-        var text = _txtQuickPaste.Text.Trim();
-        if (string.IsNullOrWhiteSpace(text)) return;
-
-        var api = ExtractParam(text, "--api");
-        var token = ExtractParam(text, "--token");
-        var dept = ExtractParam(text, "--department");
-
-        if (!string.IsNullOrEmpty(api)) _txtApiUrl.Text = api;
-        if (!string.IsNullOrEmpty(token)) _txtToken.Text = token;
-        if (!string.IsNullOrEmpty(dept)) _txtDepartment.Text = dept;
-
-        // Force clear user email to require manual input
-        _txtEmail.Text = "";
-        _txtEmail.Focus();
-
-        Log("Quick Setup: Parsed parameters from pasted command. Email cleared for manual entry.", ColorAccent);
+        await RefreshTokenUsersAsync();
     }
 
-    private string? ExtractParam(string text, string paramName)
+    private void OnEmailTextChanged(object? sender, EventArgs e)
     {
-        var index = text.IndexOf(paramName, StringComparison.OrdinalIgnoreCase);
-        if (index < 0) return null;
+        var email = _txtEmail.Text.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(email)) return;
 
-        var start = index + paramName.Length;
-        while (start < text.Length && (char.IsWhiteSpace(text[start]) || text[start] == '='))
+        var matchingUser = _tokenUsers.Find(u => u.Email.Trim().ToLowerInvariant() == email);
+        if (matchingUser != null && !string.IsNullOrWhiteSpace(matchingUser.DepartmentName))
         {
-            start++;
+            _txtDepartment.Text = matchingUser.DepartmentName;
+            Log($"Auto-selected department: {matchingUser.DepartmentName} for email {matchingUser.Email}", ColorGreen);
         }
+    }
 
-        if (start >= text.Length) return null;
-
-        if (text[start] == '"' || text[start] == '\'')
+    private async Task RefreshTokenUsersAsync()
+    {
+        var token = _txtToken.Text.Trim();
+        var api = _txtApiUrl.Text.Trim();
+        if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(api))
         {
-            var quote = text[start];
-            start++;
-            var end = text.IndexOf(quote, start);
-            if (end < 0) return text[start..].Trim();
-            return text[start..end];
-        }
-        else
-        {
-            var end = start;
-            while (end < text.Length && !char.IsWhiteSpace(text[end]))
+            _tokenUsers = new List<TokenUserDto>();
+            if (this.InvokeRequired)
             {
-                end++;
+                this.BeginInvoke(new Action(() =>
+                {
+                    _txtEmail.Items.Clear();
+                }));
             }
-            return text[start..end];
+            else
+            {
+                _txtEmail.Items.Clear();
+            }
+            return;
+        }
+
+        try
+        {
+            var users = await Task.Run(() => _api.GetTokenUsersAsync(api, token, CancellationToken.None));
+            _tokenUsers = users ?? new List<TokenUserDto>();
+
+            if (this.InvokeRequired)
+            {
+                this.BeginInvoke(new Action(() =>
+                {
+                    _txtEmail.Items.Clear();
+                    _txtEmail.DropDownStyle = ComboBoxStyle.DropDown;
+                    foreach (var user in _tokenUsers)
+                    {
+                        if (!string.IsNullOrWhiteSpace(user.Email))
+                            _txtEmail.Items.Add(user.Email);
+                    }
+                    _txtEmail.AutoCompleteMode = AutoCompleteMode.SuggestAppend;
+                    _txtEmail.AutoCompleteSource = AutoCompleteSource.ListItems;
+                    if (_tokenUsers.Count > 0)
+                    {
+                        Log($"Successfully loaded {_tokenUsers.Count} active user(s) from key. Choose your email from the list.", ColorGreen);
+                    }
+                }));
+            }
+            else
+            {
+                _txtEmail.Items.Clear();
+                _txtEmail.DropDownStyle = ComboBoxStyle.DropDown;
+                foreach (var user in _tokenUsers)
+                {
+                    if (!string.IsNullOrWhiteSpace(user.Email))
+                        _txtEmail.Items.Add(user.Email);
+                }
+                _txtEmail.AutoCompleteMode = AutoCompleteMode.SuggestAppend;
+                _txtEmail.AutoCompleteSource = AutoCompleteSource.ListItems;
+                if (_tokenUsers.Count > 0)
+                {
+                    Log($"Successfully loaded {_tokenUsers.Count} active user(s) from key. Choose your email from the list.", ColorGreen);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log($"Could not load user list from key: {ex.Message}", ColorMuted);
+            _tokenUsers = new List<TokenUserDto>();
         }
     }
 
@@ -520,10 +578,10 @@ public sealed class AgentGuiForm : Form
         {
             var config = new AgentConfig
             {
-                ApiBaseUrl = _txtApiUrl.Text.Trim(),
+                ApiBaseUrl = string.IsNullOrWhiteSpace(_txtApiUrl.Text.Trim()) ? "http://127.0.0.1:5185" : _txtApiUrl.Text.Trim(),
                 EnrollmentToken = _txtToken.Text.Trim(),
                 UserEmail = _txtEmail.Text.Trim(),
-                DepartmentName = _txtDepartment.Text.Trim(),
+                DepartmentName = string.IsNullOrWhiteSpace(_txtDepartment.Text.Trim()) ? "Default" : _txtDepartment.Text.Trim(),
                 HeartbeatSeconds = 30,
                 EnableAiCodeAppProtection = true,
                 EnableProcessKill = true

@@ -43,7 +43,7 @@ public class TenantBusinessController : ControllerBase
         Ok(ApiResponse<TenantSettingsResponse>.Ok(await _business.GetSettingsAsync(null)));
 
     [HttpPut("settings")]
-    [Authorize(Roles = "TenantOwner")]
+    [Authorize(Roles = "TenantOwner,SecurityAdmin,PlatformAdmin")]
     public async Task<IActionResult> UpdateSettings([FromBody] TenantSettingsRequest request) =>
         Ok(ApiResponse<TenantSettingsResponse>.Ok(await _business.UpdateSettingsAsync(null, request)));
 
@@ -52,20 +52,20 @@ public class TenantBusinessController : ControllerBase
         Ok(ApiResponse<List<ContactResponse>>.Ok(await _business.GetContactsAsync(null)));
 
     [HttpPost("contacts")]
-    [Authorize(Roles = "TenantOwner")]
+    [Authorize(Roles = "TenantOwner,SecurityAdmin,PlatformAdmin")]
     public async Task<IActionResult> CreateContact([FromBody] ContactRequest request) =>
         StatusCode(StatusCodes.Status201Created,
             ApiResponse<ContactResponse>.Ok(await _business.CreateContactAsync(null, request)));
 
     [HttpPut("contacts/{id:guid}")]
-    [Authorize(Roles = "TenantOwner")]
+    [Authorize(Roles = "TenantOwner,SecurityAdmin,PlatformAdmin")]
     public async Task<IActionResult> UpdateContact(Guid id, [FromBody] ContactRequest request) =>
         await _business.UpdateContactAsync(id, null, request) is { } result
             ? Ok(ApiResponse<ContactResponse>.Ok(result))
             : NotFound(ApiResponse<object>.Fail("Contact not found."));
 
     [HttpDelete("contacts/{id:guid}")]
-    [Authorize(Roles = "TenantOwner")]
+    [Authorize(Roles = "TenantOwner,SecurityAdmin,PlatformAdmin")]
     public async Task<IActionResult> DeleteContact(Guid id) =>
         await _business.DeleteContactAsync(id)
             ? Ok(ApiResponse<object>.Ok(new { deleted = true }))

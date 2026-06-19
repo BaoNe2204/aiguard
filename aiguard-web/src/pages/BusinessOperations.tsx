@@ -141,7 +141,7 @@ export const BusinessOperations: React.FC = () => {
   const view = businessViews[activeView];
   const isPlatformAdmin = user?.role === 'PlatformAdmin';
   const isTenantOwner = user?.role === 'TenantOwner';
-  const canUseCompanySettings = isTenantOwner || user?.role === 'SecurityAdmin';
+  const canUseCompanySettings = isTenantOwner || user?.role === 'SecurityAdmin' || isPlatformAdmin;
   const mountedRef = useRef(true);
 
   useEffect(() => () => {
@@ -308,7 +308,7 @@ export const BusinessOperations: React.FC = () => {
         canUseCompanySettings ? (
           <CompanySettingsView
             tenant={tenant} settings={settings} contacts={contacts}
-            canEdit={isTenantOwner} onReload={loadData} onError={setError} onMessage={setMessage}
+            canEdit={isTenantOwner || user?.role === 'SecurityAdmin' || isPlatformAdmin} onReload={loadData} onError={setError} onMessage={setMessage}
           />
         ) : (
           <div className="card glass p-8 text-center text-gray-400">
@@ -1068,6 +1068,19 @@ const SupportView: React.FC<{ tickets: TicketResponse[]; isPlatformAdmin: boolea
 // ====== ONBOARDING CHECKLIST ======
 const OnboardingChecklistView: React.FC = () => {
   const { user } = useAuth();
+  const getSetupValue = (value?: string) => {
+    if (!value) return '';
+    let res = value;
+    if (user?.email) {
+      res = res.replace(/<employee@company\.com>/g, user.email);
+    }
+    if (user?.departmentName) {
+      res = res.replace(/<department>/g, user.departmentName);
+    } else {
+      res = res.replace(/<department>/g, 'Default');
+    }
+    return res;
+  };
   const isPlatformAdmin = user?.role === 'PlatformAdmin';
   const [onboardingList, setOnboardingList] = useState<OnboardingResponse[]>([]);
   const [selectedTenant, setSelectedTenant] = useState<string>('');
@@ -1340,10 +1353,10 @@ const OnboardingChecklistView: React.FC = () => {
                 <div className="token-box mb-4">
                   <div>
                     <span>Lệnh PowerShell cài đặt Agent</span>
-                    <code style={{ fontSize: '11px' }}>{tokenInfo.installCommand}</code>
+                    <code style={{ fontSize: '11px' }}>{getSetupValue(tokenInfo.installCommand)}</code>
                   </div>
                   <button className="btn-secondary p-2 min-h-[36px] flex items-center justify-center"
-                    onClick={() => handleCopy(tokenInfo.installCommand)}>
+                    onClick={() => handleCopy(getSetupValue(tokenInfo.installCommand))}>
                     <Copy size={14} />
                   </button>
                 </div>

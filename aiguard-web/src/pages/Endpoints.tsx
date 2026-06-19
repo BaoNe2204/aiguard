@@ -19,6 +19,7 @@ import {
 import { policiesApi, type SecurityPolicyResponse } from '../api/policies';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useRealtimeExtension } from '../contexts/RealtimeContext';
+import { useAuth } from '../contexts/AuthContext';
 
 type TabType = 'overview' | 'devices' | 'custom-settings' | 'websites' | 'dlp-events' | 'telemetry' | 'agent' | 'extension' | 'deployment';
 
@@ -113,6 +114,23 @@ export const Endpoints: React.FC = () => {
 
   const location = useLocation();
   const { t, locale } = useLanguage();
+  const { user } = useAuth();
+
+  const getSetupValue = (value?: string) => {
+    if (!value) return '';
+    let res = value;
+    if (user?.email) {
+      res = res.replace(/<employee@company\.com>/g, user.email);
+    }
+    if (user?.departmentName) {
+      res = res.replace(/<department>/g, user.departmentName);
+    } else {
+      res = res.replace(/<department>/g, 'Default');
+    }
+    res = res.replace(/<extension-id>/g, 'extension-id');
+    return res;
+  };
+
   const activeTab: TabType = location.pathname.endsWith('/devices') ? 'devices'
     : location.pathname.endsWith('/custom-settings') ? 'custom-settings'
     : location.pathname.endsWith('/events') || location.pathname.endsWith('/dlp-events') ? 'dlp-events'
@@ -807,18 +825,18 @@ export const Endpoints: React.FC = () => {
                   </button>
                 </div>
                 <div className={`endpoint-token-card ${lastRotatedKeyFor === 'agent' ? 'fresh' : ''}`}>
-                  <span>Agent enrollment key</span>
-                  <strong>{deployToken?.token ? deployToken.token : 'Token chỉ hiển thị khi tạo lại'}</strong>
-                  <small>Reset riêng cho Desktop Agent · Tenant: {deployToken?.tenantCode || '-'} · Hết hạn: {deployToken?.expiresAt ? new Date(deployToken.expiresAt).toLocaleDateString(locale) : '-'}</small>
-                </div>
-                <div className="endpoint-command-box">
-                  <div>
-                    <strong>Lệnh cài Desktop Agent</strong>
-                    <button className="btn-action text-xs" type="button" onClick={() => copyToClipboard('agent', deployToken?.installCommand)}>
+                  <div className="flex items-center gap-2">
+                    <strong className="break-all flex-1">{deployToken?.token ? deployToken.token : 'Token chỉ hiển thị khi tạo lại'}</strong>
+                    <button
+                      className="btn-action text-xs flex items-center gap-1"
+                      type="button"
+                      onClick={() => copyToClipboard('agent', deployToken?.token || undefined)}
+                      title={t('Copy key', 'Sao chép key')}
+                      disabled={!deployToken?.token}
+                    >
                       {copiedCommand === 'agent' ? 'Đã copy' : <><Copy size={13} /> Copy</>}
                     </button>
                   </div>
-                  <code>{deployToken?.installCommand || 'Tạo lại token để sinh lệnh cài đặt Desktop Agent.'}</code>
                 </div>
               </section>
 
@@ -894,7 +912,7 @@ export const Endpoints: React.FC = () => {
                   <span><Puzzle size={20} /></span>
                   <div>
                     <h2>aiguard-extension</h2>
-                    <p>Quản lý extension Chrome/Edge, link setup và lệnh cấu hình cho trình duyệt.</p>
+                    <p>Quản lý extension Chrome/Edge, chỉ hiển thị key để nhân viên nhập trực tiếp.</p>
                   </div>
                 </div>
                 <div className="endpoint-manager-actions">
@@ -904,27 +922,20 @@ export const Endpoints: React.FC = () => {
                   <button className="btn-secondary" type="button" onClick={() => void handleRotateToken('extension')} disabled={rotatingKeyFor === 'extension'}>
                     <RefreshCw size={14} /> {rotatingKeyFor === 'extension' ? 'Đang reset...' : 'Reset Extension Key'}
                   </button>
-                  <button className="btn-secondary" type="button" onClick={() => copyToClipboard('url', deployToken?.extensionSetupUrl)}>
-                    {copiedCommand === 'url' ? 'Đã copy URL' : <><Copy size={14} /> Copy setup URL</>}
-                  </button>
                 </div>
                 <div className={`endpoint-token-card ${lastRotatedKeyFor === 'extension' ? 'fresh' : ''}`}>
-                  <span>Extension enrollment key</span>
-                  <strong>{deployToken?.token ? deployToken.token : 'Token chỉ hiển thị khi reset Extension Key'}</strong>
-                  <small>Reset riêng cho Browser Extension · Tenant: {deployToken?.tenantCode || '-'} · Hết hạn: {deployToken?.expiresAt ? new Date(deployToken.expiresAt).toLocaleDateString(locale) : '-'}</small>
-                </div>
-                <div className="endpoint-command-box">
-                  <div>
-                    <strong>Lệnh setup Browser Extension</strong>
-                    <button className="btn-action text-xs" type="button" onClick={() => copyToClipboard('extension', deployToken?.extensionSetupCommand)}>
+                  <div className="flex items-center gap-2">
+                    <strong className="break-all flex-1">{deployToken?.token ? deployToken.token : 'Token chỉ hiển thị khi reset Extension Key'}</strong>
+                    <button
+                      className="btn-action text-xs flex items-center gap-1"
+                      type="button"
+                      onClick={() => copyToClipboard('extension', deployToken?.token || undefined)}
+                      title={t('Copy key', 'Sao chép key')}
+                      disabled={!deployToken?.token}
+                    >
                       {copiedCommand === 'extension' ? 'Đã copy' : <><Copy size={13} /> Copy</>}
                     </button>
                   </div>
-                  <code>{deployToken?.extensionSetupCommand || 'Tạo lại token để sinh lệnh setup Browser Extension.'}</code>
-                </div>
-                <div className="endpoint-command-box">
-                  <div><strong>Setup URL</strong></div>
-                  <code>{deployToken?.extensionSetupUrl || 'Chưa có setup URL.'}</code>
                 </div>
               </section>
 
@@ -996,9 +1007,9 @@ export const Endpoints: React.FC = () => {
                 )}
               </div>
 
-              <div className="card glass p-6">
-                <h2 className="mb-2">{t('2. Deployment commands', '2. Lệnh triển khai')}</h2>
-                <p className="text-sm text-zinc-400 mb-4">{t('Copy the correct command for Desktop Agent or Browser Extension deployment.', 'Sao chép lệnh phù hợp để triển khai Desktop Agent hoặc Browser Extension.')}</p>
+                <div className="card glass p-6">
+                  <h2 className="mb-2">{t('2. Deployment commands', '2. Lệnh triển khai')}</h2>
+                  <p className="text-sm text-zinc-400 mb-4">{t('Copy the correct command for Desktop Agent or Browser Extension deployment.', 'Sao chép lệnh phù hợp để triển khai Desktop Agent hoặc Browser Extension.')}</p>
 
                 <div className="space-y-4">
                   <div>
@@ -1006,7 +1017,7 @@ export const Endpoints: React.FC = () => {
                       <h3 className="text-sm font-bold text-white">Desktop Agent</h3>
                       <button
                         className="btn-action text-xs flex items-center gap-1"
-                        onClick={() => copyToClipboard('agent', deployToken?.installCommand)}
+                        onClick={() => copyToClipboard('agent', getSetupValue(deployToken?.installCommand))}
                         title={t('Copy command', 'Sao chép lệnh')}
                       >
                         {copiedCommand === 'agent' ? t('Copied!', 'Đã sao chép!') : <><Copy size={13} /> Copy</>}
@@ -1014,7 +1025,7 @@ export const Endpoints: React.FC = () => {
                     </div>
                     <div className="p-4 rounded bg-zinc-900 border border-zinc-700">
                       <code className="block whitespace-pre-wrap text-xs text-indigo-400 font-mono select-all">
-                        {deployToken?.installCommand || 'Rotate token to generate Desktop Agent install command'}
+                        {getSetupValue(deployToken?.installCommand) || 'Rotate token to generate Desktop Agent install command'}
                       </code>
                     </div>
                   </div>
@@ -1022,27 +1033,12 @@ export const Endpoints: React.FC = () => {
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <h3 className="text-sm font-bold text-white">Browser Extension</h3>
-                      <button
-                        className="btn-action text-xs flex items-center gap-1"
-                        onClick={() => copyToClipboard('extension', deployToken?.extensionSetupCommand)}
-                        title={t('Copy extension setup', 'Sao chép lệnh setup extension')}
-                      >
-                        {copiedCommand === 'extension' ? t('Copied!', 'Đã sao chép!') : <><Copy size={13} /> Copy</>}
-                      </button>
                     </div>
                     <div className="p-4 rounded bg-zinc-900 border border-zinc-700">
                       <code className="block whitespace-pre-wrap text-xs text-emerald-400 font-mono select-all">
-                        {deployToken?.extensionSetupCommand || 'Rotate token to generate Browser Extension setup command'}
+                        {t('Open the Extension page and use the displayed key only.', 'Mở trang Extension và chỉ dùng key hiển thị ở đó.')}
                       </code>
                     </div>
-                    {deployToken?.extensionSetupUrl && (
-                      <button
-                        className="btn-action text-xs mt-2 flex items-center gap-1"
-                        onClick={() => copyToClipboard('url', deployToken.extensionSetupUrl)}
-                      >
-                        {copiedCommand === 'url' ? t('Copied setup URL!', 'Đã sao chép setup URL!') : <><Copy size={13} /> Copy setup URL</>}
-                      </button>
-                    )}
                   </div>
                 </div>
               </div>

@@ -69,6 +69,13 @@ public sealed class AgentCli
                 : existing?.HeartbeatSeconds ?? 30,
             EnableAiCodeAppProtection = BoolValue(options, "ai-code-protection", existing?.EnableAiCodeAppProtection ?? true),
             EnableProcessKill = BoolValue(options, "enable-process-kill", existing?.EnableProcessKill ?? false),
+            OfflinePolicyTtlMinutes = int.TryParse(Value(options, "offline-policy-ttl-minutes"), out var ttl)
+                ? ttl
+                : existing?.OfflinePolicyTtlMinutes ?? 1440,
+            OfflineFallbackToBlock = BoolValue(options, "offline-fallback-to-block", existing?.OfflineFallbackToBlock ?? true),
+            MaxQueuedTelemetryEvents = int.TryParse(Value(options, "max-queued-events"), out var maxQueuedEvents)
+                ? maxQueuedEvents
+                : existing?.MaxQueuedTelemetryEvents ?? 1000,
             WorkspaceRoots = ListValue(options, "workspace-roots") ?? existing?.WorkspaceRoots ?? new()
         };
 
@@ -83,6 +90,9 @@ public sealed class AgentCli
         _output.WriteLine($"Heartbeat: {config.HeartbeatSeconds}s");
         _output.WriteLine($"AI code protection: {config.EnableAiCodeAppProtection}");
         _output.WriteLine($"Process kill enforcement: {config.EnableProcessKill}");
+        _output.WriteLine($"Offline policy TTL: {config.OfflinePolicyTtlMinutes} minute(s)");
+        _output.WriteLine($"Offline fallback to block: {config.OfflineFallbackToBlock}");
+        _output.WriteLine($"Max queued telemetry events: {config.MaxQueuedTelemetryEvents}");
         _output.WriteLine($"Workspace roots: {(config.WorkspaceRoots.Count == 0 ? "auto" : string.Join(", ", config.WorkspaceRoots))}");
         _output.WriteLine($"Enrollment token: {(string.IsNullOrWhiteSpace(config.EnrollmentToken) ? "missing" : "configured")}");
         return 0;
@@ -95,7 +105,7 @@ public sealed class AgentCli
         if (existing != null && !force)
         {
             _output.WriteLine($"Already enrolled. DeviceId: {existing.DeviceId}");
-            _output.WriteLine("Use: enroll --force to re-enroll with the configured enrollment token.");
+            _output.WriteLine("Use: enroll --force to re-enroll with the configured key.");
             return 0;
         }
 
@@ -277,9 +287,10 @@ public sealed class AgentCli
         Service mode:
           aiguard-endpoint-agent run
           aiguard-endpoint-agent.exe with no arguments also runs service mode.
+          aiguard-endpoint-agent clipboard-helper
 
         Setup and diagnostics:
-          configure --api http://127.0.0.1:5185 --token <enrollment-token> --email user@company.com --department Dev
+          configure --api http://127.0.0.1:5185 --token <enrollment-key> --email user@company.com --department Dev
           enroll
           status
           scan --text "my password is 123456"
@@ -291,6 +302,11 @@ public sealed class AgentCli
           create-test-fixture --path C:\tmp\aiguard-sensitive-test
           reset-state
 
+        User-session protection:
+          clipboard-helper
+          Runs the interactive clipboard DLP helper. Deploy it with an ONLOGON scheduled task,
+          because Windows services in Session 0 cannot read the user's clipboard.
+
         Optional:
           --heartbeat 30
           --workspace-roots C:\repo1;C:\repo2
@@ -298,6 +314,9 @@ public sealed class AgentCli
           --critical-action Block
           --high-action PendingApproval
           --enable-process-kill false
+          --offline-policy-ttl-minutes 1440
+          --offline-fallback-to-block true
+          --max-queued-events 1000
           --clear-state
           enroll --force
 

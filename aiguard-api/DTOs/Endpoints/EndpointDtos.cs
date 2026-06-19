@@ -152,8 +152,8 @@ public class EnrollDeviceRequest
     [Required, EmailAddress]
     public string UserEmail { get; set; } = string.Empty;
 
-    [Required, MaxLength(100)]
-    public string DepartmentName { get; set; } = string.Empty;
+    [MaxLength(100)]
+    public string? DepartmentName { get; set; }
 
     public string? AgentVersion { get; set; }
     public string? ExtensionVersion { get; set; }
@@ -242,3 +242,10 @@ public class DeviceAiWebsiteOverrideDto
     public string GlobalMode { get; set; } = string.Empty;
     public string OverrideMode { get; set; } = string.Empty;
 }
+
+public class TokenUserDto
+{
+    public string Email { get; set; } = string.Empty;
+    public string DepartmentName { get; set; } = string.Empty;
+}
+
