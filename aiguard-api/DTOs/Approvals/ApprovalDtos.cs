@@ -46,3 +46,12 @@ public class ApprovalJustificationRequest
     [Required, MaxLength(2000)]
     public string BusinessJustification { get; set; } = string.Empty;
 }
+
+public class DesktopAppApprovalRequest
+{
+    [Required]
+    public string AppName { get; set; } = string.Empty;
+
+    [Required]
+    public string Reason { get; set; } = string.Empty;
+}

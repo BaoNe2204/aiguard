@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using aiguard_api.Data;
 
@@ -11,9 +12,11 @@ using aiguard_api.Data;
 namespace aiguard_api.Data.Migrations
 {
     [DbContext(typeof(AiguardDbContext))]
-    partial class AiguardDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260620035715_MoveBlockedCodeAppsToTenantSettings")]
+    partial class MoveBlockedCodeAppsToTenantSettings
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

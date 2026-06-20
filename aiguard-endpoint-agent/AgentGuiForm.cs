@@ -61,11 +61,54 @@ public sealed class AgentGuiForm : Form
         _syncTimer = new System.Windows.Forms.Timer();
         _syncTimer.Interval = 15000; // 15 seconds
         _syncTimer.Tick += OnSyncTimerTick;
+
+        _telemetry.ProcessKilled += HandleProcessKilled;
+    }
+
+    private void HandleProcessKilled(string appName)
+    {
+        this.Invoke((MethodInvoker)delegate
+        {
+            try
+            {
+                var form = new ApprovalRequestForm(appName);
+                if (form.ShowDialog(this) == DialogResult.OK)
+                {
+                    var reason = form.Reason;
+                    Task.Run(async () =>
+                    {
+                        try
+                        {
+                            var config = _store.LoadConfig();
+                            var state = _store.LoadState();
+                            if (state != null)
+                            {
+                                await _api.RequestDesktopAppApprovalAsync(config, state, appName, reason, CancellationToken.None);
+                                this.Invoke((MethodInvoker)delegate {
+                                    Log($"Gửi yêu cầu xin phép sử dụng {appName} thành công.", ColorGreen);
+                                });
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            this.Invoke((MethodInvoker)delegate {
+                                Log($"Lỗi khi gửi yêu cầu: {ex.Message}", ColorRed);
+                            });
+                        }
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"Lỗi mở hộp thoại: {ex.Message}", ColorRed);
+            }
+        });
     }
 
     private void InitializeComponent()
     {
         // Form properties
+
         this.Text = "AIGuard Endpoint Agent Console";
         this.Size = new Size(880, 720);
         this.BackColor = ColorBg;

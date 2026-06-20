@@ -27,6 +27,7 @@ export interface SecurityPolicyResponse {
   scanFileUpload: boolean;
   clipboardWarning: boolean;
   offlineCriticalBlock: boolean;
+  blockedCodeApps: string;
   version: string;
   updatedAt: string;
 }

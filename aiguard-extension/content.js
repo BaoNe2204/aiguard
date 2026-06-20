@@ -260,20 +260,22 @@
           <div class="ag-head"><div class="ag-logo">AG</div><div><div class="ag-eye">AIGuard Control Tower</div><h2></h2></div><button class="ag-close">x</button></div>
           <div class="ag-chips"><span class="ag-chip ag-risk"></span><span class="ag-chip ag-score"></span><span class="ag-chip ag-decision"></span></div>
           <p class="ag-reason"></p><div class="ag-findings"></div>
-          <div class="ag-mask" hidden><label>Du lieu sau khi che</label><pre></pre></div>
-          <label class="ag-input" hidden>Ly do nghiep vu / bao cao<textarea maxlength="2000" placeholder="Nhap ly do..."></textarea></label>
+          <div class="ag-mask" hidden><label>Dữ liệu sau khi che</label><pre></pre></div>
+          <label class="ag-input" hidden>Lý do nghiệp vụ / báo cáo<textarea maxlength="2000" placeholder="Nhập lý do..."></textarea></label>
           <div class="ag-status" hidden></div><div class="ag-actions"></div>
         </div>`;
 
+      const riskLabels = { Critical: "Nghiêm trọng", High: "Cao", Medium: "Trung bình", Low: "Thấp" };
+      const decisionLabels = { Block: "Chặn", Mask: "Che dữ liệu", PendingApproval: "Chờ duyệt", Allow: "Cho phép" };
       const isPending = result.decision === "PendingApproval";
       overlay.querySelector("h2").textContent = isPending
-        ? "Noi dung can phe duyet"
-        : result.decision === "Mask" ? "Phat hien du lieu nhay cam" : "Da chan gui du lieu";
-      overlay.querySelector(".ag-risk").textContent = `Muc do: ${result.riskLevel}`;
-      overlay.querySelector(".ag-score").textContent = `Diem: ${result.riskScore}/100`;
-      overlay.querySelector(".ag-decision").textContent = `Xu ly: ${result.decision}`;
+        ? "Nội dung cần phê duyệt"
+        : result.decision === "Mask" ? "Phát hiện dữ liệu nhạy cảm" : "Đã chặn gửi dữ liệu";
+      overlay.querySelector(".ag-risk").textContent = `Mức độ: ${riskLabels[result.riskLevel] || result.riskLevel}`;
+      overlay.querySelector(".ag-score").textContent = `Điểm: ${result.riskScore}/100`;
+      overlay.querySelector(".ag-decision").textContent = `Xử lý: ${decisionLabels[result.decision] || result.decision}`;
       overlay.querySelector(".ag-reason").textContent =
-        result.policyReason || "Noi dung vi pham chinh sach bao ve du lieu doanh nghiep.";
+        result.policyReason || "Nội dung vi phạm chính sách bảo vệ dữ liệu doanh nghiệp.";
 
       const findings = overlay.querySelector(".ag-findings");
       for (const match of result.matches || []) {
@@ -283,8 +285,8 @@
         title.textContent = `${match.dataType} (${match.count})`;
         const detail = document.createElement("small");
         const locations = (match.locations || []).slice(0, 5)
-          .map(location => `dong ${location.line}, cot ${location.column}`).join("; ");
-        detail.textContent = `${match.reason || "Du lieu nhay cam"}${locations ? ` - ${locations}` : ""}`;
+          .map(location => `dòng ${location.line}, cột ${location.column}`).join("; ");
+        detail.textContent = `${match.reason || "Dữ liệu nhạy cảm"}${locations ? ` - ${locations}` : ""}`;
         card.append(title, detail);
         findings.appendChild(card);
       }
@@ -311,21 +313,21 @@
         button.addEventListener("click", () => handler(button));
         actions.appendChild(button);
       };
-      addButton("Sua prompt", () => finish({ action: "edit" }));
-      if (result.maskedContent) addButton("Dung ban da che", () => finish({ action: "masked" }), "safe");
+      addButton("Sửa prompt", () => finish({ action: "edit" }));
+      if (result.maskedContent) addButton("Dùng bản đã che", () => finish({ action: "masked" }), "safe");
       if (options.allowReport && options.eventId) {
-        addButton("Bao cao chan nham", async button => {
+        addButton("Báo cáo chặn nhầm", async button => {
           const reason = reasonInput.value.trim();
           if (!reason) {
             status.hidden = false;
-            status.textContent = "Vui long nhap ly do bao cao.";
+            status.textContent = "Vui lòng nhập lý do báo cáo.";
             return;
           }
           button.disabled = true;
           try {
             await reportFalsePositive(options.eventId, result, reason);
             status.hidden = false;
-            status.textContent = "Da gui bao cao den Security Admin.";
+            status.textContent = "Đã gửi báo cáo đến Security Admin.";
             setTimeout(() => finish({ action: "reported" }), 800);
           } catch (error) {
             status.hidden = false;
@@ -335,17 +337,17 @@
         }, "danger");
       }
       if (isPending) {
-        addButton("Gui phe duyet", () => {
+        addButton("Gửi phê duyệt", () => {
           const reason = reasonInput.value.trim();
           if (!reason) {
             status.hidden = false;
-            status.textContent = "Vui long nhap ly do nghiep vu.";
+            status.textContent = "Vui lòng nhập lý do nghiệp vụ.";
             return;
           }
           finish({ action: "approval", reason });
         }, "primary");
       }
-      addButton("Dong", () => finish({ action: "cancel" }));
+      addButton("Đóng", () => finish({ action: "cancel" }));
       overlay.querySelector(".ag-close").addEventListener("click", () => finish({ action: "cancel" }));
       document.documentElement.appendChild(overlay);
       if (!inputLabel.hidden) reasonInput.focus();
@@ -550,18 +552,18 @@
         }
         if (choice.action !== "approval") return { outcome: "blocked", content: text };
         const event = await recordTextEvent(text, result, eventType, choice.reason);
-        if (!event.approvalId) throw new Error("Backend khong tra ve ma phe duyet.");
-        notify("Da gui yeu cau phe duyet. Dang cho quan ly xu ly.", "warning");
+        if (!event.approvalId) throw new Error("Backend không trả về mã phê duyệt.");
+        notify("Đã gửi yêu cầu phê duyệt. Đang chờ quản lý xử lý.", "warning");
         const approval = await waitForApproval(event.approvalId, event.expiresAt);
         if (approval.status === "Approved") {
-          notify("Yeu cau da duoc phe duyet.", "success");
+          notify("Yêu cầu đã được phê duyệt.", "success");
           return { outcome: "allow", content: text };
         }
         if (approval.status === "ApprovedWithMasking" && result.maskedContent) {
-          notify("Da phe duyet voi du lieu duoc che.", "success");
+          notify("Đã phê duyệt với dữ liệu được che.", "success");
           return { outcome: "masked", content: result.maskedContent };
         }
-        notify(`Yeu cau phe duyet: ${approval.status}.`);
+        notify(`Yêu cầu phê duyệt: ${approval.status}.`);
         return { outcome: "blocked", content: text };
       }
 
@@ -569,7 +571,7 @@
       return { outcome: "allow", content: text };
     } catch (error) {
       const config = await getConfig();
-      notify(`AIGuard khong the xac minh thao tac: ${error.message}`);
+      notify(`AIGuard không thể xác minh thao tác: ${error.message}`);
       return {
         outcome: config.offlineCriticalBlock === false ? "allow" : "blocked",
         content: text
@@ -690,14 +692,14 @@
           const choice = await showDecisionModal(result);
           if (choice.action !== "approval") return;
           const event = await recordFileEvent(file, result, choice.reason);
-          if (!event.approvalId) throw new Error("Backend khong tra ve ma phe duyet.");
-          notify(`Tep ${file.name} dang cho phe duyet.`, "warning");
+          if (!event.approvalId) throw new Error("Backend không trả về mã phê duyệt.");
+          notify(`Tệp ${file.name} đang chờ phê duyệt.`, "warning");
           const approval = await waitForApproval(event.approvalId, event.expiresAt);
           if (approval.status !== "Approved") {
-            notify(`Khong the upload tep: ${approval.status}.`);
+            notify(`Không thể upload tệp: ${approval.status}.`);
             return;
           }
-          notify(`Tep ${file.name} da duoc phe duyet.`, "success");
+          notify(`Tệp ${file.name} đã được phê duyệt.`, "success");
           continue;
         }
         if (result.decision === "Mask") {
@@ -713,14 +715,14 @@
         await recordFileEvent(file, result);
       }
       replayFileSelection(input, files);
-      notify(`AIGuard da kiem tra ${files.length} tep.`, "success");
+      notify(`AIGuard đã kiểm tra ${files.length} tệp.`, "success");
     } catch (error) {
       input.value = "";
       if (config.offlineCriticalBlock === false) {
         replayFileSelection(input, files);
-        notify("Khong the quet tep; dang cho phep theo policy offline.", "warning");
+        notify("Không thể quét tệp; đang cho phép theo policy offline.", "warning");
       } else {
-        notify(`AIGuard chan upload: ${error.message}`);
+        notify(`AIGuard chặn upload: ${error.message}`);
       }
     }
   }

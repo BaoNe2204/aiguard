@@ -495,6 +495,7 @@ public class SaasBusinessService : ISaasBusinessService
         settings.BankAccountName = request.BankAccountName?.Trim();
         settings.PaymentWebhookUrl = request.PaymentWebhookUrl?.Trim();
         settings.BillingAddress = request.BillingAddress?.Trim();
+        settings.AgentBlockedCodeApps = request.AgentBlockedCodeApps;
         settings.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
         return MapSettings(settings);
@@ -1396,7 +1397,8 @@ public class SaasBusinessService : ISaasBusinessService
         Id = x.Id, TenantId = x.TenantId, LogoUrl = x.LogoUrl, PrimaryDomain = x.PrimaryDomain,
         DefaultRetentionDays = x.DefaultRetentionDays, TimeZone = x.TimeZone, Locale = x.Locale,
         BankCode = x.BankCode, BankAccountNumber = x.BankAccountNumber, BankAccountName = x.BankAccountName,
-        PaymentWebhookUrl = x.PaymentWebhookUrl, BillingAddress = x.BillingAddress, UpdatedAt = x.UpdatedAt
+        PaymentWebhookUrl = x.PaymentWebhookUrl, BillingAddress = x.BillingAddress, 
+        AgentBlockedCodeApps = x.AgentBlockedCodeApps, UpdatedAt = x.UpdatedAt
     };
 
     private static ProductPlanResponse MapPlan(ProductPlan x) => new()

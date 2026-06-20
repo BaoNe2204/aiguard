@@ -31,11 +31,20 @@ public class PolicyService : IPolicyService
 
     public async Task<List<SecurityPolicyResponse>> GetDepartmentPoliciesAsync()
     {
-        return await _db.SecurityPolicies
+        var tenantSettings = await _db.TenantSettings.FirstOrDefaultAsync();
+        var blockedApps = tenantSettings?.AgentBlockedCodeApps ?? "code,cursor,codex,claude,windsurf,trae,tabnine,github copilot";
+
+        var policies = await _db.SecurityPolicies
             .Include(p => p.Department)
             .OrderBy(p => p.Name)
-            .Select(p => MapToResponse(p))
             .ToListAsync();
+
+        return policies.Select(p => 
+        {
+            var res = MapToResponse(p);
+            res.BlockedCodeApps = blockedApps;
+            return res;
+        }).ToList();
     }
 
     public async Task<SecurityPolicyResponse?> GetCurrentForDeviceAsync(string hostname)
@@ -72,7 +81,32 @@ public class PolicyService : IPolicyService
             await _db.SaveChangesAsync();
         }
 
-        return MapToResponse(policy);
+        var tenantSettings = await _db.TenantSettings.FirstOrDefaultAsync();
+        var blockedApps = tenantSettings?.AgentBlockedCodeApps ?? "code,cursor,codex,claude,windsurf,trae,tabnine,github copilot";
+
+        var whitelistedProcessNames = await _db.PolicyListEntries
+            .Where(e => e.TenantCode == _scope.TenantCode && e.ListType == "Whitelist" && e.EntryType == "ProcessName" && e.IsActive)
+            .Select(e => e.Value.ToLower())
+            .ToListAsync();
+
+        var userPrefix = device.UserEmail + ":";
+        var userWhitelistedProcessNames = await _db.PolicyListEntries
+            .Where(e => e.TenantCode == _scope.TenantCode && e.ListType == "Whitelist" && e.EntryType == "UserProcessName" && e.Value.StartsWith(userPrefix) && e.IsActive)
+            .Select(e => e.Value.Substring(userPrefix.Length).ToLower())
+            .ToListAsync();
+
+        whitelistedProcessNames.AddRange(userWhitelistedProcessNames);
+
+        if (whitelistedProcessNames.Any() && !string.IsNullOrWhiteSpace(blockedApps))
+        {
+            var appsList = blockedApps.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+            appsList.RemoveAll(a => whitelistedProcessNames.Contains(a.ToLowerInvariant()));
+            blockedApps = string.Join(",", appsList);
+        }
+
+        var res = MapToResponse(policy);
+        res.BlockedCodeApps = blockedApps;
+        return res;
     }
 
     public async Task<SecurityPolicyResponse?> UpdatePolicyAsync(
@@ -111,7 +145,13 @@ public class PolicyService : IPolicyService
 
         AddSnapshot(policy, actorEmail, request.ChangeReason ?? "Policy updated");
         await _db.SaveChangesAsync();
-        return MapToResponse(policy);
+        
+        var tenantSettings = await _db.TenantSettings.FirstOrDefaultAsync();
+        var blockedApps = tenantSettings?.AgentBlockedCodeApps ?? "code,cursor,codex,claude,windsurf,trae,tabnine,github copilot";
+
+        var res = MapToResponse(policy);
+        res.BlockedCodeApps = blockedApps;
+        return res;
     }
 
     public async Task<List<PolicyVersionResponse>> GetVersionsAsync(Guid? policyId = null)

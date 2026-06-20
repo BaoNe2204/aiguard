@@ -112,6 +112,22 @@ public sealed class EndpointApiClient
         response.EnsureSuccessStatusCode();
         return await ReadDataAsync<DlpScanData>(response, token);
     }
+    public async Task<bool> RequestDesktopAppApprovalAsync(
+        AgentConfig config,
+        AgentState state,
+        string appName,
+        string reason,
+        CancellationToken token)
+    {
+        using var client = Client(config, state.EndpointKey);
+        var response = await client.PostAsJsonAsync($"/api/endpoints/approvals/request?hostname={Uri.EscapeDataString(Environment.MachineName)}", new
+        {
+            appName,
+            reason
+        }, token);
+        
+        return response.IsSuccessStatusCode;
+    }
 
     public async Task<DlpScanData> ScanFileAsync(
         AgentConfig config,
@@ -228,6 +244,7 @@ public sealed class PolicyData
     public bool ScanFileUpload { get; set; }
     public bool ClipboardWarning { get; set; }
     public bool OfflineCriticalBlock { get; set; }
+    public string BlockedCodeApps { get; set; } = "code,cursor,codex,claude,windsurf,trae,tabnine,github copilot";
 }
 
 public sealed class DlpScanData

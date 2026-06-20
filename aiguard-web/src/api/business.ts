@@ -35,6 +35,7 @@ export interface TenantSettingsRequest {
   bankAccountName?: string;
   paymentWebhookUrl?: string;
   billingAddress?: string;
+  agentBlockedCodeApps?: string;
 }
 
 export interface TenantSettingsResponse extends TenantSettingsRequest {

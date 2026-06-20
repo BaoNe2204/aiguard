@@ -40,7 +40,7 @@ public class ShadowAiController : ControllerBase
     {
         var device = await _security.GetAuthenticatedDeviceAsync(hostname, endpointKey);
         if (device == null) return Unauthorized(ApiResponse<object>.Fail("Invalid endpoint credentials"));
-        return Ok(ApiResponse<EndpointAiPolicyResponse>.Ok(await _shadowAi.GetPolicyAsync()));
+        return Ok(ApiResponse<EndpointAiPolicyResponse>.Ok(await _shadowAi.GetPolicyAsync(device)));
     }
 
     [HttpPost("discover")]

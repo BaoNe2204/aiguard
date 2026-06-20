@@ -17,16 +17,18 @@ import {
   type DeviceAiWebsiteOverrideDto
 } from '../api/endpoints';
 import { policiesApi, type SecurityPolicyResponse } from '../api/policies';
+import { businessApi, type TenantSettingsResponse } from '../api/business';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useRealtimeExtension } from '../contexts/RealtimeContext';
 import { useAuth } from '../contexts/AuthContext';
 
-type TabType = 'overview' | 'devices' | 'custom-settings' | 'websites' | 'dlp-events' | 'telemetry' | 'agent' | 'extension' | 'deployment';
+type TabType = 'overview' | 'devices' | 'custom-settings' | 'agent-settings' | 'websites' | 'dlp-events' | 'telemetry' | 'agent' | 'extension' | 'deployment';
 
 const endpointTabs: Array<{ key: TabType; path: string; label: string }> = [
   { key: 'overview', path: '/app/endpoints', label: 'Tổng quan' },
   { key: 'devices', path: '/app/endpoints/devices', label: 'Thiết bị đã triển khai' },
   { key: 'custom-settings', path: '/app/endpoints/custom-settings', label: 'Cài đặt riêng' },
+  { key: 'agent-settings', path: '/app/endpoints/agent-settings', label: 'Tùy chỉnh Agent' },
   { key: 'websites', path: '/app/endpoints/ai-websites', label: 'Website AI theo dõi' },
   { key: 'dlp-events', path: '/app/endpoints/dlp-events', label: 'Nhật ký DLP' },
   { key: 'telemetry', path: '/app/endpoints/telemetry', label: 'Telemetry Agent' },
@@ -133,13 +135,14 @@ export const Endpoints: React.FC = () => {
 
   const activeTab: TabType = location.pathname.endsWith('/devices') ? 'devices'
     : location.pathname.endsWith('/custom-settings') ? 'custom-settings'
-    : location.pathname.endsWith('/events') || location.pathname.endsWith('/dlp-events') ? 'dlp-events'
-      : location.pathname.endsWith('/telemetry') ? 'telemetry'
-      : location.pathname.endsWith('/ai-websites') ? 'websites'
-        : location.pathname.endsWith('/agent') ? 'agent'
-          : location.pathname.endsWith('/extension') ? 'extension'
-            : location.pathname.endsWith('/deployment') ? 'deployment'
-              : 'overview';
+      : location.pathname.endsWith('/events') || location.pathname.endsWith('/dlp-events') ? 'dlp-events'
+        : location.pathname.endsWith('/telemetry') ? 'telemetry'
+          : location.pathname.endsWith('/ai-websites') ? 'websites'
+            : location.pathname.endsWith('/agent-settings') ? 'agent-settings'
+              : location.pathname.endsWith('/agent') ? 'agent'
+                : location.pathname.endsWith('/extension') ? 'extension'
+                  : location.pathname.endsWith('/deployment') ? 'deployment'
+                    : 'overview';
 
   const { extensionEvents, extensionStatus } = useRealtimeExtension();
 
@@ -199,6 +202,12 @@ export const Endpoints: React.FC = () => {
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [overviewStats, setOverviewStats] = useState({ total: 0, active: 0, offline: 0, extensionActive: 0 });
 
+  // ── Agent Settings state ──
+  const [agentSettings, setAgentSettings] = useState<TenantSettingsResponse | null>(null);
+  const [agentSettingsLoading, setAgentSettingsLoading] = useState(false);
+  const [savingAgentSettings, setSavingAgentSettings] = useState(false);
+  const [newAppInput, setNewAppInput] = useState('');
+
   const [error, setError] = useState('');
 
   // ── Fetch Devices ──
@@ -246,6 +255,19 @@ export const Endpoints: React.FC = () => {
     }
   }, [telemetryPage]);
 
+  // ── Fetch Agent Settings ──
+  const fetchAgentSettings = useCallback(async () => {
+    setAgentSettingsLoading(true);
+    try {
+      const result = await businessApi.getSettings();
+      setAgentSettings(result);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setAgentSettingsLoading(false);
+    }
+  }, []);
+
   // ── Open Custom Settings Modal ──
   const openCustomSettingsModal = async (device: DeviceResponse) => {
     setCustomSettingsDevice(device);
@@ -290,9 +312,70 @@ export const Endpoints: React.FC = () => {
       setCustomSettingsDevice(null);
       await fetchDevices();
     } catch (err: any) {
-      setError(err.message || 'Lỗi khi lưu cấu hình riêng.');
+      setError(err.message);
     } finally {
       setSavingCustomSettings(false);
+    }
+  };
+
+  const handleSaveAgentSettings = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!agentSettings) return;
+    setSavingAgentSettings(true);
+    try {
+      await businessApi.updateSettings(agentSettings);
+      await fetchAgentSettings();
+      setError('');
+    } catch (err: any) {
+      setError(err.message || 'Không thể lưu tùy chỉnh Agent');
+    } finally {
+      setSavingAgentSettings(false);
+    }
+  };
+
+  const handleAddApp = async (appName?: string) => {
+    const appToAdd = (appName || newAppInput).trim();
+    if (!appToAdd || !agentSettings) return;
+    const currentList = (agentSettings.agentBlockedCodeApps || '').split(',').map(s => s.trim()).filter(Boolean);
+    if (!currentList.includes(appToAdd)) {
+      const newList = [...currentList, appToAdd];
+      
+      const updatedSettings = { ...agentSettings, agentBlockedCodeApps: newList.join(', ') };
+      setAgentSettings(updatedSettings);
+      
+      // Auto save
+      setSavingAgentSettings(true);
+      try {
+        await businessApi.updateSettings(updatedSettings);
+        setNewAppInput('');
+        setError('');
+      } catch (err: any) {
+        setError(err.message);
+      } finally {
+        setSavingAgentSettings(false);
+      }
+    }
+  };
+
+  const handleRemoveApp = async (appToRemove: string) => {
+    if (!agentSettings) return;
+    if (!window.confirm(`Xóa ứng dụng '${appToRemove}' khỏi danh sách chặn?`)) return;
+
+    const currentList = (agentSettings.agentBlockedCodeApps || '').split(',').map(s => s.trim()).filter(Boolean);
+    const newList = currentList.filter(app => app !== appToRemove);
+    
+    const updatedSettings = { ...agentSettings, agentBlockedCodeApps: newList.join(', ') };
+    setAgentSettings(updatedSettings);
+    
+    // Auto save
+    setSavingAgentSettings(true);
+    try {
+      await businessApi.updateSettings(updatedSettings);
+      setError('');
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSavingAgentSettings(false);
     }
   };
 
@@ -358,12 +441,13 @@ export const Endpoints: React.FC = () => {
     else if (activeTab === 'dlp-events') fetchEvents();
     else if (activeTab === 'telemetry') fetchTelemetry();
     else if (activeTab === 'websites') fetchWebsites();
+    else if (activeTab === 'agent-settings') fetchAgentSettings();
     else if (activeTab === 'agent' || activeTab === 'extension') {
       fetchDeployment();
       fetchDevices();
     }
     else if (activeTab === 'deployment') fetchDeployment();
-  }, [activeTab, fetchDevices, fetchEvents, fetchTelemetry, fetchWebsites, fetchDeployment, fetchOverview]);
+  }, [activeTab, fetchDevices, fetchEvents, fetchTelemetry, fetchWebsites, fetchDeployment, fetchOverview, fetchAgentSettings]);
 
   // Prepend real-time DLP events to the log view
   useEffect(() => {
@@ -753,9 +837,9 @@ export const Endpoints: React.FC = () => {
                     { header: t('Hostname', 'Tên máy'), accessor: 'hostname', width: '120px' },
                     { header: t('Platform', 'Nền tảng'), accessor: 'websiteAi', width: '120px' },
                     { header: t('Matched data', 'Dữ liệu phát hiện'), accessor: 'dataTypeMatched' },
-                    { 
-                      header: t('Masked Preview', 'Nội dung đã che'), 
-                      accessor: (item) => item.maskedContentPreview ? (item.maskedContentPreview.length > 40 ? item.maskedContentPreview.substring(0, 40) + '...' : item.maskedContentPreview) : '—' 
+                    {
+                      header: t('Masked Preview', 'Nội dung đã che'),
+                      accessor: (item) => item.maskedContentPreview ? (item.maskedContentPreview.length > 40 ? item.maskedContentPreview.substring(0, 40) + '...' : item.maskedContentPreview) : '—'
                     },
                     { header: t('Decision', 'Quyết định'), accessor: (item) => <DecisionBadge decision={item.decision as any} />, width: '150px' },
                     {
@@ -805,6 +889,108 @@ export const Endpoints: React.FC = () => {
           </div>
         )}
 
+        {activeTab === 'agent-settings' && (
+          <div className="card glass p-6 max-w-4xl">
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h2 className="text-xl font-bold">App Code AI bị chặn</h2>
+                <p className="text-xs text-zinc-400 mt-1">
+                  Các tiến trình bị chặn khi tính năng bảo vệ mã nguồn được bật. Áp dụng toàn cục cho tất cả Agent thuộc tenant này.
+                </p>
+              </div>
+            </div>
+
+            {agentSettingsLoading ? (
+              <LoadingSpinner text="Đang tải tùy chỉnh..." />
+            ) : agentSettings ? (
+              <div className="flex flex-col gap-6">
+                <div className="flex flex-col gap-3">
+                  <div className="flex gap-2 items-center bg-zinc-900/50 p-4" style={{ borderRadius: '12px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                    <input
+                      type="text"
+                      className="input-field font-mono text-sm flex-1"
+                      value={newAppInput}
+                      onChange={(e) => setNewAppInput(e.target.value)}
+                      placeholder="Nhập tên tiến trình mới (ví dụ: notepad, msedge...)"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleAddApp();
+                        }
+                      }}
+                    />
+                    <button 
+                      type="button" 
+                      className="btn-primary" 
+                      onClick={() => handleAddApp()}
+                      disabled={!newAppInput.trim() || savingAgentSettings}
+                    >
+                      Thêm
+                    </button>
+                  </div>
+                  
+                  <div className="flex flex-wrap gap-2 items-center" style={{ marginTop: '12px' }}>
+                    <span className="text-xs text-zinc-400 mr-1">Gợi ý nhanh:</span>
+                    {['cursor', 'code', 'codex', 'claude', 'windsurf', 'trae', 'tabnine', 'github copilot', 'codeium'].map(app => {
+                      const isBlocked = (agentSettings.agentBlockedCodeApps || '').split(',').map(s => s.trim()).includes(app);
+                      return (
+                        <button
+                          key={app}
+                          type="button"
+                          onClick={() => !isBlocked && handleAddApp(app)}
+                          disabled={isBlocked || savingAgentSettings}
+                          style={{
+                            backgroundColor: isBlocked ? 'transparent' : 'rgba(244, 63, 94, 0.1)',
+                            color: isBlocked ? '#71717a' : '#fda4af',
+                            border: `1px solid ${isBlocked ? '#3f3f46' : 'rgba(244, 63, 94, 0.3)'}`,
+                            padding: '4px 12px',
+                            borderRadius: '9999px',
+                            fontSize: '12px',
+                            cursor: isBlocked ? 'not-allowed' : 'pointer',
+                            transition: 'all 0.2s',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            opacity: isBlocked ? 0.6 : 1,
+                          }}
+                        >
+                          + {app}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <DataTable
+                  data={(agentSettings.agentBlockedCodeApps || '').split(',').map(s => s.trim()).filter(Boolean).map(app => ({ appName: app }))}
+                  columns={[
+                    { header: 'Tên tiến trình (App)', accessor: 'appName' },
+                    {
+                      header: 'Chế độ', accessor: () => (
+                        <span className="px-2 py-1 text-xs rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                          Chặn
+                        </span>
+                      ), width: '120px'
+                    },
+                    {
+                      header: 'Thao tác', accessor: (item) => (
+                        <button 
+                          className="btn-action text-xs text-rose-400" 
+                          onClick={() => handleRemoveApp(item.appName)}
+                          disabled={savingAgentSettings}
+                        >
+                          Xóa
+                        </button>
+                      ), width: '100px'
+                    }
+                  ]}
+                />
+              </div>
+            ) : (
+              <div className="text-zinc-400">Không tải được tùy chỉnh Agent.</div>
+            )}
+          </div>
+        )}
+
         {activeTab === 'agent' && (
           deployLoading ? <LoadingSpinner text={t('Loading deployment info...', 'Đang tải thông tin triển khai...')} /> : (
             <div className="endpoint-manager-grid">
@@ -818,7 +1004,7 @@ export const Endpoints: React.FC = () => {
                 </div>
                 <div className="endpoint-manager-actions">
                   <a href="/aiguard-endpoint-agent.exe" download="aiguard-endpoint-agent.exe" className="btn-primary">
-                     <Download size={14} /> Tải agent EXE
+                    <Download size={14} /> Tải agent EXE
                   </a>
                   <button className="btn-secondary" type="button" onClick={() => void handleRotateToken('agent')} disabled={rotatingKeyFor === 'agent'}>
                     <RefreshCw size={14} /> {rotatingKeyFor === 'agent' ? 'Đang reset...' : 'Reset Agent Key'}
@@ -890,14 +1076,23 @@ export const Endpoints: React.FC = () => {
                 <div className="endpoint-manager-title">
                   <span><AlertTriangle size={20} /></span>
                   <div>
-                    <h2>Giới hạn Desktop Agent</h2>
-                    <p>Một số tác vụ cần helper ký số, driver, GPO hoặc Intune để chặn ở mức hệ điều hành.</p>
+                    <h2>Khả năng can thiệp sâu</h2>
+                    <p>Desktop Agent hiện thiên về giám sát và telemetry. Các tác vụ chặn sâu cần helper user-session hoặc chính sách hệ thống riêng.</p>
                   </div>
                 </div>
-                <div className="endpoint-limit-list">
-                  <div className="blocked"><b>Không chặn clipboard interactive</b><span>Cần helper ký số hoặc driver để can thiệp sâu.</span></div>
-                  <div className="blocked"><b>Không chặn USB/print ở kernel level</b><span>Cần GPO, Intune hoặc driver chuyên dụng.</span></div>
-                  <div className="allowed"><b>Giám sát và gửi telemetry</b><span>Admin xem log, nhận cảnh báo và quyết định hành động phù hợp.</span></div>
+                <div className="grid grid-cols-1 gap-3">
+                  <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4">
+                    <b className="block text-amber-300 mb-1">Clipboard interactive</b>
+                    <span className="text-sm text-zinc-300">Muốn chặn theo thao tác dán/người dùng thì cần helper chạy trong user session hoặc thành phần được ký số để bám clipboard của phiên hiện tại.</span>
+                  </div>
+                  <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4">
+                    <b className="block text-amber-300 mb-1">USB / print / kernel level</b>
+                    <span className="text-sm text-zinc-300">Các chặn ở mức hệ điều hành thường phải dùng GPO, Intune, driver hoặc filter chuyên dụng. Agent hiện tại không can thiệp sâu ở mức đó.</span>
+                  </div>
+                  <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4">
+                    <b className="block text-emerald-300 mb-1">Đang hỗ trợ</b>
+                    <span className="text-sm text-zinc-300">Agent vẫn giám sát, gửi telemetry và áp chính sách DLP theo ngữ cảnh để admin ra quyết định phù hợp.</span>
+                  </div>
                 </div>
               </section>
             </div>
@@ -1007,9 +1202,9 @@ export const Endpoints: React.FC = () => {
                 )}
               </div>
 
-                <div className="card glass p-6">
-                  <h2 className="mb-2">{t('2. Deployment commands', '2. Lệnh triển khai')}</h2>
-                  <p className="text-sm text-zinc-400 mb-4">{t('Copy the correct command for Desktop Agent or Browser Extension deployment.', 'Sao chép lệnh phù hợp để triển khai Desktop Agent hoặc Browser Extension.')}</p>
+              <div className="card glass p-6">
+                <h2 className="mb-2">{t('2. Deployment commands', '2. Lệnh triển khai')}</h2>
+                <p className="text-sm text-zinc-400 mb-4">{t('Copy the correct command for Desktop Agent or Browser Extension deployment.', 'Sao chép lệnh phù hợp để triển khai Desktop Agent hoặc Browser Extension.')}</p>
 
                 <div className="space-y-4">
                   <div>
@@ -1325,11 +1520,10 @@ export const Endpoints: React.FC = () => {
                             <tr key={override.aiWebsiteId} className="hover:bg-zinc-900/30">
                               <td className="p-3 font-semibold text-white">{override.name}</td>
                               <td className="p-3 text-zinc-400">
-                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold border ${
-                                  override.globalMode === 'Block' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' :
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold border ${override.globalMode === 'Block' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' :
                                   override.globalMode === 'Mask' ? 'bg-sky-500/10 text-sky-400 border-sky-500/20' :
-                                  'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                                }`}>
+                                    'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                  }`}>
                                   {override.globalMode}
                                 </span>
                               </td>

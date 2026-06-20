@@ -81,10 +81,8 @@ public class ApprovalsController : ControllerBase
     [Authorize]
     public async Task<IActionResult> Revoke(Guid id)
     {
-        var email = User.FindFirstValue(ClaimTypes.Email) ?? User.FindFirstValue("email");
-        if (string.IsNullOrWhiteSpace(email)) return Unauthorized(ApiResponse<object>.Fail("Email claim is missing"));
-        var result = await _approvalService.RevokeAsync(id, email);
-        if (result == null) return NotFound(ApiResponse<object>.Fail("Approval not found or cannot be revoked"));
+        var result = await _approvalService.AdminRevokeAsync(id);
+        if (result == null) return NotFound(ApiResponse<object>.Fail("Approval not found"));
         var tenant = User.FindFirstValue("tenantCode") ?? "DEFAULT";
         await _hubContext.Clients.Group(NotificationGroups.Role(tenant, "DepartmentManager"))
             .SendAsync("ApprovalRevoked", new { approvalId = result.Id });

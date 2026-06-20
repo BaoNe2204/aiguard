@@ -107,6 +107,7 @@ public class TenantSettingsRequest
     public string? BankAccountName { get; set; }
     public string? PaymentWebhookUrl { get; set; }
     public string? BillingAddress { get; set; }
+    public string? AgentBlockedCodeApps { get; set; }
 }
 
 public class TenantSettingsResponse : TenantSettingsRequest

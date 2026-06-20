@@ -40,6 +40,8 @@ public sealed class EndpointTelemetryCollector
     private HashSet<string> _previous = new(StringComparer.OrdinalIgnoreCase);
     private bool _initialized;
 
+    public event Action<string>? ProcessKilled;
+
     public IReadOnlyList<AgentTelemetryItem> Collect(
         PolicyData? policy = null,
         AgentConfig? config = null,
@@ -109,23 +111,27 @@ public sealed class EndpointTelemetryCollector
         if (processes.Contains("spoolsv"))
             result.Add("PrintService|Windows Print Spooler is running");
 
-        if (config?.EnableAiCodeAppProtection ?? true)
+        if (config?.EnableAiCodeAppProtection == true)
         {
-            AddAiCodeProcessSignals(result, processes);
+            AddAiCodeProcessSignals(result, processes, policy);
             AddSensitiveWorkspaceSignals(result, policy, config);
         }
         return result;
     }
 
-    private static void AddAiCodeProcessSignals(HashSet<string> result, HashSet<string> processes)
+    private static void AddAiCodeProcessSignals(HashSet<string> result, HashSet<string> processes, PolicyData? policy)
     {
+        var blockedAppsString = policy?.BlockedCodeApps ?? "code,cursor,codex,claude,windsurf,trae,tabnine,github copilot";
+        var targetApps = blockedAppsString.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
         var detected = new List<string>();
-        if (processes.Overlaps(["cursor", "cursor helper"])) detected.Add("Cursor");
-        if (processes.Overlaps(["codex", "openai-codex"])) detected.Add("Codex");
-        if (processes.Overlaps(["code", "code-insiders"])) detected.Add("VS Code");
-        if (processes.Overlaps(["github copilot", "copilot"])) detected.Add("GitHub Copilot");
-        if (processes.Overlaps(["claude", "claude desktop"])) detected.Add("Claude Desktop");
-        if (processes.Overlaps(["windsurf", "trae", "tabnine"])) detected.Add("AI coding assistant");
+        foreach (var app in targetApps)
+        {
+            if (processes.Any(p => p.Contains(app, StringComparison.OrdinalIgnoreCase)))
+            {
+                detected.Add(app);
+            }
+        }
 
         foreach (var name in detected.Distinct(StringComparer.OrdinalIgnoreCase))
             result.Add($"AiCodeApp|{name} is running and may access opened code/workspace files");
@@ -160,7 +166,7 @@ public sealed class EndpointTelemetryCollector
         }
     }
 
-    private static IEnumerable<AgentTelemetryItem> EvaluateAiCodePolicy(
+    private IEnumerable<AgentTelemetryItem> EvaluateAiCodePolicy(
         HashSet<string> current,
         PolicyData? policy,
         AgentConfig? config,
@@ -173,25 +179,25 @@ public sealed class EndpointTelemetryCollector
 
         string risk;
         string reason;
-        if (apps.Count > 0 && secrets.Count > 0)
+        if (apps.Count > 0)
         {
             risk = "Critical";
-            reason = "AI coding app is running while sensitive developer secrets exist in a source workspace.";
-        }
-        else if (apps.Count > 0 && workspaces.Count > 0)
-        {
-            risk = "High";
-            reason = "AI coding app is running while source workspaces are present.";
+            reason = "A blocked AI coding app was detected running on the system.";
         }
         else if (secrets.Count > 0)
         {
             risk = "High";
             reason = "Sensitive developer secrets are present in a source workspace.";
         }
+        else if (workspaces.Count > 0)
+        {
+            risk = "Medium";
+            reason = "Source workspaces are present without active AI coding apps or secrets.";
+        }
         else
         {
             risk = "Low";
-            reason = "AI coding app observed without a sensitive workspace signal.";
+            reason = "Normal background activity.";
         }
 
         var decision = DecisionForRisk(policy, risk);
@@ -200,8 +206,13 @@ public sealed class EndpointTelemetryCollector
         {
             if (config?.EnableProcessKill == true)
             {
-                var killed = KillAiCodeProcesses();
+                var killed = KillAiCodeProcesses(policy);
                 enforcement = killed.Count == 0 ? "BlockRequestedNoMatchingProcess" : $"KilledProcesses={string.Join(",", killed)}";
+                
+                if (killed.Count > 0)
+                {
+                    foreach (var k in killed) ProcessKilled?.Invoke(k);
+                }
             }
             else
             {
@@ -247,7 +258,8 @@ public sealed class EndpointTelemetryCollector
     private static bool IsBlockDecision(string? decision) =>
         string.Equals(decision, "Block", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(decision, "Quarantine", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(decision, "KillProcess", StringComparison.OrdinalIgnoreCase);
+        string.Equals(decision, "KillProcess", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(decision, "PendingApproval", StringComparison.OrdinalIgnoreCase);
 
     private static string Compact(List<string> values)
     {
@@ -257,7 +269,7 @@ public sealed class EndpointTelemetryCollector
         return string.Join(" | ", compacted) + suffix;
     }
 
-    private static IEnumerable<AgentTelemetryItem> EvaluateBlockedDesktopApps(
+    private IEnumerable<AgentTelemetryItem> EvaluateBlockedDesktopApps(
         EndpointAiPolicyData? aiPolicy,
         AgentConfig? config,
         DateTime occurredAt)
@@ -281,6 +293,11 @@ public sealed class EndpointTelemetryCollector
                 enforcement = killed.Count == 0
                     ? "BlockRequestedNoMatchingProcess"
                     : $"KilledProcesses={string.Join(",", killed)}";
+
+                if (killed.Count > 0)
+                {
+                    ProcessKilled?.Invoke(app.DisplayName ?? matches.First());
+                }
             }
 
             yield return new AgentTelemetryItem(
@@ -353,13 +370,13 @@ public sealed class EndpointTelemetryCollector
         return result;
     }
 
-    private static List<string> KillAiCodeProcesses()
+    private IReadOnlyList<string> KillAiCodeProcesses(PolicyData? policy)
     {
         var killed = new List<string>();
-        var names = new HashSet<string>([
-            "cursor", "cursor helper", "codex", "openai-codex", "code", "code-insiders",
-            "github copilot", "copilot", "claude", "claude desktop", "windsurf", "trae", "tabnine"
-        ], StringComparer.OrdinalIgnoreCase);
+        var blockedAppsString = policy?.BlockedCodeApps ?? "code,cursor,codex,claude,windsurf,trae,tabnine,github copilot";
+        var targetApps = blockedAppsString.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        
+        var names = new HashSet<string>(targetApps, StringComparer.OrdinalIgnoreCase);
 
         foreach (var process in Process.GetProcesses())
         {
@@ -383,7 +400,7 @@ public sealed class EndpointTelemetryCollector
         return killed.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     }
 
-    private static List<string> KillProcesses(IEnumerable<string> processNames)
+    private IReadOnlyList<string> KillProcesses(IReadOnlyList<string> processNames)
     {
         var names = processNames.ToHashSet(StringComparer.OrdinalIgnoreCase);
         var killed = new List<string>();

@@ -136,7 +136,7 @@ export const Sidebar: React.FC = () => {
             description: 'Prompt, file và agent',
             icon: <CheckSquare size={18} />,
             subItems: [
-              { title: 'Duyệt prompt', path: '/app/approvals/prompts' },
+
               { title: 'Duyệt Agent', path: '/app/approvals/agents' },
               { title: 'Lịch sử phê duyệt', path: '/app/approvals/history' }
             ]
@@ -201,7 +201,7 @@ export const Sidebar: React.FC = () => {
             description: 'Prompt, file và agent',
             icon: <CheckSquare size={18} />,
             subItems: [
-              { title: 'Duyệt prompt', path: '/app/approvals/prompts' },
+
               { title: 'Duyệt Agent', path: '/app/approvals/agents' },
               { title: 'Lịch sử phê duyệt', path: '/app/approvals/history' }
             ]
@@ -253,7 +253,7 @@ export const Sidebar: React.FC = () => {
             description: 'Yêu cầu từ cấp dưới',
             icon: <CheckSquare size={18} />,
             subItems: [
-              { title: 'Duyệt prompt', path: '/app/approvals/prompts' },
+
               { title: 'Duyệt Agent', path: '/app/approvals/agents' },
               { title: 'Lịch sử phê duyệt', path: '/app/approvals/history' }
             ]
@@ -271,11 +271,9 @@ export const Sidebar: React.FC = () => {
     }
   }, [user?.role]);
 
-  const productionMenuItems = rawMenuItems
-    .filter(item => item.key !== 'agents')
-    .map(item => item.key === 'approvals'
-      ? { ...item, subItems: item.subItems?.filter(subItem => subItem.path !== '/app/approvals/agents') }
-      : item);
+  const productionMenuItems = rawMenuItems.filter(item =>
+    user?.role === 'TenantOwner' ? item.key !== 'agents' : true
+  );
   const securityAgentLabItem: SidebarItem = {
     key: 'agent_lab',
     title: 'AI Agent Lab',

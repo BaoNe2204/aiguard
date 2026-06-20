@@ -70,12 +70,13 @@ function App() {
                 <Route path="endpoints/telemetry" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><Endpoints /></ProtectedRoute>} />
                 <Route path="endpoints/ai-websites" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><Endpoints /></ProtectedRoute>} />
                 <Route path="endpoints/agent" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><Endpoints /></ProtectedRoute>} />
+                <Route path="endpoints/agent-settings" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><Endpoints /></ProtectedRoute>} />
                 <Route path="endpoints/extension" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><Endpoints /></ProtectedRoute>} />
                 <Route path="endpoints/deployment" element={<ProtectedRoute allowedRoles={SECURITY_ROLES}><Endpoints /></ProtectedRoute>} />
 
                 {/* Approvals subroutes */}
                 <Route path="approvals/prompts" element={<ProtectedRoute allowedRoles={APPROVAL_ROLES}><Approvals /></ProtectedRoute>} />
-                <Route path="approvals/agents" element={<Navigate to="/app/approvals/prompts" replace />} />
+                <Route path="approvals/agents" element={<ProtectedRoute allowedRoles={APPROVAL_ROLES}><Approvals /></ProtectedRoute>} />
                 <Route path="approvals/history" element={<ProtectedRoute allowedRoles={APPROVAL_ROLES}><Approvals /></ProtectedRoute>} />
 
                 {/* Policies subroutes */}

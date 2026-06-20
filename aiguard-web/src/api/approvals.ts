@@ -10,6 +10,7 @@ export interface ApprovalResponse {
   assignedApproverName: string | null;
   status: string;
   reason: string | null;
+  businessJustification?: string | null;
   approverNote: string | null;
   createdAt: string;
   decidedAt: string | null;
@@ -44,5 +45,11 @@ export const approvalsApi = {
     return apiRequest<PagedResult<ApprovalResponse>>(
       `/approvals/history${buildQuery(query)}`
     );
+  },
+
+  revoke(id: string): Promise<ApprovalResponse> {
+    return apiRequest<ApprovalResponse>(`/approvals/${id}/revoke`, {
+      method: 'POST',
+    });
   },
 };

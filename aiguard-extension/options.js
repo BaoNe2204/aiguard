@@ -234,11 +234,16 @@ async function enroll() {
     const granted = await requestOriginPermission(elements.api.value);
     if (!granted) throw new Error("Bạn chưa cấp quyền kết nối đến Backend API");
 
+    let finalHost = elements.host.value.trim();
+    if (finalHost && !finalHost.toLowerCase().endsWith("-ext")) {
+      finalHost += "-Ext";
+    }
+
     const response = await chrome.runtime.sendMessage({
       type: "AIGUARD_ENROLL",
       body: {
         apiBaseUrl: elements.api.value,
-        hostname: elements.host.value.trim(),
+        hostname: finalHost,
         userEmail: elements.email.value.replace(/[<>]/g, "").trim().toLowerCase(),
         departmentName: elements.department.value.replace(/[<>]/g, "").trim(),
         enrollmentToken: elements.enrollmentToken.value.replace(/\s/g, "")

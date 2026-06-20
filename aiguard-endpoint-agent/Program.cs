@@ -1,71 +1,83 @@
 using AIGuard.EndpointAgent;
 using System.Runtime.InteropServices;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.DependencyInjection;
 
-if (args.Length > 0)
+namespace AIGuard.EndpointAgent;
+
+internal static class Program
 {
-    if (args[0].Equals("clipboard-helper", StringComparison.OrdinalIgnoreCase))
+    [STAThread]
+    static int Main(string[] args)
     {
-        var exitCode = 0;
-        var helperThread = new Thread(() =>
+        if (args.Length > 0)
         {
-            try
+            if (args[0].Equals("clipboard-helper", StringComparison.OrdinalIgnoreCase))
             {
-                ApplicationConfiguration.Initialize();
+                var exitCode = 0;
+                var helperThread = new Thread(() =>
+                {
+                    try
+                    {
+                        ApplicationConfiguration.Initialize();
+                        var store = new AgentStateStore();
+                        var api = new EndpointApiClient(store);
+                        Application.Run(new ClipboardProtectionContext(store, api));
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"Clipboard helper failed: {ex.Message}");
+                        exitCode = 1;
+                    }
+                });
+                helperThread.SetApartmentState(ApartmentState.STA);
+                helperThread.Start();
+                helperThread.Join();
+                return exitCode;
+            }
+
+            // Attach to parent console if running in CLI mode (not run as service)
+            if (!args[0].Equals("run", StringComparison.OrdinalIgnoreCase))
+            {
+                AttachConsole(-1);
+                
+                using var loggerFactory = LoggerFactory.Create(logging =>
+                {
+                    logging.AddSimpleConsole(options =>
+                    {
+                        options.SingleLine = true;
+                        options.TimestampFormat = "HH:mm:ss ";
+                    });
+                });
                 var store = new AgentStateStore();
                 var api = new EndpointApiClient(store);
-                Application.Run(new ClipboardProtectionContext(store, api));
+                var telemetry = new EndpointTelemetryCollector();
+                var cli = new AgentCli(store, api, telemetry, Console.Out);
+                return cli.RunAsync(args, CancellationToken.None).GetAwaiter().GetResult();
             }
-            catch (Exception ex)
+            else
             {
-                Console.Error.WriteLine($"Clipboard helper failed: {ex.Message}");
-                exitCode = 1;
+                // Service mode
+                var builder = Host.CreateApplicationBuilder(args);
+                builder.Services.AddWindowsService(options => options.ServiceName = "AIGuard Endpoint Agent");
+                builder.Services.AddSingleton<AgentStateStore>();
+                builder.Services.AddSingleton<EndpointApiClient>();
+                builder.Services.AddSingleton<EndpointTelemetryCollector>();
+                builder.Services.AddSingleton<EndpointPolicyCache>();
+                builder.Services.AddSingleton<OfflineTelemetryQueue>();
+                builder.Services.AddHostedService<EndpointWorker>();
+                builder.Build().RunAsync().GetAwaiter().GetResult();
+                return 0;
             }
-        });
-        helperThread.SetApartmentState(ApartmentState.STA);
-        helperThread.Start();
-        helperThread.Join();
-        return exitCode;
-    }
+        }
 
-    // Attach to parent console if running in CLI mode (not run as service)
-    if (!args[0].Equals("run", StringComparison.OrdinalIgnoreCase))
-    {
-        AttachConsole(-1);
-        
-        using var loggerFactory = LoggerFactory.Create(logging =>
-        {
-            logging.AddSimpleConsole(options =>
-            {
-                options.SingleLine = true;
-                options.TimestampFormat = "HH:mm:ss ";
-            });
-        });
-        var store = new AgentStateStore();
-        var api = new EndpointApiClient(store);
-        var telemetry = new EndpointTelemetryCollector();
-        var cli = new AgentCli(store, api, telemetry, Console.Out);
-        return await cli.RunAsync(args, CancellationToken.None);
-    }
-    else
-    {
-        // Service mode
-        var builder = Host.CreateApplicationBuilder(args);
-        builder.Services.AddWindowsService(options => options.ServiceName = "AIGuard Endpoint Agent");
-        builder.Services.AddSingleton<AgentStateStore>();
-        builder.Services.AddSingleton<EndpointApiClient>();
-        builder.Services.AddSingleton<EndpointTelemetryCollector>();
-        builder.Services.AddSingleton<EndpointPolicyCache>();
-        builder.Services.AddSingleton<OfflineTelemetryQueue>();
-        builder.Services.AddHostedService<EndpointWorker>();
-        await builder.Build().RunAsync();
+        // GUI Mode (no arguments)
+        ApplicationConfiguration.Initialize();
+        Application.Run(new AgentGuiForm());
         return 0;
     }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool AttachConsole(int dwProcessId);
 }
-
-// GUI Mode (no arguments)
-ApplicationConfiguration.Initialize();
-Application.Run(new AgentGuiForm());
-return 0;
-
-[DllImport("kernel32.dll", SetLastError = true)]
-static extern bool AttachConsole(int dwProcessId);

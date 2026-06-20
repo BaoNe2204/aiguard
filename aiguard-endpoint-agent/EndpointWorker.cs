@@ -23,6 +23,34 @@ public sealed class EndpointWorker : BackgroundService
         _policyCache = policyCache;
         _offlineQueue = offlineQueue;
         _logger = logger;
+        
+        _telemetry.ProcessKilled += HandleProcessKilled;
+    }
+
+    private void HandleProcessKilled(string appName)
+    {
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                var form = new ApprovalRequestForm(appName);
+                if (form.ShowDialog() == DialogResult.OK)
+                {
+                    var config = _store.LoadConfig();
+                    var state = _store.LoadState();
+                    if (state != null)
+                    {
+                        _api.RequestDesktopAppApprovalAsync(config, state, appName, form.Reason, CancellationToken.None).GetAwaiter().GetResult();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to prompt or send approval for desktop app {AppName}", appName);
+            }
+        });
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

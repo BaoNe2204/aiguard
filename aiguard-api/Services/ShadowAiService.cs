@@ -8,7 +8,7 @@ namespace aiguard_api.Services;
 
 public interface IShadowAiService
 {
-    Task<EndpointAiPolicyResponse> GetPolicyAsync();
+    Task<EndpointAiPolicyResponse> GetPolicyAsync(Device device);
     Task<ShadowAiDiscoveryResponse> DiscoverAsync(Device device, ShadowAiDiscoverRequest request);
     Task<PagedResult<ShadowAiDiscoveryResponse>> GetDiscoveriesAsync(PagedQuery query, bool? approved);
 }
@@ -24,9 +24,9 @@ public class ShadowAiService : IShadowAiService
         _audit = audit;
     }
 
-    public async Task<EndpointAiPolicyResponse> GetPolicyAsync() => new()
+    public async Task<EndpointAiPolicyResponse> GetPolicyAsync(Device device)
     {
-        Websites = await _db.AiWebsites.Where(x => x.IsActive)
+        var websites = await _db.AiWebsites.Where(x => x.IsActive)
             .OrderBy(x => x.Name)
             .Select(x => new AiWebsiteResponse
             {
@@ -36,9 +36,40 @@ public class ShadowAiService : IShadowAiService
                 IsActive = x.IsActive,
                 Mode = x.Mode,
                 LastUpdated = x.LastUpdated
-            }).ToListAsync(),
-        BlockUnknownAi = false
-    };
+            }).ToListAsync();
+
+        var whitelistedProcessNames = await _db.PolicyListEntries
+            .Where(e => e.TenantCode == device.TenantCode && e.ListType == "Whitelist" && e.EntryType == "ProcessName" && e.IsActive)
+            .Select(e => e.Value.ToLower())
+            .ToListAsync();
+
+        var userPrefix = device.UserEmail + ":";
+        var userWhitelistedProcessNames = await _db.PolicyListEntries
+            .Where(e => e.TenantCode == device.TenantCode && e.ListType == "Whitelist" && e.EntryType == "UserProcessName" && e.Value.StartsWith(userPrefix) && e.IsActive)
+            .Select(e => e.Value.Substring(userPrefix.Length).ToLower())
+            .ToListAsync();
+
+        whitelistedProcessNames.AddRange(userWhitelistedProcessNames);
+
+        if (whitelistedProcessNames.Any())
+        {
+            foreach (var site in websites)
+            {
+                var key = $"{site.Name} {site.DomainPattern}".ToLowerInvariant();
+                var isWhitelisted = whitelistedProcessNames.Any(wp => key.Contains(wp));
+                if (isWhitelisted)
+                {
+                    site.Mode = "Allow";
+                }
+            }
+        }
+
+        return new EndpointAiPolicyResponse
+        {
+            Websites = websites,
+            BlockUnknownAi = false
+        };
+    }
 
     public async Task<ShadowAiDiscoveryResponse> DiscoverAsync(Device device, ShadowAiDiscoverRequest request)
     {

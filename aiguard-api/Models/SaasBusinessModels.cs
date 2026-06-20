@@ -45,6 +45,7 @@ public class TenantSettings
     [MaxLength(255)] public string? BankAccountName { get; set; }
     [MaxLength(1000)] public string? PaymentWebhookUrl { get; set; }
     [MaxLength(1000)] public string? BillingAddress { get; set; }
+    public string AgentBlockedCodeApps { get; set; } = "code,cursor,codex,claude,windsurf,trae,tabnine,github copilot";
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     public Tenant Tenant { get; set; } = null!;
 }

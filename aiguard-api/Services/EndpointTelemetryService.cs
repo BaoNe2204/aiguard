@@ -78,20 +78,7 @@ public class EndpointTelemetryService : IEndpointTelemetryService
 
     private static void ApplyAutomaticDeviceControls(Device device, List<EndpointTelemetryEvent> records)
     {
-        var shouldQuarantine = records.Any(item =>
-            item.Category.Equals("AiCodePolicyDecision", StringComparison.OrdinalIgnoreCase) &&
-            item.Severity.Equals("Critical", StringComparison.OrdinalIgnoreCase) &&
-            (item.EventType.Equals("Blocked", StringComparison.OrdinalIgnoreCase) ||
-                (item.Detail?.Contains("Decision=Block", StringComparison.OrdinalIgnoreCase) ?? false) ||
-                (item.Detail?.Contains("Decision=Quarantine", StringComparison.OrdinalIgnoreCase) ?? false)));
-
-        if (!shouldQuarantine) return;
-
-        device.IsQuarantined = true;
-        device.QuarantinedAt = DateTime.UtcNow;
-        device.QuarantineReason = "AI code app policy blocked access to sensitive developer data.";
-        device.RiskStatus = "Critical";
-        device.AgentStatus = "BlockedByAiCodePolicy";
+        // Removed auto quarantine on AI block to prevent full device lockdown just for opening Cursor/Code.
     }
 
     public async Task<PagedResult<EndpointTelemetryResponse>> GetAsync(PagedQuery query, string? category)
