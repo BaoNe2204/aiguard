@@ -146,19 +146,34 @@ export interface InvoiceResponse {
   paidAt?: string;
 }
 
+export interface TicketMessageResponse {
+  id: string;
+  authorEmail: string;
+  authorType: string;
+  message: string;
+  attachmentUrl?: string;
+  isInternal: boolean;
+  createdAt: string;
+}
+
 export interface TicketResponse {
   id: string;
   ticketNumber: string;
   tenantId: string;
+  tenantCode: string;
+  companyName: string;
   subject: string;
   category: string;
   priority: string;
-  message: string;
-  attachmentUrl?: string;
   status: string;
+  requesterEmail: string;
   assignedTo?: string;
+  slaDueAt: string;
+  isSlaBreached: boolean;
   createdAt: string;
   updatedAt: string;
+  resolvedAt?: string;
+  messages: TicketMessageResponse[];
 }
 
 export interface EnrollmentTokenResponse {
@@ -231,6 +246,9 @@ export const platformApi = {
   updatePlan: (id: string, data: ProductPlanRequest) => 
     apiRequest<ProductPlanResponse>(`/platform/plans/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
 
+  deletePlan: (id: string) =>
+    apiRequest<any>(`/platform/plans/${id}`, { method: 'DELETE' }),
+
   getOrders: (params?: { page?: number; pageSize?: number; status?: string; tenantId?: string }) => 
     apiRequest<PagedResult<OrderResponse>>(`/platform/orders${buildQuery(params || {})}`),
 
@@ -261,6 +279,9 @@ export const platformApi = {
   updateTicket: (id: string, data: { status?: string; priority?: string; assignedTo?: string }) => 
     apiRequest<TicketResponse>(`/platform/tickets/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
 
+  addTicketMessage: (id: string, data: { message: string; isInternal?: boolean }) =>
+    apiRequest<TicketResponse>(`/platform/tickets/${id}/messages`, { method: 'POST', body: JSON.stringify(data) }),
+
   getPayments: (params?: { page?: number; pageSize?: number; status?: string; tenantId?: string }) =>
     apiRequest<PagedResult<PaymentResponse>>(`/platform/payments${buildQuery(params || {})}`),
 
@@ -278,4 +299,13 @@ export const platformApi = {
 
   regenerateEnrollmentToken: (tenantId: string) =>
     apiRequest<EnrollmentTokenResponse>(`/platform/onboarding/${tenantId}/enrollment-token`, { method: 'POST' }),
+
+  getTenantUsers: (tenantId: string) =>
+    apiRequest<any[]>(`/platform/tenants/${tenantId}/users`),
+
+  updateTenantUser: (tenantId: string, userId: string, data: any) =>
+    apiRequest<any>(`/platform/tenants/${tenantId}/users/${userId}`, { method: 'PUT', body: JSON.stringify(data) }),
+
+  changeTenantUserPassword: (tenantId: string, userId: string, data: { newPassword: string }) =>
+    apiRequest<any>(`/platform/tenants/${tenantId}/users/${userId}/change-password`, { method: 'POST', body: JSON.stringify(data) }),
 };

@@ -205,6 +205,18 @@ export const businessApi = {
   getTickets: (params?: { page?: number; pageSize?: number; status?: string }) =>
     apiRequest<PagedResult<TicketResponse>>(`/business/tickets${buildQuery(params || {})}`),
 
+  createTicket: (data: { subject: string; message: string; priority?: string; category?: string }) =>
+    apiRequest<TicketResponse>('/business/tickets', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  addTicketMessage: (id: string, data: { message: string }) =>
+    apiRequest<TicketResponse>(`/business/tickets/${id}/messages`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
   getOnboarding: () =>
     apiRequest<OnboardingResponse | OnboardingListResponse>('/business/onboarding'),
 

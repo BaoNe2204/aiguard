@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   AlertCircle, Check, ChevronDown, ChevronLeft, ChevronRight, Edit, Layers, PackageCheck,
   Plus, Save, Sparkles, X, Tag, DollarSign, Users, Monitor,
-  Shield, Calendar, Award, Info, Globe, Activity
+  Shield, Calendar, Award, Info, Globe, Activity, Trash2
 } from 'lucide-react';
 import { businessApi } from '../api/business';
 import { platformApi } from '../api/platform';
@@ -47,6 +47,8 @@ export const BusinessPackaging: React.FC = () => {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [deletePlanConfirm, setDeletePlanConfirm] = useState<{ id: string; name: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const createEmptyNewPlan = () => ({
     code: '',
@@ -209,6 +211,10 @@ export const BusinessPackaging: React.FC = () => {
     }
   };
 
+  const handleDeletePlan = (id: string, name: string) => {
+    setDeletePlanConfirm({ id, name });
+  };
+
   const newYearlyTotal = newPlan.yearlyPrice * newPlan.includedUsers;
 
   return (
@@ -250,6 +256,27 @@ export const BusinessPackaging: React.FC = () => {
         />
       )}
 
+      {isPlatformAdmin && deletePlanConfirm && (
+        <DeleteConfirmModal
+          name={deletePlanConfirm.name}
+          onClose={() => setDeletePlanConfirm(null)}
+          saving={deleting}
+          onConfirm={async () => {
+            setDeleting(true);
+            try {
+              await platformApi.deletePlan(deletePlanConfirm.id);
+              setNotice({ type: 'success', message: `Đã xóa gói dịch vụ ${deletePlanConfirm.name} thành công.` });
+              setDeletePlanConfirm(null);
+              await loadPlans();
+            } catch (e: any) {
+              setNotice({ type: 'error', message: e?.message || 'Không thể xóa gói dịch vụ.' });
+            } finally {
+              setDeleting(false);
+            }
+          }}
+        />
+      )}
+
       {loading ? (
         <div className="p-8 text-center">Đang tải cấu hình gói...</div>
       ) : (
@@ -265,14 +292,24 @@ export const BusinessPackaging: React.FC = () => {
             {plans.map(item => (
               <div key={item.id} className={`business-plan-card pricing-plan-card card glass ${selectedPlanId === item.id ? 'active' : ''} relative`}>
                 {isPlatformAdmin && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); openEditForm(item); }}
-                    className="plan-edit-button"
-                    title="Chỉnh sửa gói"
-                    aria-label={`Chỉnh sửa gói ${item.name}`}
-                  >
-                    <Edit size={14} />
-                  </button>
+                  <>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); openEditForm(item); }}
+                      className="plan-edit-button"
+                      title="Chỉnh sửa gói"
+                      aria-label={`Chỉnh sửa gói ${item.name}`}
+                    >
+                      <Edit size={14} />
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDeletePlan(item.id, item.name); }}
+                      className="plan-delete-button"
+                      title="Xóa gói"
+                      aria-label={`Xóa gói ${item.name}`}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </>
                 )}
 
                 <div className="cursor-pointer plan-card-body" onClick={() => setSelectedPlanId(item.id)}>
@@ -854,5 +891,56 @@ function renderFeature(value: boolean | string) {
   if (value === false) return <span className="feature-no">-</span>;
   return <span className="feature-partial">{value}</span>;
 }
+
+const DeleteConfirmModal: React.FC<{
+  name: string;
+  onClose: () => void;
+  onConfirm: () => void;
+  saving?: boolean;
+}> = ({ name, onClose, onConfirm, saving }) => {
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, []);
+
+  const modal = (
+    <div className="package-modal-overlay" style={{ zIndex: 1100 }}>
+      <div className="delete-confirm-card animate-in fade-in zoom-in-95 duration-200">
+        <div className="delete-confirm-icon-wrap">
+          <Trash2 size={24} />
+        </div>
+        <h3 className="delete-confirm-title">
+          Xác nhận xóa gói dịch vụ
+        </h3>
+        <p className="delete-confirm-text">
+          Bạn có chắc chắn muốn xóa gói dịch vụ <strong>"{name}"</strong> không? Hành động này sẽ gỡ bỏ gói hoàn toàn khỏi danh mục và không thể hoàn tác.
+        </p>
+        <div className="delete-confirm-actions">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="btn-cancel-confirm"
+          >
+            Hủy bỏ
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={saving}
+            className="btn-danger-confirm"
+          >
+            {saving ? 'Đang xóa...' : 'Đồng ý xóa'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  return createPortal(modal, document.body);
+};
 
 export default BusinessPackaging;

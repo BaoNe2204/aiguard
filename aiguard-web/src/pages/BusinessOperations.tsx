@@ -104,19 +104,19 @@ function customerStatusPill(status: string) {
 
 function priorityPill(priority: string) {
   const value = priority?.toLowerCase() || 'low';
-  if (value === 'low')    return <span className="status-pill status-blue">Thấp</span>;
-  if (value === 'medium' || value === 'normal') return <span className="status-pill status-amber">Trung bình</span>;
-  if (value === 'high')   return <span className="status-pill status-red">Cao</span>;
-  if (value === 'urgent' || value === 'critical') return <span className="status-pill status-red">Khẩn cấp</span>;
-  return <span className="status-pill">{priority}</span>;
+  if (value === 'low')    return <span className="status-pill status-blue"><span>Thấp</span></span>;
+  if (value === 'medium' || value === 'normal') return <span className="status-pill status-amber"><span>Trung bình</span></span>;
+  if (value === 'high')   return <span className="status-pill status-red"><span>Cao</span></span>;
+  if (value === 'urgent' || value === 'critical') return <span className="status-pill status-red"><span>Khẩn cấp</span></span>;
+  return <span className="status-pill"><span>{priority}</span></span>;
 }
 
 function ticketStatusPill(status: string) {
-  if (status === 'Open')          return <span className="status-pill status-amber">Mới</span>;
-  if (status === 'In Progress' || status === 'In-progress') return <span className="status-pill status-blue">Đang xử lý</span>;
-  if (status === 'Resolved' || status === 'Closed') return <span className="status-pill status-green">Đã đóng</span>;
-  if (status === 'WaitingCustomer') return <span className="status-pill status-amber">Chờ phản hồi</span>;
-  return <span className="status-pill">{status}</span>;
+  if (status === 'Open')          return <span className="status-pill status-amber"><span>Mới</span></span>;
+  if (status === 'In Progress' || status === 'In-progress') return <span className="status-pill status-blue"><span>Đang xử lý</span></span>;
+  if (status === 'Resolved' || status === 'Closed') return <span className="status-pill status-green"><span>Đã đóng</span></span>;
+  if (status === 'WaitingCustomer') return <span className="status-pill status-amber"><span>Chờ phản hồi</span></span>;
+  return <span className="status-pill"><span>{status}</span></span>;
 }
 
 function paymentStatusPill(status: string) {
@@ -810,10 +810,46 @@ const CustomersView: React.FC<{ customers: TenantResponse[]; isPlatformAdmin: bo
     const [newName, setNewName] = useState('');
     const [newDomain, setNewDomain] = useState('');
 
+    const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
+    const [tenantUsers, setTenantUsers] = useState<any[]>([]);
+    const [loadingUsers, setLoadingUsers] = useState(false);
+
+    const [editingUserId, setEditingUserId] = useState<string | null>(null);
+    const [editName, setEditName] = useState('');
+    const [editEmail, setEditEmail] = useState('');
+    const [editRole, setEditRole] = useState('');
+    const [editIsActive, setEditIsActive] = useState(true);
+
+    const [changingPasswordUserId, setChangingPasswordUserId] = useState<string | null>(null);
+    const [newPassword, setNewPassword] = useState('');
+
+    useEffect(() => {
+      if (selectedTenantId) {
+        void loadTenantUsers(selectedTenantId);
+      } else {
+        setTenantUsers([]);
+      }
+      setEditingUserId(null);
+      setChangingPasswordUserId(null);
+    }, [selectedTenantId]);
+
+    const loadTenantUsers = async (id: string) => {
+      setLoadingUsers(true);
+      try {
+        const users = await platformApi.getTenantUsers(id);
+        setTenantUsers(users);
+      } catch (err) {
+        console.error("Failed to load tenant users", err);
+      } finally {
+        setLoadingUsers(false);
+      }
+    };
+
     const handleStatusChange = async (id: string, current: string) => {
       await platformApi.updateTenantStatus(id, current === 'Active' ? 'Suspended' : 'Active');
       await onReload();
     };
+
     const handleAddTrial = async () => {
       if (!newCompany || !newEmail || !newName || !newDomain) { alert('Vui lòng điền đủ thông tin'); return; }
       await platformApi.createTrialTenant({
@@ -825,51 +861,219 @@ const CustomersView: React.FC<{ customers: TenantResponse[]; isPlatformAdmin: bo
       await onReload();
     };
 
+    const startEditingUser = (user: any) => {
+      setEditingUserId(user.id);
+      setEditName(user.fullName);
+      setEditEmail(user.email);
+      setEditRole(user.role);
+      setEditIsActive(user.isActive);
+      setChangingPasswordUserId(null);
+    };
+
+    const handleUpdateUser = async (userId: string) => {
+      if (!editName.trim() || !editEmail.trim()) {
+        alert('Tên và email không được để trống.');
+        return;
+      }
+      try {
+        await platformApi.updateTenantUser(selectedTenantId!, userId, {
+          fullName: editName,
+          email: editEmail,
+          role: editRole,
+          isActive: editIsActive
+        });
+        setEditingUserId(null);
+        await loadTenantUsers(selectedTenantId!);
+      } catch (err: any) {
+        alert(err.message || 'Lỗi khi cập nhật người dùng.');
+      }
+    };
+
+    const startChangingPassword = (userId: string) => {
+      setChangingPasswordUserId(userId);
+      setNewPassword('');
+      setEditingUserId(null);
+    };
+
+    const handleChangePassword = async (userId: string) => {
+      if (newPassword.length < 8) {
+        alert('Mật khẩu mới phải có ít nhất 8 ký tự.');
+        return;
+      }
+      try {
+        await platformApi.changeTenantUserPassword(selectedTenantId!, userId, { newPassword });
+        setChangingPasswordUserId(null);
+        setNewPassword('');
+        alert('Đổi mật khẩu thành công.');
+      } catch (err: any) {
+        alert(err.message || 'Lỗi khi đổi mật khẩu.');
+      }
+    };
+
+    const handleToggleUserActive = async (user: any) => {
+      try {
+        await platformApi.updateTenantUser(selectedTenantId!, user.id, {
+          fullName: user.fullName,
+          email: user.email,
+          role: user.role,
+          isActive: !user.isActive
+        });
+        await loadTenantUsers(selectedTenantId!);
+      } catch (err: any) {
+        alert(err.message || 'Lỗi khi thay đổi trạng thái.');
+      }
+    };
+
+    const selectedTenant = customers.find(c => c.id === selectedTenantId);
+
     return (
-      <section className="card glass bizops-panel">
-        <div className="bizops-panel-title">
-          <div><Building2 size={18} /><h2>Khách hàng / Tenant CRM</h2></div>
-          {isPlatformAdmin && (
-            <button className="btn-primary" onClick={() => setShowAdd(!showAdd)}><Plus size={14} /> Thêm Trial</button>
-          )}
-        </div>
-        {showAdd && (
-          <div className="bizops-inline-form tenant-trial-form">
-            <h3>Thêm khách hàng dùng thử</h3>
-            <div className="bizops-form-grid">
-              <input type="text" placeholder="Tên công ty" value={newCompany} onChange={e => setNewCompany(e.target.value)} />
-              <input type="text" placeholder="Domain công ty" value={newDomain} onChange={e => setNewDomain(e.target.value)} />
-              <input type="text" placeholder="Tên admin" value={newName} onChange={e => setNewName(e.target.value)} />
-              <input type="email" placeholder="Email admin" value={newEmail} onChange={e => setNewEmail(e.target.value)} />
-            </div>
-            <div className="bizops-actions tenant-trial-actions">
-              <button className="btn-primary tenant-trial-submit" onClick={handleAddTrial}>Tạo Trial</button>
-              <button className="btn-secondary tenant-trial-cancel" onClick={() => setShowAdd(false)}>Hủy</button>
-            </div>
+      <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'flex-start', width: '100%' }}>
+        <section className="card glass bizops-panel" style={{ flex: 1, minWidth: 0 }}>
+          <div className="bizops-panel-title">
+            <div><Building2 size={18} /><h2>Khách hàng / Tenant CRM</h2></div>
+            {isPlatformAdmin && (
+              <button className="btn-primary" onClick={() => setShowAdd(!showAdd)}><Plus size={14} /> Thêm Trial</button>
+            )}
           </div>
-        )}
-        <div className="bizops-crm-grid">
-          {customers.map(c => (
-            <div className="bizops-crm-card" key={c.id}>
-              <div className="crm-head">
-                <div><strong>{c.companyName} ({c.code})</strong><span>{c.ownerName}</span></div>
-                {customerStatusPill(c.status || 'Active')}
+          {showAdd && (
+            <div className="bizops-inline-form tenant-trial-form">
+              <h3>Thêm khách hàng dùng thử</h3>
+              <div className="bizops-form-grid">
+                <input type="text" placeholder="Tên công ty" value={newCompany} onChange={e => setNewCompany(e.target.value)} />
+                <input type="text" placeholder="Domain công ty" value={newDomain} onChange={e => setNewDomain(e.target.value)} />
+                <input type="text" placeholder="Tên admin" value={newName} onChange={e => setNewName(e.target.value)} />
+                <input type="email" placeholder="Email admin" value={newEmail} onChange={e => setNewEmail(e.target.value)} />
               </div>
-              <p>{c.ownerEmail}</p>
-              <p>{c.ownerPhone}</p>
-              <div className="crm-plan">{c.currentPlan || 'Không có gói'}</div>
-              <small>Users: {c.activeUsers} | Devices: {c.activeDevices}</small>
-              {isPlatformAdmin && (
-                <>
-                  <button className="btn-secondary w-full mt-4" onClick={() => handleStatusChange(c.id, c.status || 'Active')}>
-                    {c.status === 'Active' ? 'Khóa Tenant' : 'Mở khóa Tenant'}
-                  </button>
-                </>
+              <div className="bizops-actions tenant-trial-actions">
+                <button className="btn-primary tenant-trial-submit" onClick={handleAddTrial}>Tạo Trial</button>
+                <button className="btn-secondary tenant-trial-cancel" onClick={() => setShowAdd(false)}>Hủy</button>
+              </div>
+            </div>
+          )}
+          <div className="bizops-crm-grid">
+            {customers.map(c => {
+              const isSelected = selectedTenantId === c.id;
+              return (
+                <div 
+                  className={`bizops-crm-card cursor-pointer transition-all hover:bg-white/5 ${isSelected ? 'bg-white/10 border-l-4 border-blue-500' : ''}`} 
+                  key={c.id}
+                  onClick={() => setSelectedTenantId(isSelected ? null : c.id)}
+                >
+                  <div className="crm-head">
+                    <div><strong>{c.companyName} ({c.code})</strong><span>{c.ownerName}</span></div>
+                    {customerStatusPill(c.status || 'Active')}
+                  </div>
+                  <p>{c.ownerEmail}</p>
+                  <p>{c.ownerPhone}</p>
+                  <div className="crm-plan">{c.currentPlan || 'Không có gói'}</div>
+                  <small>Users: {c.activeUsers} | Devices: {c.activeDevices}</small>
+                  {isPlatformAdmin && (
+                    <div onClick={e => e.stopPropagation()} style={{ marginTop: 'auto' }}>
+                      <button className="btn-secondary w-full mt-4" onClick={() => handleStatusChange(c.id, c.status || 'Active')}>
+                        {c.status === 'Active' ? 'Khóa Tenant' : 'Mở khóa Tenant'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* Panel Quản lý Users */}
+        {selectedTenantId && selectedTenant && (
+          <section className="card glass bizops-panel" style={{ width: '480px', flexShrink: 0 }}>
+            <div className="bizops-panel-title">
+              <div><Building2 size={18} /><h2><span>Quản lý Users: {selectedTenant.companyName}</span></h2></div>
+              <button className="btn-secondary text-xs py-1 px-2.5" onClick={() => setSelectedTenantId(null)}><span>Đóng</span></button>
+            </div>
+            <div style={{ padding: '1rem' }}>
+              <div className="mb-4 pb-3 border-b border-gray-700/50 text-sm">
+                <div><span>Đại diện: </span><strong>{selectedTenant.ownerName}</strong></div>
+                <div className="text-gray-400 mt-1"><span>Email liên hệ: </span><span>{selectedTenant.ownerEmail}</span></div>
+              </div>
+
+              <h3 className="text-sm font-semibold mb-3"><span>Danh sách người dùng</span></h3>
+              {loadingUsers ? (
+                <div className="text-center py-4 text-gray-400"><span>Đang tải danh sách người dùng...</span></div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxHeight: '500px', overflowY: 'auto', paddingRight: '0.25rem' }}>
+                  {tenantUsers.map((user: any) => {
+                    const isEditing = editingUserId === user.id;
+                    const isChangingPassword = changingPasswordUserId === user.id;
+                    return (
+                      <div key={user.id} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', padding: '0.75rem' }}>
+                        {isEditing ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                            <div>
+                              <label className="text-xs text-gray-400"><span>Họ tên</span></label>
+                              <input type="text" value={editName} onChange={e => setEditName(e.target.value)} style={{ width: '100%', fontSize: '0.875rem', padding: '0.375rem' }} />
+                            </div>
+                            <div>
+                              <label className="text-xs text-gray-400"><span>Email</span></label>
+                              <input type="email" value={editEmail} onChange={e => setEditEmail(e.target.value)} style={{ width: '100%', fontSize: '0.875rem', padding: '0.375rem' }} />
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                              <div>
+                                <label className="text-xs text-gray-400"><span>Vai trò</span></label>
+                                <select value={editRole} onChange={e => setEditRole(e.target.value)} style={{ width: '100%', background: '#111827', color: 'white', border: '1px solid #374151', borderRadius: '0.375rem', padding: '0.375rem', fontSize: '0.875rem' }}>
+                                  <option value="Employee">Employee</option>
+                                  <option value="DepartmentManager">DepartmentManager</option>
+                                  <option value="SecurityAdmin">SecurityAdmin</option>
+                                  <option value="TenantOwner">TenantOwner</option>
+                                </select>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '1.25rem' }}>
+                                <input type="checkbox" id={`active-${user.id}`} checked={editIsActive} onChange={e => setEditIsActive(e.target.checked)} />
+                                <label htmlFor={`active-${user.id}`} className="text-xs text-gray-300"><span>Hoạt động</span></label>
+                              </div>
+                            </div>
+                            <div className="flex gap-2 justify-end mt-2">
+                              <button className="btn-primary text-xs py-1 px-3" onClick={() => handleUpdateUser(user.id)}><span>Lưu</span></button>
+                              <button className="btn-secondary text-xs py-1 px-3" onClick={() => setEditingUserId(null)}><span>Hủy</span></button>
+                            </div>
+                          </div>
+                        ) : isChangingPassword ? (
+                          <div>
+                            <label className="text-xs text-gray-400 block mb-1"><span>Mật khẩu mới (tối thiểu 8 ký tự)</span></label>
+                            <div className="flex gap-2">
+                              <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Nhập mật khẩu mới..." style={{ flex: 1, fontSize: '0.875rem', padding: '0.375rem' }} />
+                              <button className="btn-primary text-xs py-1 px-3" onClick={() => handleChangePassword(user.id)}><span>Đổi</span></button>
+                              <button className="btn-secondary text-xs py-1 px-3" onClick={() => setChangingPasswordUserId(null)}><span>Hủy</span></button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div>
+                            <div className="flex justify-between items-start mb-1">
+                              <strong className="text-white text-sm">{user.fullName}</strong>
+                              <span className={`status-pill ${user.isActive ? 'status-green' : 'status-red'}`}>
+                                <span>{user.isActive ? 'Hoạt động' : 'Đã khóa'}</span>
+                              </span>
+                            </div>
+                            <div className="text-xs text-gray-400">{user.email}</div>
+                            <div className="text-xs text-blue-400 mt-1"><span>Quyền: </span><span>{user.role}</span></div>
+                            
+                            <div className="flex gap-2 mt-3 pt-2 border-t border-gray-700/30">
+                              <button className="btn-secondary text-xs py-1 px-2.5" onClick={() => startEditingUser(user)}><span>Sửa</span></button>
+                              <button className="btn-secondary text-xs py-1 px-2.5" onClick={() => startChangingPassword(user.id)}><span>Đổi mật khẩu</span></button>
+                              <button className="btn-secondary text-xs py-1 px-2.5" onClick={() => handleToggleUserActive(user)}>
+                                <span>{user.isActive ? 'Khóa' : 'Mở khóa'}</span>
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {tenantUsers.length === 0 && (
+                    <div className="text-center py-4 text-gray-500 text-xs"><span>Không có người dùng nào.</span></div>
+                  )}
+                </div>
               )}
             </div>
-          ))}
-        </div>
-      </section>
+          </section>
+        )}
+      </div>
     );
   };
 
@@ -1024,44 +1228,266 @@ const SubscriptionsView: React.FC<{
 // ====== SUPPORT ======
 const SupportView: React.FC<{ tickets: TicketResponse[]; isPlatformAdmin: boolean; onReload: () => void }> =
   ({ tickets, isPlatformAdmin, onReload }) => {
+    const [showAdd, setShowAdd] = useState(false);
+    const [subject, setSubject] = useState('');
+    const [message, setMessage] = useState('');
+    const [category, setCategory] = useState('Technical');
+    const [priority, setPriority] = useState('Normal');
+    const [submitting, setSubmitting] = useState(false);
+    const [error, setError] = useState('');
+
+    const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
+    const [replyText, setReplyText] = useState('');
+    const [sendingReply, setSendingReply] = useState(false);
+    const [replyError, setReplyError] = useState('');
+
     const updateStatus = async (id: string, status: string) => {
       await platformApi.updateTicket(id, { status });
       await onReload();
     };
+
+    const handleToggleTicket = (id: string) => {
+      setSelectedTicketId(selectedTicketId === id ? null : id);
+      setReplyText('');
+      setReplyError('');
+    };
+
+    const handleCreateTicket = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!subject.trim() || !message.trim()) {
+        setError('Vui lòng nhập đầy đủ tiêu đề và nội dung.');
+        return;
+      }
+      setSubmitting(true);
+      setError('');
+      try {
+        await businessApi.createTicket({ subject, message, priority, category });
+        setSubject('');
+        setMessage('');
+        setCategory('Technical');
+        setPriority('Normal');
+        setShowAdd(false);
+        await onReload();
+      } catch (err: any) {
+        setError(err.message || 'Không thể gửi yêu cầu hỗ trợ. Vui lòng thử lại.');
+      } finally {
+        setSubmitting(false);
+      }
+    };
+
+    const handleSendReply = async (e: React.FormEvent, ticketId: string) => {
+      e.preventDefault();
+      if (!replyText.trim()) return;
+      setSendingReply(true);
+      setReplyError('');
+      try {
+        if (isPlatformAdmin) {
+          await platformApi.addTicketMessage(ticketId, { message: replyText });
+        } else {
+          await businessApi.addTicketMessage(ticketId, { message: replyText });
+        }
+        setReplyText('');
+        await onReload();
+      } catch (err: any) {
+        setReplyError(err.message || 'Không thể gửi phản hồi.');
+      } finally {
+        setSendingReply(false);
+      }
+    };
+
     return (
-      <section className="card glass bizops-panel">
-        <div className="bizops-panel-title">
-          <div><Headphones size={18} /><h2>Hỗ trợ / Ticket</h2></div>
-        </div>
-        <div className="bizops-table-wrap">
-          <table className="bizops-table">
-            <thead><tr>
-              <th>Mã Ticket</th><th>Tiêu đề</th><th>Độ ưu tiên</th><th>Trạng thái</th><th>Ngày tạo</th>
-              {isPlatformAdmin && <th>Thao tác</th>}
-            </tr></thead>
-            <tbody>
-              {tickets.map(t => (
-                <tr key={t.id}>
-                  <td><strong>{t.ticketNumber}</strong></td>
-                  <td>{t.subject}</td>
-                  <td>{priorityPill(t.priority)}</td>
-                  <td>{ticketStatusPill(t.status)}</td>
-                  <td>{new Date(t.createdAt).toLocaleDateString('vi-VN')}</td>
-                  {isPlatformAdmin && (
-                    <td>
-                      <div className="bizops-actions">
-                        {t.status === 'Open' && <button onClick={() => updateStatus(t.id, 'In Progress')}>Xử lý</button>}
-                        {t.status !== 'Resolved' && <button onClick={() => updateStatus(t.id, 'Resolved')}>Đóng</button>}
+      <div className="flex flex-col gap-6 notranslate" translate="no" style={{ width: '100%' }}>
+        {showAdd && (
+          <form className="card glass bizops-panel bizops-inline-form" onSubmit={handleCreateTicket} style={{ marginBottom: '1.5rem' }}>
+            <h3><span>Tạo yêu cầu hỗ trợ mới</span></h3>
+            {error && <div className="text-red-500 text-sm mb-3"><span>{error}</span></div>}
+            <div className="bizops-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+              <div style={{ gridColumn: 'span 2' }}>
+                <label className="text-xs text-gray-400 block mb-1"><span>Tiêu đề</span></label>
+                <input 
+                  type="text" 
+                  placeholder="Tiêu đề yêu cầu hỗ trợ..." 
+                  value={subject} 
+                  onChange={e => setSubject(e.target.value)} 
+                  style={{ width: '100%' }}
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 block mb-1"><span>Phân loại</span></label>
+                <select 
+                  value={category} 
+                  onChange={e => setCategory(e.target.value)}
+                  style={{ width: '100%', background: '#111827', color: 'white', border: '1px solid #374151', borderRadius: '0.375rem', padding: '0.5rem' }}
+                >
+                  <option value="Technical">Kỹ thuật (Technical)</option>
+                  <option value="Billing">Thanh toán (Billing)</option>
+                  <option value="General">Yêu cầu khác (General)</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 block mb-1"><span>Mức độ ưu tiên</span></label>
+                <select 
+                  value={priority} 
+                  onChange={e => setPriority(e.target.value)}
+                  style={{ width: '100%', background: '#111827', color: 'white', border: '1px solid #374151', borderRadius: '0.375rem', padding: '0.5rem' }}
+                >
+                  <option value="Low">Thấp (Low)</option>
+                  <option value="Normal">Trung bình (Normal)</option>
+                  <option value="High">Cao (High)</option>
+                  <option value="Critical">Khẩn cấp (Critical)</option>
+                </select>
+              </div>
+              <div style={{ gridColumn: 'span 2' }}>
+                <label className="text-xs text-gray-400 block mb-1"><span>Nội dung chi tiết</span></label>
+                <textarea 
+                  placeholder="Mô tả chi tiết vấn đề bạn đang gặp phải..." 
+                  value={message} 
+                  onChange={e => setMessage(e.target.value)} 
+                  rows={4}
+                  style={{ width: '100%', background: '#111827', color: 'white', border: '1px solid #374151', borderRadius: '0.375rem', padding: '0.5rem', resize: 'vertical' }}
+                  required
+                />
+              </div>
+            </div>
+            <div className="bizops-actions">
+              <button className="btn-primary" type="submit" disabled={submitting}>
+                <span>{submitting ? 'Đang tạo...' : 'Gửi yêu cầu'}</span>
+              </button>
+              <button className="btn-secondary" type="button" onClick={() => setShowAdd(false)}>
+                <span>Hủy</span>
+              </button>
+            </div>
+          </form>
+        )}
+
+        <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'flex-start', width: '100%' }}>
+          {/* Danh sách ticket */}
+          <section className="card glass bizops-panel" style={{ flex: 1, minWidth: 0 }}>
+            <div className="bizops-panel-title">
+              <div><Headphones size={18} /><h2><span>Hỗ trợ / Ticket</span></h2></div>
+              {!isPlatformAdmin && (
+                <button className="btn-primary" onClick={() => setShowAdd(!showAdd)}>
+                  {showAdd ? <X size={14} /> : <Plus size={14} />} <span>Tạo Ticket</span>
+                </button>
+              )}
+            </div>
+            <div className="bizops-table-wrap">
+              <table className="bizops-table" style={{ minWidth: 'auto' }}>
+                <thead><tr>
+                  <th><span>Mã Ticket</span></th><th><span>Tiêu đề</span></th><th><span>Độ ưu tiên</span></th><th><span>Trạng thái</span></th><th><span>Ngày tạo</span></th>
+                  {isPlatformAdmin && <th><span>Thao tác</span></th>}
+                </tr></thead>
+                <tbody>
+                  {tickets.map(t => {
+                    const isSelected = selectedTicketId === t.id;
+                    return (
+                      <tr 
+                        key={t.id}
+                        className={`hover:bg-white/5 cursor-pointer transition-colors ${isSelected ? 'bg-white/10 border-l-2 border-blue-500' : ''}`}
+                        onClick={() => handleToggleTicket(t.id)}
+                      >
+                        <td><strong>{t.ticketNumber}</strong></td>
+                        <td><span>{t.subject}</span></td>
+                        <td>{priorityPill(t.priority)}</td>
+                        <td>{ticketStatusPill(t.status)}</td>
+                        <td><span>{new Date(t.createdAt).toLocaleDateString('vi-VN')}</span></td>
+                        {isPlatformAdmin && (
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <div className="bizops-actions">
+                              {t.status === 'Open' && <button onClick={() => updateStatus(t.id, 'InProgress')}><span>Xử lý</span></button>}
+                              {t.status !== 'Resolved' && <button onClick={() => updateStatus(t.id, 'Resolved')}><span>Đóng</span></button>}
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                  {tickets.length === 0 && <tr><td colSpan={isPlatformAdmin ? 6 : 5} className="text-center p-4"><span>Không có ticket nào.</span></td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          {/* Chi tiết ticket & Chat box (Side Panel) */}
+          {selectedTicketId && (() => {
+            const t = tickets.find(x => x.id === selectedTicketId);
+            if (!t) return null;
+            return (
+              <section className="card glass bizops-panel" style={{ width: '450px', flexShrink: 0 }}>
+                <div className="bizops-panel-title">
+                  <div><Headphones size={18} /><h2><span>Chi tiết Ticket</span></h2></div>
+                  <button className="btn-secondary text-xs py-1 px-2.5" onClick={() => setSelectedTicketId(null)}><span>Đóng</span></button>
+                </div>
+                <div style={{ padding: '1rem' }}>
+                  <div className="mb-4 pb-3 border-b border-gray-700/50">
+                    <div className="flex justify-between items-start mb-2">
+                      <strong className="text-white text-base">{t.ticketNumber}</strong>
+                      {ticketStatusPill(t.status)}
+                    </div>
+                    <h3 className="text-sm font-medium text-gray-300 mb-2"><span>{t.subject}</span></h3>
+                    <div className="flex gap-2 text-xs text-gray-400">
+                      <span><span>Độ ưu tiên:</span> {priorityPill(t.priority)}</span>
+                      <span>•</span>
+                      <span><span>Ngày tạo:</span> <span>{new Date(t.createdAt).toLocaleString('vi-VN')}</span></span>
+                    </div>
+                  </div>
+
+                  {/* Danh sách tin nhắn */}
+                  <div style={{ maxHeight: '300px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1rem', padding: '0.5rem', background: '#111827', borderRadius: '0.375rem', border: '1px solid #374151' }}>
+                    {t.messages && t.messages.map(msg => {
+                      const isStaff = msg.authorType === 'Staff' || msg.authorEmail.includes('platform');
+                      return (
+                        <div 
+                          key={msg.id} 
+                          style={{ 
+                            alignSelf: isStaff ? 'flex-end' : 'flex-start', 
+                            background: isStaff ? '#1e3a8a' : '#374151', 
+                            border: isStaff ? '1px solid #3b82f6' : '1px solid #4b5563',
+                            padding: '0.5rem 0.75rem', 
+                            borderRadius: '0.5rem', 
+                            maxWidth: '85%' 
+                          }}
+                        >
+                          <div style={{ fontSize: '0.75rem', color: isStaff ? '#60a5fa' : '#9ca3af', marginBottom: '0.25rem' }}>
+                            <strong>{isStaff ? 'Hỗ trợ kỹ thuật' : 'Khách hàng'}</strong> <span>({msg.authorEmail})</span>
+                          </div>
+                          <div className="text-sm text-gray-200 whitespace-pre-wrap">{msg.message}</div>
+                        </div>
+                      );
+                    })}
+                    {(!t.messages || t.messages.length === 0) && (
+                      <div className="text-xs text-gray-400 text-center py-2"><span>Chưa có phản hồi nào.</span></div>
+                    )}
+                  </div>
+
+                  {/* Gửi phản hồi */}
+                  {t.status !== 'Resolved' && t.status !== 'Closed' ? (
+                    <form onSubmit={(e) => handleSendReply(e, t.id)}>
+                      {replyError && <div className="text-red-500 text-xs mb-2"><span>{replyError}</span></div>}
+                      <div className="flex gap-2">
+                        <textarea 
+                          placeholder="Nhập nội dung phản hồi..." 
+                          value={replyText} 
+                          onChange={e => setReplyText(e.target.value)} 
+                          rows={2}
+                          style={{ flex: 1, background: '#111827', color: 'white', border: '1px solid #374151', borderRadius: '0.375rem', padding: '0.5rem', fontSize: '0.875rem' }}
+                          required
+                        />
+                        <button className="btn-primary" type="submit" disabled={sendingReply} style={{ alignSelf: 'flex-end' }}>
+                          <span>{sendingReply ? 'Đang gửi...' : 'Gửi'}</span>
+                        </button>
                       </div>
-                    </td>
+                    </form>
+                  ) : (
+                    <div className="text-xs text-center text-gray-400 border-t border-gray-700/50 pt-2"><span>Ticket này đã đóng. Không thể phản hồi thêm.</span></div>
                   )}
-                </tr>
-              ))}
-              {tickets.length === 0 && <tr><td colSpan={6} className="text-center p-4">Không có ticket nào.</td></tr>}
-            </tbody>
-          </table>
+                </div>
+              </section>
+            );
+          })()}
         </div>
-      </section>
+      </div>
     );
   };
 
@@ -1630,6 +2056,18 @@ const QuotationsView: React.FC<{
 
   const selectedPlan = plans.find(p => p.id === form.productPlanId);
 
+  useEffect(() => {
+    if (selectedPlan) {
+      const isYearly = form.billingCycle === 'Yearly';
+      if (isYearly) {
+        const yearlyDiscount = Math.max(0, (selectedPlan.monthlyPrice * 12 - selectedPlan.yearlyPrice) * form.userQuantity);
+        setForm(prev => ({ ...prev, discountAmount: yearlyDiscount }));
+      } else {
+        setForm(prev => ({ ...prev, discountAmount: 0 }));
+      }
+    }
+  }, [form.productPlanId, form.billingCycle, form.userQuantity, plans]);
+
   const handleCreate = async () => {
     if (!form.productPlanId) { onError('Vui lòng chọn gói dịch vụ.'); return; }
     setCreating(true); onError('');
@@ -1688,13 +2126,31 @@ const QuotationsView: React.FC<{
               <label>Giảm giá (VND)<input type="number" min={0} value={form.discountAmount} onChange={e => setForm({ ...form, discountAmount: Number(e.target.value) })} /></label>
               <label>Thuế (%)<input type="number" min={0} max={100} value={form.taxPercent} onChange={e => setForm({ ...form, taxPercent: Number(e.target.value) })} /></label>
               <label className="wide">Ghi chú / Điều khoản<textarea value={form.terms} onChange={e => setForm({ ...form, terms: e.target.value })} placeholder="Điều khoản báo giá..." /></label>
-              {selectedPlan && (
-                <div className="col-span-2 p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                  <strong className="text-emerald-300">Tổng tiền dự kiến:</strong>
-                  <div className="text-2xl font-bold mt-1">{formatVnd((selectedPlan.monthlyPrice * (form.billingCycle === 'Yearly' ? 12 : 1) * form.userQuantity - form.discountAmount) * (1 + form.taxPercent / 100))}</div>
-                  <small className="text-gray-400">{selectedPlan.name} x {form.userQuantity} user x {form.billingCycle === 'Yearly' ? '12 tháng' : '1 tháng'} - Thuế {form.taxPercent}% - Giảm {formatVnd(form.discountAmount)}</small>
-                </div>
-              )}
+              {selectedPlan && (() => {
+                const userQty = Number(form.userQuantity) || 0;
+                const discountAmt = Number(form.discountAmount) || 0;
+                const taxPct = Number(form.taxPercent) || 0;
+                const unitPrice = form.billingCycle === 'Yearly' ? selectedPlan.yearlyPrice : selectedPlan.monthlyPrice;
+                const subtotal = unitPrice * userQty;
+                const discount = Math.min(discountAmt, subtotal);
+                const taxAmount = (subtotal - discount) * (taxPct / 100);
+                const total = subtotal - discount + taxAmount;
+                return (
+                  <div className="col-span-2 p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-sm">
+                    <strong className="text-emerald-300 block mb-2"><span>Chi tiết tính toán dự kiến:</span></strong>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                      <div className="flex justify-between"><span>Đơn giá:</span> <span>{formatVnd(unitPrice)} / user / {form.billingCycle === 'Yearly' ? 'năm' : 'tháng'}</span></div>
+                      <div className="flex justify-between"><span>Tạm tính (chưa thuế):</span> <span>{formatVnd(subtotal)}</span></div>
+                      {discount > 0 && <div className="flex justify-between text-amber-300"><span>Giảm giá:</span> <span>-{formatVnd(discount)}</span></div>}
+                      <div className="flex justify-between"><span>Thuế VAT ({taxPct}%):</span> <span>+{formatVnd(taxAmount)}</span></div>
+                      <div className="flex justify-between border-t border-emerald-500/30 pt-2 font-bold text-base text-emerald-400 mt-2">
+                        <span>Tổng tiền dự kiến:</span>
+                        <span>{formatVnd(total)}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
             <div className="bizops-actions">
               <button className="btn-primary" onClick={handleCreate} disabled={creating}>{creating ? 'Đang tạo...' : 'Tạo báo giá'}</button>

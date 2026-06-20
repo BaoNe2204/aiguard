@@ -318,21 +318,6 @@ export const Endpoints: React.FC = () => {
     }
   };
 
-  const handleSaveAgentSettings = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!agentSettings) return;
-    setSavingAgentSettings(true);
-    try {
-      await businessApi.updateSettings(agentSettings);
-      await fetchAgentSettings();
-      setError('');
-    } catch (err: any) {
-      setError(err.message || 'Không thể lưu tùy chỉnh Agent');
-    } finally {
-      setSavingAgentSettings(false);
-    }
-  };
-
   const handleAddApp = async (appName?: string) => {
     const appToAdd = (appName || newAppInput).trim();
     if (!appToAdd || !agentSettings) return;

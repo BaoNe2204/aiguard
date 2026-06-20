@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using aiguard_api.Data;
 using aiguard_api.DTOs.Common;
 using aiguard_api.DTOs.Saas;
+using aiguard_api.DTOs.Governance;
 using aiguard_api.Models;
 
 namespace aiguard_api.Services;
@@ -29,6 +30,7 @@ public interface ISaasBusinessService
     Task<List<ProductPlanResponse>> GetPlansAsync(bool activeOnly);
     Task<ProductPlanResponse> CreatePlanAsync(ProductPlanRequest request);
     Task<ProductPlanResponse?> UpdatePlanAsync(Guid id, ProductPlanRequest request);
+    Task<bool> DeletePlanAsync(Guid id);
     Task<PagedResult<OrderResponse>> GetOrdersAsync(PagedQuery query, string? status, Guid? tenantId);
     Task<OrderResponse> CreateOrderAsync(OrderRequest request);
     Task<OrderResponse?> CancelOrderAsync(Guid id, string? reason);
@@ -64,6 +66,11 @@ public interface ISaasBusinessService
     Task<TicketResponse> CreateTicketAsync(TicketRequest request, string requesterEmail);
     Task<TicketResponse?> UpdateTicketAsync(Guid id, TicketUpdateRequest request);
     Task<TicketResponse?> AddTicketMessageAsync(Guid id, TicketMessageRequest request, string authorEmail, bool isStaff);
+    
+    // CRM User Management
+    Task<List<UserAdminResponse>> GetTenantUsersAsync(Guid tenantId);
+    Task<UserAdminResponse?> UpdateTenantUserAsync(Guid tenantId, Guid userId, UpsertUserRequest request);
+    Task<UserAdminResponse?> ChangeTenantUserPasswordAsync(Guid tenantId, Guid userId, string newPassword);
 }
 
 public class SaasBusinessService : ISaasBusinessService
@@ -482,9 +489,17 @@ public class SaasBusinessService : ISaasBusinessService
     public async Task<TenantSettingsResponse> UpdateSettingsAsync(Guid? tenantId, TenantSettingsRequest request)
     {
         var tenant = await ResolveTenantAsync(tenantId);
-        var settings = await _db.TenantSettings.FirstOrDefaultAsync(x => x.TenantId == tenant.Id)
-            ?? new TenantSettings { TenantId = tenant.Id, TenantCode = tenant.Code };
-        if (settings.Id == Guid.Empty || _db.Entry(settings).State == EntityState.Detached) _db.TenantSettings.Add(settings);
+        var settings = await _db.TenantSettings.FirstOrDefaultAsync(x => x.TenantId == tenant.Id);
+        if (settings == null)
+        {
+            settings = new TenantSettings
+            {
+                Id = Guid.Empty,
+                TenantId = tenant.Id,
+                TenantCode = tenant.Code
+            };
+            _db.TenantSettings.Add(settings);
+        }
         settings.LogoUrl = request.LogoUrl?.Trim();
         settings.PrimaryDomain = request.PrimaryDomain?.Trim().ToLowerInvariant();
         settings.DefaultRetentionDays = request.DefaultRetentionDays;
@@ -607,6 +622,16 @@ public class SaasBusinessService : ISaasBusinessService
         ApplyPlan(plan, request);
         await _db.SaveChangesAsync();
         return MapPlan(plan);
+     }
+
+    public async Task<bool> DeletePlanAsync(Guid id)
+    {
+        EnsurePlatformAdmin();
+        var plan = await _db.ProductPlans.FindAsync(id);
+        if (plan == null) return false;
+        _db.ProductPlans.Remove(plan);
+        await _db.SaveChangesAsync();
+        return true;
     }
 
     public async Task<PagedResult<OrderResponse>> GetOrdersAsync(PagedQuery query, string? status, Guid? tenantId)
@@ -640,10 +665,17 @@ public class SaasBusinessService : ISaasBusinessService
         var plan = await _db.ProductPlans.FindAsync(request.ProductPlanId)
             ?? throw new ArgumentException("Product plan not found.");
         ValidateBillingCycle(request.BillingCycle);
-        var subtotal = UnitPrice(plan, request.BillingCycle) * request.UserQuantity;
-        var discount = Math.Min(request.DiscountAmount, subtotal);
+
+        var baseUnitPrice = plan.MonthlyPrice * (request.BillingCycle.Equals("Yearly", StringComparison.OrdinalIgnoreCase) ? 12 : 1);
+        var subtotal = baseUnitPrice * request.UserQuantity;
+        var yearlyDiscount = request.BillingCycle.Equals("Yearly", StringComparison.OrdinalIgnoreCase)
+            ? Math.Max(0, (plan.MonthlyPrice * 12 - plan.YearlyPrice) * request.UserQuantity)
+            : 0;
+
+        var discount = Math.Min(yearlyDiscount + request.DiscountAmount, subtotal);
         var taxable = subtotal - discount;
-        var tax = Math.Round(taxable * request.TaxPercent / 100m, 2);
+        var taxPercent = request.TaxPercent > 0 ? request.TaxPercent : 10m; // fixed 10% default
+        var tax = Math.Round(taxable * taxPercent / 100m, 2);
         var order = new SalesOrder
         {
             OrderNumber = Number("ORD"), TenantId = tenant.Id, TenantCode = tenant.Code,
@@ -1084,9 +1116,16 @@ public class SaasBusinessService : ISaasBusinessService
         var plan = await _db.ProductPlans.FindAsync(request.ProductPlanId)
             ?? throw new ArgumentException("Product plan not found.");
         ValidateBillingCycle(request.BillingCycle);
-        var subtotal = UnitPrice(plan, request.BillingCycle) * request.UserQuantity;
-        var discount = Math.Min(request.DiscountAmount, subtotal);
-        var tax = Math.Round((subtotal - discount) * request.TaxPercent / 100m, 2);
+
+        var baseUnitPrice = plan.MonthlyPrice * (request.BillingCycle.Equals("Yearly", StringComparison.OrdinalIgnoreCase) ? 12 : 1);
+        var subtotal = baseUnitPrice * request.UserQuantity;
+        var yearlyDiscount = request.BillingCycle.Equals("Yearly", StringComparison.OrdinalIgnoreCase)
+            ? Math.Max(0, (plan.MonthlyPrice * 12 - plan.YearlyPrice) * request.UserQuantity)
+            : 0;
+
+        var discount = Math.Min(yearlyDiscount + request.DiscountAmount, subtotal);
+        var taxPercent = request.TaxPercent > 0 ? request.TaxPercent : 10m; // fixed 10% default
+        var tax = Math.Round((subtotal - discount) * taxPercent / 100m, 2);
         var quotation = new Quotation
         {
             QuotationNumber = Number("QUO"), TenantId = tenant.Id, TenantCode = tenant.Code,
@@ -1346,13 +1385,18 @@ public class SaasBusinessService : ISaasBusinessService
             .FirstOrDefaultAsync(x => x.Id == id);
         if (ticket == null) return null;
         if (request.IsInternal && !isStaff) throw new UnauthorizedAccessException();
-        ticket.Messages.Add(new SupportTicketMessage
+        var newMessage = new SupportTicketMessage
         {
-            TenantId = ticket.TenantId, TenantCode = ticket.TenantCode,
-            AuthorEmail = authorEmail, AuthorType = isStaff ? "Staff" : "Customer",
-            Message = request.Message.Trim(), AttachmentUrl = request.AttachmentUrl?.Trim(),
+            SupportTicketId = ticket.Id,
+            TenantId = ticket.TenantId,
+            TenantCode = ticket.TenantCode,
+            AuthorEmail = authorEmail,
+            AuthorType = isStaff ? "Staff" : "Customer",
+            Message = request.Message.Trim(),
+            AttachmentUrl = request.AttachmentUrl?.Trim(),
             IsInternal = request.IsInternal
-        });
+        };
+        _db.SupportTicketMessages.Add(newMessage);
         ticket.Status = isStaff ? "WaitingCustomer" : "InProgress";
         ticket.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
@@ -1727,5 +1771,111 @@ public class SaasBusinessService : ISaasBusinessService
         );
 
         await db.SaveChangesAsync();
+    }
+
+    public async Task<List<UserAdminResponse>> GetTenantUsersAsync(Guid tenantId)
+    {
+        EnsurePlatformAdmin();
+        var tenant = await _db.Tenants.IgnoreQueryFilters().FirstOrDefaultAsync(t => t.Id == tenantId);
+        if (tenant == null) return new List<UserAdminResponse>();
+
+        var users = await _db.Users.IgnoreQueryFilters()
+            .Include(u => u.Department)
+            .Where(u => u.TenantCode == tenant.Code)
+            .OrderBy(u => u.FullName)
+            .ToListAsync();
+
+        return users.Select(u => new UserAdminResponse
+        {
+            Id = u.Id,
+            FullName = u.FullName,
+            Email = u.Email,
+            Role = u.Role,
+            DepartmentId = u.DepartmentId,
+            DepartmentName = u.Department?.Name,
+            IsActive = u.IsActive,
+            MfaRequired = u.MfaRequired,
+            MfaEnabled = u.MfaEnabled,
+            AuthProvider = u.AuthProvider,
+            LastLoginAt = u.LastLoginAt,
+            CreatedAt = u.CreatedAt
+        }).ToList();
+    }
+
+    public async Task<UserAdminResponse?> UpdateTenantUserAsync(Guid tenantId, Guid userId, UpsertUserRequest request)
+    {
+        EnsurePlatformAdmin();
+        var tenant = await _db.Tenants.IgnoreQueryFilters().FirstOrDefaultAsync(t => t.Id == tenantId);
+        if (tenant == null) return null;
+
+        var user = await _db.Users.IgnoreQueryFilters()
+            .Include(u => u.Department)
+            .FirstOrDefaultAsync(u => u.Id == userId && u.TenantCode == tenant.Code);
+        if (user == null) return null;
+
+        var normalizedEmail = request.Email.Trim().ToLowerInvariant();
+        if (await _db.Users.IgnoreQueryFilters().AnyAsync(u => u.Id != userId && u.Email == normalizedEmail))
+            throw new ArgumentException("Email already exists.");
+
+        user.FullName = request.FullName.Trim();
+        user.Email = normalizedEmail;
+        user.Role = request.Role;
+        user.IsActive = request.IsActive;
+        
+        if (!string.IsNullOrWhiteSpace(request.Password))
+        {
+            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
+        }
+
+        await _db.SaveChangesAsync();
+        return new UserAdminResponse
+        {
+            Id = user.Id,
+            FullName = user.FullName,
+            Email = user.Email,
+            Role = user.Role,
+            DepartmentId = user.DepartmentId,
+            DepartmentName = user.Department?.Name,
+            IsActive = user.IsActive,
+            MfaRequired = user.MfaRequired,
+            MfaEnabled = user.MfaEnabled,
+            AuthProvider = user.AuthProvider,
+            LastLoginAt = user.LastLoginAt,
+            CreatedAt = user.CreatedAt
+        };
+    }
+
+    public async Task<UserAdminResponse?> ChangeTenantUserPasswordAsync(Guid tenantId, Guid userId, string newPassword)
+    {
+        EnsurePlatformAdmin();
+        var tenant = await _db.Tenants.IgnoreQueryFilters().FirstOrDefaultAsync(t => t.Id == tenantId);
+        if (tenant == null) return null;
+
+        var user = await _db.Users.IgnoreQueryFilters()
+            .Include(u => u.Department)
+            .FirstOrDefaultAsync(u => u.Id == userId && u.TenantCode == tenant.Code);
+        if (user == null) return null;
+
+        if (string.IsNullOrWhiteSpace(newPassword) || newPassword.Length < 8)
+            throw new ArgumentException("Password must be at least 8 characters.");
+
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
+        await _db.SaveChangesAsync();
+        
+        return new UserAdminResponse
+        {
+            Id = user.Id,
+            FullName = user.FullName,
+            Email = user.Email,
+            Role = user.Role,
+            DepartmentId = user.DepartmentId,
+            DepartmentName = user.Department?.Name,
+            IsActive = user.IsActive,
+            MfaRequired = user.MfaRequired,
+            MfaEnabled = user.MfaEnabled,
+            AuthProvider = user.AuthProvider,
+            LastLoginAt = user.LastLoginAt,
+            CreatedAt = user.CreatedAt
+        };
     }
 }
