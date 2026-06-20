@@ -35,14 +35,14 @@ interface SidebarItem {
 }
 
 const defaultOpenMenus: Record<string, boolean> = {
-  business: true,
-  endpoints: true,
-  approvals: true,
-  policies: true,
+  business: false,
+  endpoints: false,
+  approvals: false,
+  policies: false,
   agents: false,
   audit: false,
   governance: false,
-  myUsage: true
+  myUsage: false
 };
 
 export const Sidebar: React.FC = () => {

@@ -15,6 +15,10 @@ export interface Notification {
 }
 
 export const myUsageApi = {
+  getStats(): Promise<{ total: number; allowed: number; masked: number; blocked: number; pending: number }> {
+    return apiRequest<{ total: number; allowed: number; masked: number; blocked: number; pending: number }>('/my-usage/stats');
+  },
+
   getEvents(query: PagedQuery = {}): Promise<PagedResult<EndpointEventResponse>> {
     return apiRequest<PagedResult<EndpointEventResponse>>(`/my-usage/events${buildQuery(query)}`);
   },

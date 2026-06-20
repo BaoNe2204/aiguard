@@ -39,7 +39,7 @@ export const Policies: React.FC = () => {
 
   // AI Security health/test
   const [aiHealth, setAiHealth] = useState<AiSecurityHealthResult | null>(null);
-  const [scanContent, setScanContent] = useState('Đây là API key test sk-proj-abc1234567890abcdef1234567890 và email khachhang@example.com');
+  const [scanContent, setScanContent] = useState('');
   const [scanResult, setScanResult] = useState<DlpScanResponse | null>(null);
   const [scanLoading, setScanLoading] = useState(false);
   const [scanError, setScanError] = useState('');
@@ -561,68 +561,7 @@ export const Policies: React.FC = () => {
               </div>
 
               {globalPolicy ? (
-                <div className="detector-control-room grid grid-cols-1 xl:grid-cols-[1.02fr_0.98fr] gap-6 items-start">
-                  <div className="card glass detector-ops-panel p-6 border border-zinc-800 bg-zinc-900/20 backdrop-blur-xl rounded-xl">
-                    <div className="flex items-start justify-between gap-4 mb-4">
-                      <div>
-                        <h2 className="text-lg font-bold text-white flex items-center gap-2 mb-2">
-                          <Sparkles size={18} className="text-cyan-400" />
-                          {t('AI Detection Test Bench', 'Phòng thử AI')}
-                        </h2>
-                        <p className="text-sm text-zinc-400">{t('Enter a prompt to validate the path Web → Backend API → aiguard-ai → risk score and masking.', 'Nhập thử nội dung để kiểm tra luồng Web → Backend API → aiguard-ai → chấm điểm rủi ro và che dữ liệu.')}</p>
-                      </div>
-                      <span className={`px-3 py-1 rounded-full text-xs font-bold border ${aiHealth?.available ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30' : 'bg-amber-500/10 text-amber-300 border-amber-500/30'}`}>
-                        {aiHealth?.available ? `AI Online ${aiHealth.version ? `v${aiHealth.version}` : ''}` : `AI ${aiHealth?.status || 'Checking...'}`}
-                      </span>
-                    </div>
-                    {aiHealth?.error && (
-                      <div className="mb-4 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-                        {aiHealth.error}. Backend vẫn dùng local scanner fallback nếu AI service chưa chạy.
-                      </div>
-                    )}
-                    <textarea
-                      className="w-full min-h-[140px] rounded-xl border border-zinc-700 bg-zinc-950/80 p-4 text-sm text-white outline-none focus:border-cyan-400 detector-textarea"
-                      value={scanContent}
-                      onChange={e => setScanContent(e.target.value)}
-                      placeholder="Dán prompt/API key/email/CCCD để test..."
-                    />
-                    <div className="mt-4 flex flex-wrap items-center gap-3">
-                      <button className="btn-primary px-4 py-2" type="button" disabled={scanLoading || !scanContent.trim()} onClick={runAiScanTest}>
-                        {scanLoading ? 'Đang quét...' : 'Quét thử'}
-                      </button>
-                      {scanError && <span className="text-sm text-rose-300">{scanError}</span>}
-                    </div>
-                    {scanResult && (
-                      <div className="mt-5 grid grid-cols-1 lg:grid-cols-3 gap-3">
-                        <div className="detector-result-card">
-                          <span className="text-xs text-zinc-400">Risk Score</span>
-                          <strong className="block text-2xl text-white">{scanResult.riskScore}</strong>
-                          <span className="text-sm text-zinc-300">{scanResult.riskLevel} · {scanResult.decision}</span>
-                        </div>
-                        <div className="detector-result-card lg:col-span-2">
-                          <span className="text-xs text-zinc-400">Policy reason</span>
-                          <p className="mt-1 text-sm text-zinc-200">{scanResult.policyReason || '-'}</p>
-                        </div>
-                        <div className="detector-result-card lg:col-span-3">
-                          <span className="text-xs text-zinc-400">Dữ liệu phát hiện</span>
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            {scanResult.matches.length > 0 ? scanResult.matches.map((match, index) => (
-                              <span key={`${match.dataType}-${index}`} className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-200">
-                                {match.dataType} · {match.count} · +{match.weight}
-                              </span>
-                            )) : <span className="text-sm text-zinc-400">Không phát hiện dữ liệu nhạy cảm.</span>}
-                          </div>
-                        </div>
-                        {scanResult.maskedContent && (
-                          <div className="detector-result-card detector-result-card-success lg:col-span-3">
-                            <span className="text-xs text-emerald-200">Nội dung đã che</span>
-                            <pre className="mt-2 whitespace-pre-wrap text-sm text-emerald-100">{scanResult.maskedContent}</pre>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
+                <div className="detector-control-room">
                   <div className="card glass detector-matrix-panel p-6 border border-zinc-800 bg-zinc-900/20 backdrop-blur-xl rounded-xl">
                     <div className="flex justify-between items-start gap-4 mb-4">
                       <div>

@@ -235,9 +235,6 @@ async function enroll() {
     if (!granted) throw new Error("Bạn chưa cấp quyền kết nối đến Backend API");
 
     let finalHost = elements.host.value.trim();
-    if (finalHost && !finalHost.toLowerCase().endsWith("-ext")) {
-      finalHost += "-Ext";
-    }
 
     const response = await chrome.runtime.sendMessage({
       type: "AIGUARD_ENROLL",

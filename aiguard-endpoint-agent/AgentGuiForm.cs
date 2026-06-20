@@ -119,10 +119,7 @@ public sealed class AgentGuiForm : Form
         this.MaximizeBox = false;
         
         // Dynamically create and apply form icon
-        using (var defaultIcon = CreateDynamicIcon(ColorMuted))
-        {
-            this.Icon = defaultIcon;
-        }
+        this.Icon = CreateDynamicIcon(ColorMuted);
 
         // Layout panels
         var panelHeader = new Panel

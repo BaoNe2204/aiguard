@@ -37,3 +37,6 @@ AIGuard-Implementation-Status.md
 AIGuard-Project-Feature-Description.md
 AIGuard-Endpoint-Agent-Detailed-Description.md
 aiguard-web/public/aiguard-endpoint-agent.exe
+RESET_DB.bat
+RUN_AGENT.bat
+DEMO_GUIDE.md

@@ -61,6 +61,15 @@ export const MyUsage: React.FC = () => {
     pending: 0
   });
 
+  // Load stats once when user is available or tab changes
+  useEffect(() => {
+    if (user) {
+      myUsageApi.getStats()
+        .then(result => setStats(result))
+        .catch(() => {});
+    }
+  }, [user, activeTab]);
+
   useEffect(() => {
     if (activeTab === 'logs' && user) {
       setLogsLoading(true);
@@ -69,19 +78,6 @@ export const MyUsage: React.FC = () => {
           setLogs(result.items);
           setLogsTotalPages(result.totalPages);
           setLogsTotalCount(result.totalCount);
-          // Calculate stats
-          const allowed = result.items.filter((l: EndpointEventResponse) => l.decision === 'Allow').length;
-          const masked = result.items.filter((l: EndpointEventResponse) => l.decision === 'Mask').length;
-          const blocked = result.items.filter((l: EndpointEventResponse) => l.decision === 'Block').length;
-          const pending = result.items.filter((l: EndpointEventResponse) => l.decision === 'PendingApproval').length;
-          setStats(prev => ({
-            ...prev,
-            total: result.totalCount,
-            allowed: prev.allowed + allowed,
-            masked: prev.masked + masked,
-            blocked: prev.blocked + blocked,
-            pending: prev.pending + pending
-          }));
         })
         .catch(() => {})
         .finally(() => setLogsLoading(false));
@@ -381,7 +377,7 @@ export const MyUsage: React.FC = () => {
                 <div className="summary-stats">
                   <div className="summary-stat-row">
                     <span>{t('Total prompts checked', 'Tổng prompt đã kiểm tra')}</span>
-                    <strong>{logsTotalCount}</strong>
+                    <strong>{stats.total}</strong>
                   </div>
                   <div className="summary-stat-row success">
                     <span>{t('Safe interactions', 'Tương tác an toàn')}</span>

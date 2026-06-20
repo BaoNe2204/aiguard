@@ -885,7 +885,34 @@ public class SaasBusinessService : ISaasBusinessService
         EnsurePlatformAdmin();
         var order = await _db.SalesOrders.Include(x => x.Tenant).Include(x => x.ProductPlan)
             .FirstOrDefaultAsync(x => x.Id == orderId) ?? throw new KeyNotFoundException();
-        if (order.Status != "Paid") throw new ArgumentException("Only fully paid orders can be provisioned.");
+        
+        if (order.Status != "Paid" && order.Status != "Provisioned")
+        {
+            var now = DateTime.UtcNow;
+            var payment = new PaymentRecord
+            {
+                PaymentNumber = Number("PAY"),
+                OrderId = order.Id,
+                TenantId = order.TenantId,
+                TenantCode = order.TenantCode,
+                Amount = order.TotalAmount,
+                Currency = order.Currency,
+                Method = "Manual",
+                TransactionReference = "PlatformAdmin Provisioning",
+                Status = "Confirmed",
+                ReconciliationNote = "Provisioned by Platform Admin",
+                ReconciledBy = "platform-admin",
+                ReconciledAt = now,
+                PaidAt = now
+            };
+            order.Status = "Paid";
+            order.PaidAt = now;
+            order.PaymentReference = payment.TransactionReference;
+            order.UpdatedAt = now;
+            _db.PaymentRecords.Add(payment);
+            await _db.SaveChangesAsync();
+        }
+
         var months = order.BillingCycle.Equals("Yearly", StringComparison.OrdinalIgnoreCase) ? 12 : 1;
         return await ProvisionOrderCoreAsync(order, months);
     }

@@ -225,12 +225,13 @@ app.MapHub<EndpointHub>("/hubs/endpoint");
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AiguardDbContext>();
+    if (builder.Configuration.GetValue<bool>("DatabaseSettings:ResetOnStartup"))
+    {
+        await db.Database.EnsureDeletedAsync();
+    }
+
     if (app.Environment.IsEnvironment("Testing"))
     {
-        if (builder.Configuration.GetValue<bool>("DatabaseSettings:ResetOnStartup"))
-        {
-            await db.Database.EnsureDeletedAsync();
-        }
         await db.Database.EnsureCreatedAsync();
     }
     else

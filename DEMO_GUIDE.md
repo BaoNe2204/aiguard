@@ -1,126 +1,132 @@
-# Kịch Bản Quay Video Demo Hệ Thống AIGuard
+# 📖 HƯỚNG DẪN CHẠY BÁO CÁO & DEMO HỆ THỐNG AIGUARD CONTROL TOWER
+*(Tài liệu dành cho Giảng viên / Hội đồng Đánh giá)*
 
-Tài liệu này hướng dẫn chi tiết từng bước quay video demo từ đầu đến cuối, giúp thể hiện toàn bộ tính năng cốt lõi của AIGuard từ cài đặt, chạy test, đến giao diện người dùng và cơ chế bảo vệ.
-
----
-
-## 🎥 PHẦN 1: Chuẩn Bị Môi Trường (Trước Khi Bắt Đầu Quay)
-
-Để video mượt mà, hãy chuẩn bị sẵn các tab và terminal như sau:
-
-1. **Terminal 1: Chạy Backend API**
-   ```powershell
-   cd "G:\Dự Án\DuAn2026\aiguard-api"
-   # Reset DB về mặc định để có data demo sạch
-   dotnet run --environment Testing --urls "http://127.0.0.1:5190" --DatabaseSettings:ResetOnStartup=true
-   ```
-   *(Sau khi API khởi động xong, bấm `Ctrl+C` rồi chạy lại ở môi trường Development hoặc giữ nguyên tùy mục đích test)*
-   Chạy chính thức:
-   ```powershell
-   dotnet run --environment Development --urls "http://127.0.0.1:5185"
-   ```
-
-2. **Terminal 2: Chạy Web Dashboard**
-   ```powershell
-   cd "G:\Dự Án\DuAn2026\aiguard-web"
-   npm run dev -- --host 127.0.0.1
-   ```
-   *Mở trình duyệt tại địa chỉ: `http://127.0.0.1:5173`*
-
-3. **Terminal 3: Sẵn sàng chạy Regression Test**
-   ```powershell
-   cd "G:\Dự Án\DuAn2026\aiguard-api"
-   # Chuẩn bị sẵn lệnh nhưng chưa bấm Enter
-   powershell.exe -ExecutionPolicy Bypass -File .\Tests\run-api-tests.ps1
-   ```
-
-4. **Trình duyệt Chrome sạch (Không ẩn danh):**
-   - Truy cập `chrome://extensions/`.
-   - Bật **Developer mode** ở góc phải.
-   - Chọn **Load unpacked** và trỏ đến thư mục: `G:\Dự Án\DuAn2026\aiguard-extension\dist`.
+Tài liệu này hướng dẫn chi tiết từng bước để cài đặt, khởi chạy toàn bộ 6 phân hệ của hệ thống **AIGuard Control Tower** trên môi trường máy tính cá nhân (Local) để chạy demo chấm điểm.
 
 ---
 
-## 🎬 KỊCH BẢN QUAY CHI TIẾT (STORYBOARD)
+## 🛠️ YÊU CẦU PHẦN MỀM CẦN CÀI TRƯỚC (Prerequisites)
 
-### Cảnh 1: Giới thiệu & Chạy Regression Test (Thời lượng: ~45s)
-* **Thao tác:**
-  1. Show cấu trúc dự án trên VS Code hoặc thư mục chính.
-  2. Mở Terminal 3 lên và nhấn `Enter` chạy bộ test `run-api-tests.ps1`.
-  3. Để màn hình cuộn chạy các test cases nhanh chóng và hiển thị dòng chữ xanh: **`Passed: 169 / 169`**.
-* **Lời bình/Phụ đề gợi ý:**
-  > *"Xin chào các bạn. Hôm nay chúng ta sẽ demo hệ thống bảo mật thông tin AIGuard. Đầu tiên, chúng tôi sẽ chạy bộ thử nghiệm tự động hồi quy gồm 169 testcases để kiểm chứng toàn bộ tính năng API backend từ quản lý thiết bị, dlp engine cho tới tích hợp blockchain."*
-
-### Cảnh 2: Đăng Ký Doanh Nghiệp & Thiết Lập MFA (Thời lượng: ~1m15s)
-* **Thao tác:**
-  1. Mở trang web đăng ký tài khoản dùng thử (Trial Signup) của Tenant mới hoặc đăng nhập bằng tài khoản Admin mặc định có yêu cầu MFA.
-  2. Tạo tài khoản mới: Điền tên công ty (ví dụ: `AIGuard Demo Ltd`), email (`admin@democo.com`).
-  3. Hệ thống trả về giao diện **Thiết lập MFA (Multi-Factor Authentication)** kèm mã QR và Secret key Base32.
-  4. Dùng điện thoại (Google Authenticator) quét mã QR, lấy mã TOTP 6 số nhập vào.
-  5. Đăng nhập thành công và lưu 8 mã dự phòng (Recovery Codes). Show màn hình Dashboard chính vừa được khởi tạo.
-* **Lời bình/Phụ đề gợi ý:**
-  > *"AIGuard bảo vệ tài khoản quản trị nghiêm ngặt bằng cơ chế xác thực hai lớp TOTP MFA. Ở lần đăng nhập đầu tiên, hệ thống sẽ yêu cầu người dùng thiết lập ứng dụng xác thực và lưu trữ recovery codes phòng trường hợp khẩn cấp."*
-
-### Cảnh 3: Quản Lý Thiết Bị & Đăng Ký Device Key (Thời lượng: ~1m)
-* **Thao tác:**
-  1. Chuyển sang tab **Endpoint Protection Console** -> Chọn tab **Deployment**.
-  2. Bấm nút **Rotate Enrollment Token** để lấy mã đăng ký mới.
-  3. Show lệnh cài đặt Windows Agent tự động được tạo ra bên dưới dạng Powershell. Bấm **Copy**.
-  4. Mở tab **Deployed Devices**, show trạng thái các máy đang Online/Offline, trạng thái Browser Extension có đang Active hay không theo thời gian thực (realtime).
-* **Lời bình/Phụ đề gợi ý:**
-  > *"Để quản lý các thiết bị trong mạng lưới doanh nghiệp, AIGuard cấp mã đăng ký thiết bị (Enrollment Token) tự động. Mỗi máy trạm Windows sau khi cài đặt Agent sẽ liên kết trực tiếp, đồng bộ chính sách bảo mật và gửi tín hiệu heartbeat liên tục."*
-
-### Cảnh 4: Chặn Rò Rỉ Dữ Liệu Trên Browser Extension (DLP) (Thời lượng: ~1m30s)
-* **Thao tác:**
-  1. Mở tab ChatGPT hoặc Gemini trên Chrome đã cài Extension.
-  2. **Test case 1: Thông tin cá nhân (PII)** -> Nhập prompt có email/số điện thoại: `"Gửi email cho abc@example.com qua số 0901234567"`. Bấm Send.
-     - *Kết quả:* Extension chặn, hiển thị Popup cảnh báo với mã hóa Masking (ví dụ: `abc[EMAIL]`, `090[PHONE]`).
-  3. **Test case 2: Secrets / API Keys** -> Nhập prompt chứa AWS Secret Key hoặc API key: `"sk-abcdefghijklmnopqrstuvwxyz123456"`. Bấm Send.
-     - *Kết quả:* Extension chặn cứng (Block), hiển thị mức độ rủi ro: **Critical**, lý do policy vi phạm.
-  4. **Test case 3: Source Code cần phê duyệt** -> Nhập đoạn code Java/C#: `"public class DatabaseConnection { ... }"`
-     - *Kết quả:* Extension hiển thị Popup trạng thái **Pending Approval**. Nhập lý do nghiệp vụ: `"Cần phân tích tối ưu hóa mã nguồn với AI"` và nhấn **Gửi yêu cầu phê duyệt**. Màn hình hiển thị trạng thái đang chờ (Polling).
-* **Lời bình/Phụ đề gợi ý:**
-  > *"Bây giờ là tính năng quan trọng nhất: Giám sát rò rỉ dữ liệu thông qua Browser Extension. Khi người dùng cố ý gửi thông tin nhạy cảm như email, số điện thoại, mật khẩu, AWS key hoặc mã nguồn lên ChatGPT, AIGuard DLP Engine sẽ phân tích và chặn đứng ngay lập tức dựa trên chính sách của từng phòng ban."*
-
-### Cảnh 5: Luồng Phê Duyệt Approval Realtime (Thời lượng: ~1m)
-* **Thao tác:**
-  1. Quay lại trang Web quản trị (AIGuard Dashboard) bằng tài khoản Security Admin.
-  2. Show thông báo Realtime SignalR nhảy lên ở topbar chuông thông báo và tab **Approvals**.
-  3. Click vào yêu cầu phê duyệt mã nguồn vừa gửi ở Cảnh 4.
-  4. Xem chi tiết prompt gốc (đã mã hóa bảo mật), chọn hành động: **Approve With Masking** hoặc **Approve** kèm lời nhắn: `"Đã duyệt cho phép sử dụng"`. Bấm gửi.
-  5. Quay lại màn hình ChatGPT ban đầu, chỉ ra rằng Extension đã tự động nhận được tín hiệu phê duyệt và cho phép prompt đi qua.
-* **Lời bình/Phụ đề gợi ý:**
-  > *"Yêu cầu phê duyệt mã nguồn của nhân viên lập tức xuất hiện trên bảng điều khiển của Admin theo thời gian thực nhờ kết nối SignalR. Quản trị viên có thể xem xét lý do nghiệp vụ, phê duyệt cho phép gửi bản đã che thông tin nhạy cảm hoặc duyệt hoàn toàn."*
-
-### Cảnh 6: Phát Hiện Shadow AI (Thời lượng: ~45s)
-* **Thao tác:**
-  1. Mở một trang web AI chưa được cho phép trong danh mục (ví dụ: `https://unapproved-ai.example/chat`).
-  2. Extension phát hiện trang web không nằm trong allowlist, tự động điều hướng (redirect) tab sang trang chặn mặc định của AIGuard.
-  3. Trên Web quản trị, vào mục **Shadow AI Discovery**, show danh sách các lượt truy cập website trái phép được gửi về từ máy trạm.
-* **Lời bình/Phụ đề gợi ý:**
-  > *"Để ngăn chặn rủi ro Shadow AI, AIGuard liên tục phát hiện các lượt truy cập vào các trang AI nằm ngoài danh mục cho phép, ghi nhận thông tin thiết bị và chặn truy cập để bảo vệ tài nguyên số của doanh nghiệp."*
-
-### Cảnh 7: Telemetry Của Desktop Agent & Cấu Hình Chặn App (Thời lượng: ~1m)
-* **Thao tác:**
-  1. Vào tab **Telemetry Agent** trên Web quản trị, giới thiệu các sự kiện Metadata như kết nối USB (Removable Storage), Network Share, RDP Client, dịch vụ Print Spooler.
-  2. Di chuyển sang tab **Tùy chỉnh Agent** (Agent Settings).
-  3. Thêm một app lập trình AI cần chặn vào danh sách (ví dụ: `cursor`, `copilot`).
-  4. Nhấn lưu và giải thích cơ chế phân tách ranh giới hệ điều hành (chỉ giám sát metadata an toàn, không đọc clipboard tùy tiện để tôn trọng quyền riêng tư).
-* **Lời bình/Phụ đề gợi ý:**
-  > *"Desktop Agent chạy ngầm trên Windows giúp ghi nhận các sự kiện hệ thống quan trọng như cắm USB, in ấn tài liệu hoặc kết nối mạng dùng chung. Đồng thời, doanh nghiệp có thể cấu hình chặn các tiến trình lập trình AI không an toàn như Cursor hay Copilot."*
-
-### Cảnh 8: Báo Cáo SIEM & Blockchain Audit (Thời lượng: ~45s)
-* **Thao tác:**
-  1. Chuyển tới tab **Reports**. Bấm tải báo cáo PDF và Excel. Mở nhanh file PDF vừa tải xuống để hiển thị định dạng báo cáo chuyên nghiệp có biểu đồ rủi ro.
-  2. Vào tab **Blockchain batches** / **Audit Logs**. Show chuỗi hash liên kết các sự kiện bảo mật.
-  3. Bấm **Verify** một lô audit để hệ thống thực hiện kiểm tra tính toàn vẹn (Integrity Match: True).
-* **Lời bình/Phụ đề gợi ý:**
-  > *"Cuối cùng, mọi hành động bảo mật đều được tổng hợp thành báo cáo PDF/Excel chuyên nghiệp và được ký số, gộp lô định kỳ để lưu vết bằng cơ chế Blockchain Anchor, đảm bảo nhật ký hệ thống không thể bị giả mạo hoặc xóa bỏ."*
+Để hệ thống chạy mượt mà, máy tính cần cài sẵn các công cụ sau:
+1. **Node.js (Phiên bản 18 hoặc 20 LTS):** [Tải tại đây](https://nodejs.org/) (Dùng chạy Frontend & Blockchain).
+2. **.NET 10.0 SDK (hoặc .NET 8.0/9.0):** [Tải tại đây](https://dotnet.microsoft.com/download) (Dùng chạy Backend API và Windows Agent).
+3. **Python 3.10 hoặc 3.11:** [Tải tại đây](https://www.python.org/) (Dùng chạy AI Security Engine). *Lưu ý: Tích chọn "Add Python to PATH" khi cài.*
+4. **SQL Server & SSMS:** Cài đặt bản SQL Server Express (miễn phí) và phần mềm SQL Server Management Studio (SSMS).
 
 ---
 
-## 💡 Mẹo Để Video Trông Chuyên Nghiệp Hơn
+## 🚀 QUY TRÌNH 7 BƯỚC KHỞI CHẠY HỆ THỐNG
 
-1. **Hiệu ứng Glassmorphism**: Giao diện AIGuard được thiết kế theo phong cách mờ kính hiện đại (Glassmorphism), hãy chọn chế độ hiển thị màn hình có độ phân giải Full HD (1080p) để làm nổi bật thiết kế này.
-2. **Thao tác chậm rãi**: Khi nhấp chuột hoặc chuyển tab, hãy dừng lại 1-2 giây giúp người xem dễ theo dõi.
-3. **Che các thông tin nhạy cảm cá nhân**: Vì đây là video demo nên sử dụng dữ liệu giả lập sẵn của bộ test để tránh lộ thông tin thật.
+### BƯỚC 1: KHỞI TẠO CƠ SỞ DỮ LIỆU (SQL SERVER)
+1. Mở phần mềm **SQL Server Management Studio (SSMS)**.
+2. Kết nối vào SQL Server cục bộ (thường tên Server Name là `.` hoặc `localhost` hoặc `.\SQLEXPRESS`).
+3. Mở file [database/production-idempotent.sql](file:///g:/Dự%20Án/DuAn2026/database/production-idempotent.sql) bằng SSMS.
+4. Bấm nút **Execute** (hoặc phím **F5**) để tự động tạo cơ sở dữ liệu `AiguardDb` cùng toàn bộ bảng và dữ liệu mẫu thử nghiệm.
+5. Cấu hình kết nối:
+   - Mở file cấu hình API [appsettings.json](file:///g:/Dự%20Án/DuAn2026/aiguard-api/appsettings.json).
+   - Kiểm tra dòng `ConnectionStrings.DefaultConnection`. Đảm bảo khớp thông tin xác thực SQL Server của máy (Ví dụ dùng Windows Authentication hoặc nhập tài khoản `sa`).
+
+---
+
+### BƯỚC 2: KHỞI CHẠY AI SECURITY SERVICE (PYTHON FASTAPI)
+Phân hệ này chạy mô hình Llama Guard và bộ lọc Regex để phân loại dữ liệu nhạy cảm tại cổng **8000**.
+1. Mở cửa sổ **Terminal (PowerShell hoặc CMD)** tại thư mục dự án.
+2. Di chuyển vào thư mục: `cd aiguard-ai`
+3. Chạy file script PowerShell tự động setup môi trường ảo và khởi động:
+   ```powershell
+   .\start-aiguard-ai.ps1
+   ```
+   *(Hoặc chạy thủ công: `pip install -r requirements.txt` sau đó chạy `uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload`)*
+4. **Kiểm tra thành công:** Truy cập trang [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs) thấy giao diện tài liệu Swagger của AI Engine là thành công.
+
+---
+
+### BƯỚC 3: KHỞI CHẠY BACKEND API (C# .NET)
+Cung cấp dịch vụ Gateway và lưu vết dữ liệu tại cổng **5000 / 5001**.
+1. Mở một cửa sổ **Terminal** mới.
+2. Di chuyển vào thư mục API: `cd aiguard-api`
+3. Chạy lệnh:
+   ```bash
+   dotnet restore
+   dotnet run
+   ```
+4. **Kiểm tra thành công:** Truy cập địa chỉ [http://localhost:5000/swagger](http://localhost:5000/swagger) hiển thị danh sách API Swagger của hệ thống.
+
+---
+
+### BƯỚC 4: KHỞI CHẠY FRONTEND DASHBOARD (REACT / VITE)
+Giao diện Web Admin và bảng điều khiển tại cổng **5173**.
+1. Mở một cửa sổ **Terminal** mới.
+2. Di chuyển vào thư mục Frontend: `cd aiguard-web`
+3. Cài thư viện và chạy:
+   ```bash
+   npm install
+   npm run dev
+   ```
+4. **Đường dẫn truy cập:** Truy cập trình duyệt 👉 **http://localhost:5173**
+
+---
+
+### BƯỚC 5: CÀI ĐẶT TIỆN ÍCH TRÌNH DUYỆT (CHROME EXTENSION)
+Theo dõi hành vi gửi Prompt lên các trang AI (ChatGPT, Gemini...).
+1. Mở trình duyệt Google Chrome và truy cập đường dẫn: `chrome://extensions/`
+2. Kích hoạt nút **Chế độ nhà phát triển (Developer mode)** ở góc trên bên phải.
+3. Bấm vào nút **Load unpacked (Tải tiện ích đã giải nén)** ở góc trái.
+4. Trỏ và chọn thư mục [aiguard-extension](file:///g:/Dự%20Án/DuAn2026/aiguard-extension) trong dự án của bạn để hoàn tất cài đặt.
+
+---
+
+### BƯỚC 6: CHẠY WINDOWS DESKTOP AGENT (AGENT MÁY TRẠM)
+Theo dõi Clipboard và đồng bộ các chính sách bảo vệ máy trạm.
+1. Mở thư mục [aiguard-endpoint-agent](file:///g:/Dự%20Án/DuAn2026/aiguard-endpoint-agent).
+2. Chạy file Visual Studio Solution (`aiguard-endpoint-agent.sln`) hoặc chạy nhanh bằng lệnh Terminal:
+   ```bash
+   cd aiguard-endpoint-agent
+   dotnet run
+   ```
+3. Giao diện C# WPF Agent sẽ xuất hiện dưới khay hệ thống, kết nối trực tiếp với API cục bộ.
+
+---
+
+### BƯỚC 7 (TÙY CHỌN): CHẠY BLOCKCHAIN LEDGER (HARDHAT)
+Neo giữ mã băm Merkle Root chống sửa xóa nhật ký logs.
+1. Mở Terminal mới: `cd aiguard-contracts`
+2. Khởi chạy mạng ảo: `npx hardhat node`
+3. Deploy Smart Contract lên mạng ảo:
+   ```bash
+   npx hardhat run scripts/deploy.js --network localhost
+   ```
+
+---
+
+## 🔒 HƯỚNG DẪN KỊCH BẢN DEMO (DEMO SCENARIOS)
+
+Để trình diễn cho giảng viên, bạn có thể thực hiện đăng nhập bằng 3 tài khoản mẫu ứng với 3 vai trò khác nhau trong doanh nghiệp:
+
+### 1. Kịch bản Nhân viên (Employee)
+* **Tài khoản:** `nguyenvana@company.com` / `Employee@123`
+* **Cách demo:**
+  1. Mở ChatGPT/Gemini, nhập một đoạn văn bản bình thường -> Hệ thống cho phép gửi đi (`Allow`).
+  2. Thử dán một số thông tin nhạy cảm ở mức trung bình (ví dụ: Số điện thoại, email cá nhân) -> Tiện ích mở rộng sẽ tự động che dấu thành `[PHONE_NUMBER_1]`, `[EMAIL_1]` trước khi gửi lên AI để bảo vệ dữ liệu.
+  3. Đăng nhập trang [http://localhost:5173/app/my-usage/overview](http://localhost:5173/app/my-usage/overview) để xem **Điểm an toàn (Safety Score)** và biểu đồ thống kê thời gian thực của chính nhân viên đó.
+
+### 2. Kịch bản Chủ doanh nghiệp (Tenant Owner)
+* **Tài khoản:** `admin@company.com` / `Admin@123`
+* **Cách demo:**
+  1. Đăng nhập trang quản trị để thiết lập các chính sách DLP nâng cao (Ví dụ: bật/tắt quét mã nguồn, đổi hành động từ Che dấu sang Chặn hoàn toàn).
+  2. Duyệt các yêu cầu gửi thông tin của nhân viên tại **Trung tâm phê duyệt (Approval Center)**.
+  3. Xem thống kê tình hình rò rỉ dữ liệu của toàn bộ thiết bị trạm trong công ty.
+
+### 3. Kịch bản Quản trị hệ thống SaaS (Platform Admin)
+* **Tài khoản:** `platform@aiguard.com` / `PlatformPassword@123`
+* **Cách demo:**
+  1. Quản lý danh sách các công ty đăng ký sử dụng (Tenants).
+  2. Tạo lập gói cước bán hàng (Pricing Plans).
+  3. **Thử nghiệm phê duyệt đơn hàng:** Vào danh sách đơn hàng cần duyệt, bấm **Duyệt và cấp License ngay** -> Hệ thống tự động tạo mã hóa đơn và sinh License Key tương ứng ngay lập tức.
+
+---
+
+## 🛡️ HƯỚNG DẪN XỬ LÝ SỰ CỐ (TROUBLESHOOTING)
+- **Lỗi không kết nối được database:** Kiểm tra SQL Server Service đã bật trong Windows Services (`services.msc`), hoặc sửa kết nối SQL Server thành `Server=localhost;Database=AiguardDb;Trusted_Connection=True;TrustServerCertificate=True;`.
+- **Lỗi CORS trên trình duyệt:** Đảm bảo cả frontend (cổng 5173), API (cổng 5000) và AI (cổng 8000) đều đang chạy đồng thời.
+- **Tiến trình Backend API bị lỗi Lock File:** Chạy lệnh `taskkill /f /im aiguard-api.exe` trong CMD để giải phóng file bị chiếm dụng, sau đó chạy lại `dotnet run`.
