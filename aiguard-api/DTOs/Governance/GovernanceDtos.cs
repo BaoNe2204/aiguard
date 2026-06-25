@@ -74,6 +74,7 @@ public class FalsePositiveResponse
     public DateTime? WhitelistExpiresAt { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? ReviewedAt { get; set; }
+    public string? MaskedContentPreview { get; set; }
 }
 
 public class IncidentResponse

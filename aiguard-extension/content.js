@@ -608,15 +608,135 @@
   }
 
   document.addEventListener("paste", event => {
+    if (event.isAIGuardReplayed) return;
+
     const editor = editorFor(event.target);
+    if (!editor) return;
+
+    const files = [...(event.clipboardData?.files || [])];
     const text = event.clipboardData?.getData("text/plain");
-    if (!editor || !text) return;
+
+    if (!files.length && !text) return;
+
     event.preventDefault();
     event.stopImmediatePropagation();
-    void evaluateText(text, "PromptPasteDetected").then(evaluation => {
-      if (evaluation.outcome !== "blocked") insertAtSelection(editor, evaluation.content);
-    });
+
+    if (files.length > 0) {
+      void scanPastedFiles(editor, files, text);
+    } else {
+      void evaluateText(text, "PromptPasteDetected").then(evaluation => {
+        if (evaluation.outcome !== "blocked") insertAtSelection(editor, evaluation.content);
+      });
+    }
   }, true);
+
+  async function scanPastedFiles(editor, files, text) {
+    const config = await getConfig();
+    if (config.enabled === false) return replayPaste(editor, files, text);
+    if (!config.apiBaseUrl || !config.hostname || !config.endpointKey) {
+      return replayPaste(editor, files, text);
+    }
+
+    try {
+      const allowedFiles = [];
+      let hasBlocked = false;
+
+      for (const file of files) {
+        if (file.size > MAX_FILE_BYTES) throw new Error(`${file.name || "ảnh"} vuot qua 25 MB`);
+
+        const result = await sendApi("POST", "/api/dlp/files/scan", null, {
+          name: file.name || "pasted-image.png",
+          type: file.type || "image/png",
+          base64: arrayBufferToBase64(await file.arrayBuffer())
+        });
+
+        pushDlpEvent(
+          result.decision === "Block" ? "FileUploadBlocked" : "FileUploadChecked",
+          result.decision,
+          SITE,
+          result.riskScore,
+          result.riskLevel,
+          file.name || "pasted-image"
+        );
+
+        if (result.decision === "Block") {
+          const event = await recordFileEvent(file, result);
+          await showDecisionModal(result, { allowReport: true, eventId: event.id });
+          hasBlocked = true;
+          continue;
+        }
+
+        if (result.decision === "PendingApproval") {
+          const choice = await showDecisionModal(result);
+          if (choice.action !== "approval") {
+            hasBlocked = true;
+            continue;
+          }
+          const event = await recordFileEvent(file, result, choice.reason);
+          if (!event.approvalId) throw new Error("Backend không trả về mã phê duyệt.");
+          notify(`Tệp ${file.name || "ảnh"} đang chờ phê duyệt.`, "warning");
+          const approval = await waitForApproval(event.approvalId, event.expiresAt);
+          if (approval.status !== "Approved") {
+            notify(`Không thể dán tệp: ${approval.status}.`);
+            hasBlocked = true;
+            continue;
+          }
+          notify(`Tệp ${file.name || "ảnh"} đã được phê duyệt.`, "success");
+          allowedFiles.push(file);
+          continue;
+        }
+
+        if (result.decision === "Mask") {
+          await recordFileEvent(file, result);
+          await showDecisionModal({
+            ...result,
+            decision: "Block",
+            policyReason: "File contains sensitive data. Automatic file rewriting is not supported, so paste is blocked."
+          });
+          hasBlocked = true;
+          continue;
+        }
+
+        await recordFileEvent(file, result);
+        allowedFiles.push(file);
+      }
+
+      if (allowedFiles.length > 0 || (text && !hasBlocked)) {
+         if (text && !hasBlocked) {
+             const evaluation = await evaluateText(text, "PromptPasteDetected");
+             if (evaluation.outcome === "blocked") return;
+             replayPaste(editor, allowedFiles, evaluation.content);
+         } else {
+             replayPaste(editor, allowedFiles, text);
+         }
+         if (files.length > 0) {
+           notify(`AIGuard đã kiểm tra và cho phép dán ${files.length} tệp.`, "success");
+         }
+      }
+    } catch (error) {
+      if (config.offlineCriticalBlock === false) {
+        replayPaste(editor, files, text);
+        notify("Không thể quét tệp; đang cho phép theo policy offline.", "warning");
+      } else {
+        notify(`AIGuard chặn dán tệp: ${error.message}`);
+      }
+    }
+  }
+
+  function replayPaste(editor, files, text) {
+    const dt = new DataTransfer();
+    files.forEach(file => dt.items.add(file));
+    if (text) {
+      dt.setData("text/plain", text);
+    }
+    const pasteEvent = new ClipboardEvent("paste", {
+      clipboardData: dt,
+      bubbles: true,
+      cancelable: true
+    });
+    pasteEvent.isAIGuardReplayed = true;
+    editor.dispatchEvent(pasteEvent);
+  }
 
   document.addEventListener("keydown", event => {
     if (event.key !== "Enter" || event.shiftKey || event.isComposing || submitInProgress) return;

@@ -1,0 +1,16 @@
+=== DANH SÁCH NHÂN SỰ VÀ LƯƠNG THÁNG 6/2026 ===
+(Tài liệu Mật - Không lưu hành nội bộ)
+
+1. Giám đốc Công nghệ: Nguyễn Văn A
+   - CCCD: 079201001234
+   - SĐT: 0901234567
+   - Email: nguyen.van.a@company.com
+   - Lương (Salary): 5000 USD/tháng
+   - Trạng thái hợp đồng lao động: Có thời hạn 3 năm
+
+2. Trưởng phòng Kinh doanh: Trần Thị B
+   - CCCD: 001199004567
+   - SĐT: +84981122334
+   - Email: tran.thi.b@company.com
+   - Lương (Salary): 3500 USD/tháng
+   - Trạng thái hợp đồng lao động: Vô thời hạn
