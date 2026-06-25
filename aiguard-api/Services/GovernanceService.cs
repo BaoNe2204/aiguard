@@ -258,7 +258,7 @@ public class GovernanceService : IGovernanceService
 
     public async Task<PagedResult<FalsePositiveResponse>> GetFalsePositivesAsync(PagedQuery query, string? status)
     {
-        var q = _db.FalsePositiveReports.AsQueryable();
+        var q = _db.FalsePositiveReports.Include(r => r.EndpointEvent).AsQueryable();
         if (!string.IsNullOrWhiteSpace(status)) q = q.Where(r => r.Status == status);
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
@@ -716,7 +716,8 @@ public class GovernanceService : IGovernanceService
         ReportedByEmail = report.ReportedByEmail, DetectorName = report.DetectorName,
         Reason = report.Reason, Status = report.Status, ReviewNote = report.ReviewNote,
         CreateWhitelist = report.CreateWhitelist, WhitelistExpiresAt = report.WhitelistExpiresAt,
-        CreatedAt = report.CreatedAt, ReviewedAt = report.ReviewedAt
+        CreatedAt = report.CreatedAt, ReviewedAt = report.ReviewedAt,
+        MaskedContentPreview = report.EndpointEvent?.MaskedContentPreview
     };
 
     private static IncidentResponse MapIncident(IncidentCase incident) => new()

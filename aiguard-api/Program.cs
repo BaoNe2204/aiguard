@@ -181,6 +181,12 @@ builder.Services.AddHttpClient<IAiSecurityEngineClient, AiSecurityEngineClient>(
     var timeout = builder.Configuration.GetValue<int>("AiSecuritySettings:TimeoutSeconds", 5);
     client.Timeout = TimeSpan.FromSeconds(Math.Clamp(timeout, 1, 60));
 });
+
+builder.Services.AddHttpClient<IVisionAiClient, LocalVisionAiClient>(client =>
+{
+    var timeout = builder.Configuration.GetValue<int>("VisionAiSettings:TimeoutSeconds", 10);
+    client.Timeout = TimeSpan.FromSeconds(Math.Clamp(timeout, 1, 60));
+});
 builder.Services.AddSingleton<IEvmBlockchainAnchorClient, EvmBlockchainAnchorClient>();
 
 // ── SignalR ──

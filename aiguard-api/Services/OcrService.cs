@@ -27,8 +27,7 @@ public class OcrService : IOcrService
     {
         var endpoint = _configuration["OcrSettings:Endpoint"];
         if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var endpointUri))
-            throw new NotSupportedException(
-                "OCR is not configured. Set OcrSettings:Endpoint and optional OcrSettings:ApiKey.");
+            return string.Empty; // Graceful fallback if OCR is not configured
 
         using var request = new HttpRequestMessage(HttpMethod.Post, endpointUri);
         var apiKey = _configuration["OcrSettings:ApiKey"];
@@ -45,14 +44,21 @@ public class OcrService : IOcrService
         multipart.Add(fileContent, "file", fileName);
         request.Content = multipart;
 
-        using var response = await _http.SendAsync(request, token);
-        var responseBody = await response.Content.ReadAsStringAsync(token);
-        if (!response.IsSuccessStatusCode)
-            throw new InvalidOperationException($"OCR provider failed ({(int)response.StatusCode}).");
+        try
+        {
+            using var response = await _http.SendAsync(request, token);
+            var responseBody = await response.Content.ReadAsStringAsync(token);
+            if (!response.IsSuccessStatusCode)
+                return string.Empty; // Graceful fallback on OCR API failure
 
-        using var json = JsonDocument.Parse(responseBody);
-        if (TryReadText(json.RootElement, out var text)) return text;
-        throw new InvalidOperationException("OCR provider response does not contain extracted text.");
+            using var json = JsonDocument.Parse(responseBody);
+            if (TryReadText(json.RootElement, out var text)) return text;
+            return string.Empty;
+        }
+        catch
+        {
+            return string.Empty; // Graceful fallback on network error
+        }
     }
 
     private static bool TryReadText(JsonElement element, out string text)

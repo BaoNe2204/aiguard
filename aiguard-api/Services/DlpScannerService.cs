@@ -20,8 +20,8 @@ public class DlpScannerService : IDlpScannerService
 
     private static readonly IReadOnlyList<DetectorRule> Detectors =
     [
-        new("Private Key", @"-----BEGIN (RSA |EC |DSA )?PRIVATE KEY-----", 90, 90, p => p.EnablePrivateKeyDetection),
-        new("Database URL", @"(?i)((Server|Data Source|Host)\s*=\s*[^;]+;.*?(Password|Pwd)\s*=|(?:postgres|mysql|mongodb(?:\+srv)?):\/\/[^\s]+)", 75, 85, p => p.EnableDbUrlDetection),
+        new("Private Key", @"-----BEGIN (RSA |EC |DSA )?PRIVATE KEY-----", 90, 90, _ => true),
+        new("Database URL", @"(?i)((Server|Data Source|Host)\s*=\s*[^;]+;.*?(Password|Pwd)\s*=|(?:postgres|mysql|mongodb(?:\+srv)?):\/\/[^\s]+)", 75, 85, _ => true),
         new("API Key", @"(?x)(
             sk-(?:proj-)?[a-zA-Z0-9\-_]{16,} |
             AKIA[0-9A-Z]{16} |
@@ -33,19 +33,20 @@ public class DlpScannerService : IDlpScannerService
             SG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,} |
             sk_(?:live|test)_[A-Za-z0-9]{16,} |
             npm_[A-Za-z0-9]{20,}
-        )", 70, 85, p => p.EnableApiKeyDetection),
-        new("AWS Secret Key", @"(?i)(aws_secret_access_key|aws.?secret)\s*[=:]\s*[""']?[A-Za-z0-9/+=]{32,}", 80, 90, p => p.EnableApiKeyDetection),
-        new("Azure Storage Key", @"(?i)(AccountKey|SharedAccessSignature)\s*=\s*[^;\s]{20,}", 80, 90, p => p.EnableApiKeyDetection),
-        new("Password", @"(?i)(password|passwd|pwd|db_password|secret)\s*[=:]\s*[""']?[^\s;""']+", 70, 85, p => p.EnablePasswordDetection),
-        new("JWT Token", @"eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}", 70, 85, p => p.EnableTokenDetection),
-        new("CCCD", @"(?<!\d)\d{12}(?!\d)", 35, 60, p => p.EnableCccdDetection),
-        new("Source Code", @"(?im)(class\s+\w+|function\s+\w+|def\s+\w+|public\s+(static\s+)?(?:void|class)|import\s+\w+|using\s+[\w.]+;|SELECT\s+.+\s+FROM|CREATE\s+TABLE)", 40, 60, p => p.EnableSourceCodeDetection),
-        new("Customer Data", @"(?i)(khách hàng|customer|client|danh sách khách hàng|customer list)", 45, 60, _ => true),
-        new("HR Data", @"(?i)(lương|salary|cv ứng viên|hợp đồng lao động|employment contract|đánh giá nhân viên)", 45, 60, p => p.EnableHrDetection),
-        new("Financial Data", @"(?i)(doanh thu|revenue|lợi nhuận|profit|công nợ|receivable|báo cáo tài chính)", 55, 60, p => p.EnableFinancialDetection),
-        new("Legal Contract", @"(?i)(NDA|non.?disclosure|bảo mật thông tin|điều khoản hợp đồng|confidential agreement)", 50, 60, _ => true),
-        new("Email", @"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", 10, 0, p => p.EnableEmailDetection),
-        new("Phone", @"(?<!\d)(0\d{9,10}|\+84\d{9,10})(?!\d)", 15, 0, p => p.EnablePhoneDetection)
+        )", 70, 85, _ => true),
+        new("AWS Secret Key", @"(?i)(aws_secret_access_key|aws.?secret)\s*[=:]\s*[""']?[A-Za-z0-9/+=]{32,}", 80, 90, _ => true),
+        new("Azure Storage Key", @"(?i)(AccountKey|SharedAccessSignature)\s*=\s*[^;\s]{20,}", 80, 90, _ => true),
+        new("Password", @"(?i)(password|passwd|pwd|db_password|secret)\s*[=:]\s*[""']?[^\s;""']+", 70, 85, _ => true),
+        new("JWT Token", @"eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}", 70, 85, _ => true),
+        new("CCCD", @"(?<!\d)\d{12}(?!\d)", 80, 85, _ => true),
+        new("Credit Card", @"\b(?:\d{4}[ -]?){3}\d{4}\b", 80, 85, _ => true),
+        new("Source Code", @"(?im)(class\s+\w+|function\s+\w+|def\s+\w+|public\s+(static\s+)?(?:void|class)|import\s+\w+|using\s+[\w.]+;|SELECT\s+.+\s+FROM|CREATE\s+TABLE)", 65, 85, _ => true),
+        new("Customer Data", @"(?i)(khách hàng|customer|client|danh sách khách hàng|customer list)", 65, 85, _ => true),
+        new("HR Data", @"(?i)(lương|salary|cv ứng viên|hợp đồng lao động|employment contract|đánh giá nhân viên|danh sách nhân sự)", 65, 85, _ => true),
+        new("Financial Data", @"(?i)(doanh thu|revenue|lợi nhuận|profit|công nợ|receivable|báo cáo tài chính)", 65, 85, _ => true),
+        new("Legal Contract", @"(?i)(NDA|non.?disclosure|bảo mật thông tin|điều khoản hợp đồng|confidential agreement)", 65, 85, _ => true),
+        new("Email", @"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", 65, 85, _ => true),
+        new("Phone", @"(?<!\d)(0\d{9,10}|\+84\d{9,10})(?!\d)", 65, 85, _ => true)
     ];
 
     private static readonly IReadOnlyDictionary<string, string> MaskLabels = new Dictionary<string, string>
@@ -62,9 +63,10 @@ public class DlpScannerService : IDlpScannerService
         ["Financial Data"] = "[FINANCIAL_DATA]",
         ["Legal Contract"] = "[LEGAL_CONTRACT]",
         ["Email"] = "[EMAIL]",
-        ["Phone"] = "[PHONE]"
-        ,["AWS Secret Key"] = "[AWS_SECRET_KEY]"
-        ,["Azure Storage Key"] = "[AZURE_STORAGE_KEY]"
+        ["Phone"] = "[PHONE]",
+        ["Credit Card"] = "[CREDIT_CARD]",
+        ["AWS Secret Key"] = "[AWS_SECRET_KEY]",
+        ["Azure Storage Key"] = "[AZURE_STORAGE_KEY]"
     };
 
     public DlpScannerService(AiguardDbContext db, IAiSecurityEngineClient aiSecurityEngine)

@@ -20,12 +20,14 @@ public class FileContentScannerService : IFileContentScannerService
     private readonly IDlpScannerService _scanner;
     private readonly IScanReceiptService _receipts;
     private readonly IOcrService _ocr;
+    private readonly IVisionAiClient _visionAi;
 
-    public FileContentScannerService(IDlpScannerService scanner, IScanReceiptService receipts, IOcrService ocr)
+    public FileContentScannerService(IDlpScannerService scanner, IScanReceiptService receipts, IOcrService ocr, IVisionAiClient visionAi)
     {
         _scanner = scanner;
         _receipts = receipts;
         _ocr = ocr;
+        _visionAi = visionAi;
     }
 
     public async Task<DlpScanResponse> ScanAsync(IFormFile file, Device device)
@@ -63,6 +65,27 @@ public class FileContentScannerService : IFileContentScannerService
             WebsiteAi = "FileUpload",
             DepartmentCode = device.DepartmentName
         });
+
+        var isImage = new[] { ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff" }.Contains(extension);
+        if (isImage && result.RiskLevel == "Low" && result.Decision == "Allow")
+        {
+            var visionResult = await _visionAi.AnalyzeImageAsync(bytes, file.ContentType);
+            if (!visionResult.Safe)
+            {
+                result.RiskLevel = "High";
+                result.RiskScore = Math.Max(result.RiskScore, 85);
+                result.Decision = "Block";
+                result.Matches.Add(new DetectionMatch {
+                    DataType = "Vision AI",
+                    Weight = 85,
+                    Count = 1,
+                    Sample = "[VISION_DETECTED]",
+                    Reason = visionResult.Reason ?? "Vision AI detected sensitive visual content."
+                });
+                result.PolicyReason = "Vision AI analysis flagged this image as containing sensitive or restricted content.";
+            }
+        }
+
         await _receipts.AttachReceiptAsync(result, device, text);
         return result;
     }
@@ -91,9 +114,16 @@ public class FileContentScannerService : IFileContentScannerService
     private static string ExtractSpreadsheet(Stream stream)
     {
         using var document = SpreadsheetDocument.Open(stream, false);
-        return string.Join(" ", document.WorkbookPart?.WorksheetParts
-            .SelectMany(p => p.Worksheet?.Descendants<DocumentFormat.OpenXml.Spreadsheet.Text>() ?? [])
-            .Select(t => t.Text) ?? []);
+        var sharedStringTable = document.WorkbookPart?.SharedStringTablePart?.SharedStringTable;
+        var sharedStrings = sharedStringTable?.Elements<DocumentFormat.OpenXml.Spreadsheet.SharedStringItem>()
+            .Select(i => i.InnerText).ToList() ?? new List<string>();
+
+        var cellValues = document.WorkbookPart?.WorksheetParts
+            .SelectMany(p => p.Worksheet?.Descendants<DocumentFormat.OpenXml.Spreadsheet.CellValue>() ?? [])
+            .Select(v => v.Text)
+            .ToList() ?? new List<string>();
+
+        return string.Join(" ", sharedStrings) + " " + string.Join(" ", cellValues);
     }
 
     private static string ExtractArchive(byte[] bytes)

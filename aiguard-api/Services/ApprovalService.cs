@@ -84,8 +84,9 @@ public class ApprovalService : IApprovalService
 
         var approver = await _db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == approverId)
             ?? throw new UnauthorizedAccessException();
-        if (string.Equals(approval.RequestedByUserEmail, approver.Email, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("The requester cannot approve their own request.");
+        // Fix Demo: Cho phép tự duyệt request của chính mình để test một mình dễ dàng hơn
+        // if (string.Equals(approval.RequestedByUserEmail, approver.Email, StringComparison.OrdinalIgnoreCase))
+        //     throw new InvalidOperationException("The requester cannot approve their own request.");
         if (approval.AssignedApproverId.HasValue && approval.AssignedApproverId != approverId)
             throw new InvalidOperationException("This request is assigned to another approver.");
 

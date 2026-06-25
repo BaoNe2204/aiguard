@@ -373,6 +373,7 @@ const SsoMfaReadiness = ({ users }: { users: AdminUser[] }) => {
 };
 
 const FalsePositiveTab = ({ reports, refresh, run }: { reports: FalsePositive[] } & AsyncActions) => {
+  const [selectedReport, setSelectedReport] = useState<FalsePositive | null>(null);
   const approved = reports.filter(report => report.status === 'Approved').length;
   const pending = reports.filter(report => report.status === 'Pending').length;
   const rejected = reports.filter(report => report.status === 'Rejected').length;
@@ -414,21 +415,52 @@ const FalsePositiveTab = ({ reports, refresh, run }: { reports: FalsePositive[] 
           <tbody>{reports.map(report => <tr key={report.id}>
             <td>{new Date(report.createdAt).toLocaleString()}</td><td>{report.reportedByEmail}</td>
             <td>{report.detectorName}</td><td>{report.reason}</td><td>{report.status}</td>
-            <td>{report.status === 'Pending' ? <div className="row-actions">
-              <button className="table-action safe" onClick={() => void run(async () => {
-                await governanceApi.reviewFalsePositive(report.id, {
-                  action: 'Approve', note: 'Approved by Security Admin',
-                  createWhitelist: true, whitelistDurationDays: 30
-                }); await refresh();
-              }, 'Đã duyệt và tạo whitelist 30 ngày.')}>Duyệt</button>
-              <button className="table-action danger" onClick={() => void run(async () => {
-                await governanceApi.reviewFalsePositive(report.id, { action: 'Reject', note: 'Detection is valid' });
-                await refresh();
-              }, 'Đã từ chối báo cáo.')}>Từ chối</button>
-            </div> : report.reviewNote || '-'}</td>
+            <td>
+              <div className="row-actions">
+                <button className="table-action" onClick={() => setSelectedReport(report)}>Chi tiết</button>
+                {report.status === 'Pending' ? (
+                  <>
+                    <button className="table-action safe" onClick={() => void run(async () => {
+                      await governanceApi.reviewFalsePositive(report.id, {
+                        action: 'Approve', note: 'Approved by Security Admin',
+                        createWhitelist: true, whitelistDurationDays: 30
+                      }); await refresh();
+                    }, 'Đã duyệt và tạo whitelist 30 ngày.')}>Duyệt</button>
+                    <button className="table-action danger" onClick={() => void run(async () => {
+                      await governanceApi.reviewFalsePositive(report.id, { action: 'Reject', note: 'Detection is valid' });
+                      await refresh();
+                    }, 'Đã từ chối báo cáo.')}>Từ chối</button>
+                  </>
+                ) : <span>{report.reviewNote || '-'}</span>}
+              </div>
+            </td>
           </tr>)}</tbody>
         </table></div>
       </section>
+      {selectedReport && (
+        <div className="modal-overlay" onClick={() => setSelectedReport(null)}>
+          <div className="modal-content glass" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Chi tiết báo cáo chặn nhầm</h2>
+              <button className="close-btn" onClick={() => setSelectedReport(null)}>×</button>
+            </div>
+            <div className="modal-body" style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <div><strong>Người báo cáo:</strong> {selectedReport.reportedByEmail}</div>
+              <div><strong>Detector (Dữ liệu bị bắt):</strong> {selectedReport.detectorName}</div>
+              <div><strong>Lý do của nhân viên:</strong> {selectedReport.reason}</div>
+              <div style={{ marginTop: '1rem' }}>
+                <strong>Bằng chứng (Nội dung đã bị làm mờ):</strong>
+                <pre className="log-block mt-2" style={{ whiteSpace: 'pre-wrap', maxHeight: '300px', overflowY: 'auto' }}>
+                  {selectedReport.maskedContentPreview || 'Không có dữ liệu văn bản (có thể do Policy không lưu log hoặc là hình ảnh).'}
+                </pre>
+              </div>
+            </div>
+            <div className="modal-footer" style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
+              <button className="btn-secondary" onClick={() => setSelectedReport(null)}>Đóng</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

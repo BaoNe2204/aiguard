@@ -36,6 +36,7 @@ export interface FalsePositive {
   whitelistExpiresAt?: string;
   createdAt: string;
   reviewedAt?: string;
+  maskedContentPreview?: string;
 }
 
 export interface Incident {

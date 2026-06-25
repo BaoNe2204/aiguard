@@ -45,7 +45,7 @@ public sealed class AiSecurityEngineClient : IAiSecurityEngineClient
             var payload = await response.Content.ReadFromJsonAsync<AiHealthResponse>(cancellationToken);
             return new AiSecurityHealthResult(true, payload?.Status ?? "healthy", payload?.Version, null);
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        catch (Exception ex)
         {
             _logger.LogWarning(ex, "AI security engine health check failed.");
             return new AiSecurityHealthResult(false, "unreachable", null, ex.Message);
@@ -74,7 +74,7 @@ public sealed class AiSecurityEngineClient : IAiSecurityEngineClient
                 payload.TriggeredCategories ?? [],
                 null);
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        catch (Exception ex)
         {
             _logger.LogWarning(ex, "AI security engine scan failed; falling back to local scanner.");
             return AiSecurityScanResult.Unavailable(ex.Message);
@@ -94,7 +94,7 @@ public sealed class AiSecurityEngineClient : IAiSecurityEngineClient
             var payload = await response.Content.ReadFromJsonAsync<AiMaskResponse>(cancellationToken);
             return string.IsNullOrWhiteSpace(payload?.MaskedText) ? null : payload.MaskedText;
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        catch (Exception ex)
         {
             _logger.LogWarning(ex, "AI security engine mask failed; keeping local masked output.");
             return null;
