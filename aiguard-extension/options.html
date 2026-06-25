@@ -19,66 +19,20 @@
     <section class="hero-panel">
       <span class="eyebrow">CẤU HÌNH BẢO VỆ TRÌNH DUYỆT</span>
       <h1>Đăng ký thiết bị với AIGuard</h1>
-      <p>Nhập enrollment token do quản trị viên cung cấp. Extension sẽ tự nhận endpoint key và bắt đầu quét trước khi dữ liệu được gửi đến AI.</p>
+      <p>Nhập key do quản trị viên cung cấp, rồi chọn email từ danh sách. Extension sẽ tự nhận phòng ban và tự bật bảo vệ trước khi dữ liệu được gửi đến AI.</p>
     </section>
 
     <div id="statusBanner" class="status-banner hidden"></div>
 
-    <section class="settings-card quick-setup-card">
-      <div class="section-title">
-        <span class="step-number">⚡</span>
-        <div><h2>Setup nhanh cho nhân viên</h2><p>Dán token, setup link hoặc lệnh triển khai mà quản trị viên gửi. Extension sẽ tự điền thông tin cần thiết.</p></div>
-      </div>
-      <label class="field">
-        <span>Dán token/link/lệnh triển khai</span>
-        <textarea id="quickSetup" rows="4" placeholder='Ví dụ: .\aiguard-extension setup --api https://api.company.vn --token "..." --email user@company.com --department Dev'></textarea>
-      </label>
-      <div class="connection-actions">
-        <button id="parseSetup" class="secondary-button" type="button">Tự điền thông tin</button>
-        <button id="enrollQuick" class="primary-button" type="button">Đăng ký ngay</button>
-      </div>
-    </section>
 
     <section class="settings-card">
       <div class="section-title">
         <span class="step-number">1</span>
-        <div><h2>Kết nối Backend API</h2><p>Địa chỉ API AIGuard của doanh nghiệp.</p></div>
+        <div><h2>Nhập key đăng ký</h2><p>Dán key do quản trị viên cấp để tải danh sách tài khoản.</p></div>
       </div>
       <label class="field">
-        <span>API URL</span>
-        <input id="api" type="url" placeholder="http://127.0.0.1:5185" spellcheck="false">
-      </label>
-    </section>
-
-    <section class="settings-card">
-      <div class="section-title">
-        <span class="step-number">2</span>
-        <div><h2>Thông tin thiết bị</h2><p>Email phải tồn tại trong tài khoản doanh nghiệp.</p></div>
-      </div>
-      <div class="field-grid">
-        <label class="field">
-          <span>Tên thiết bị</span>
-          <input id="host" type="text" placeholder="Tự tạo nếu để trống" spellcheck="false">
-        </label>
-        <label class="field">
-          <span>Phòng ban</span>
-          <input id="department" type="text" placeholder="Dev, HR, Sales, Finance">
-        </label>
-      </div>
-      <label class="field">
-        <span>Email nhân viên</span>
-        <input id="email" type="email" placeholder="nhanvien@company.com" spellcheck="false">
-      </label>
-    </section>
-
-    <section class="settings-card">
-      <div class="section-title">
-        <span class="step-number">3</span>
-        <div><h2>Enrollment token</h2><p>Token có thời hạn và chỉ được cấp bởi quản trị viên AIGuard.</p></div>
-      </div>
-      <label class="field">
-        <span>Token đăng ký</span>
-        <input id="enrollmentToken" type="password" placeholder="Dán enrollment token tại đây" autocomplete="off">
+        <span>Key đăng ký</span>
+        <input id="enrollmentToken" type="password" placeholder="Dán key tại đây" autocomplete="off">
       </label>
       <button id="enroll" class="primary-button" type="button">
         Đăng ký và bật bảo vệ
@@ -87,9 +41,36 @@
 
     <section class="settings-card">
       <div class="section-title">
-        <span class="step-number success-step">✓</span>
-        <div><h2>Trạng thái bảo vệ</h2><p>Kiểm tra policy và khóa thiết bị hiện tại.</p></div>
+        <span class="step-number">2</span>
+        <div><h2>Chọn tài khoản</h2><p>Chọn email từ danh sách để hệ thống tự trích xuất phòng ban.</p></div>
       </div>
+      <div class="field-grid">
+        <label class="field">
+          <span>Tên thiết bị</span>
+          <input id="host" type="text" placeholder="Tự tạo nếu để trống" spellcheck="false">
+        </label>
+        <label class="field">
+          <span>Phòng ban tự nhận</span>
+          <input id="department" type="text" placeholder="Sẽ tự điền từ key" readonly>
+        </label>
+      </div>
+      <label class="field">
+        <span>Email nhân viên</span>
+        <input id="email" type="text" list="emailOptions" placeholder="nhanvien@company.com" spellcheck="false" autocomplete="off">
+        <datalist id="emailOptions"></datalist>
+      </label>
+      <div id="emailList" class="email-list hidden" aria-live="polite"></div>
+    </section>
+
+    <section class="settings-card">
+      <div class="section-title">
+        <span class="step-number">3</span>
+        <div><h2>Kết nối Backend API</h2><p>Địa chỉ API AIGuard của doanh nghiệp.</p></div>
+      </div>
+      <label class="field">
+        <span>API URL</span>
+        <input id="api" type="url" placeholder="http://127.0.0.1:5185" spellcheck="false">
+      </label>
 
       <div class="toggle-row">
         <div><strong>Bật AIGuard</strong><small>Quét prompt và file upload trên website AI.</small></div>
@@ -104,15 +85,6 @@
         <button id="save" class="secondary-button" type="button">Lưu cấu hình</button>
         <button id="test" class="secondary-button" type="button">Kiểm tra kết nối</button>
       </div>
-
-      <details class="advanced-settings">
-        <summary>Cấu hình nâng cao</summary>
-        <label class="field">
-          <span>Endpoint key</span>
-          <input id="key" type="password" placeholder="Tự động nhận sau khi enroll" autocomplete="off">
-        </label>
-        <p>Chỉ nhập thủ công khi quản trị viên vừa rotate endpoint key.</p>
-      </details>
     </section>
 
     <section class="supported-sites">

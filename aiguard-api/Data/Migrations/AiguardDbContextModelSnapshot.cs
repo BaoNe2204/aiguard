@@ -2771,6 +2771,10 @@ namespace aiguard_api.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("AgentBlockedCodeApps")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("BankAccountName")
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");

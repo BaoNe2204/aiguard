@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { Cpu, Lock, History, AlertTriangle, Play, Plus, X, ShieldCheck, Bug, KeyRound, Gauge, Power } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
+import { Play, Plus, X, ShieldCheck, Bug, KeyRound, Gauge, Power, Bot, FileText, LockKeyhole, Route, ScrollText, FlaskConical, Code2 } from 'lucide-react';
 import { DataTable } from '../components/ui/DataTable';
 import { RiskBadge } from '../components/ui/RiskBadge';
 import { DecisionBadge } from '../components/ui/DecisionBadge';
@@ -11,7 +11,6 @@ import { useLanguage } from '../contexts/LanguageContext';
 
 export const Agents: React.FC = () => {
   const location = useLocation();
-  const navigate = useNavigate();
   const { t, locale } = useLanguage();
   const activeTab = location.pathname.endsWith('/permissions') ? 'permissions'
     : location.pathname.endsWith('/monitor') ? 'monitor'
@@ -165,32 +164,72 @@ export const Agents: React.FC = () => {
           <p className="subtitle">{t('Manage credentials, intercept tool-calls, and audit prompt injection attacks', 'Quản lý quyền, kiểm tra tool-call và kiểm toán các cuộc tấn công prompt injection')}</p>
         </div>
       </div>
-
-      <div className="tabs-container">
-        <button className={`tab-btn ${activeTab === 'list' ? 'active' : ''}`} onClick={() => navigate('/app/agents')}>
-          <Cpu size={16} /> {t('Agent Registry', 'Danh sách Agent')}
-        </button>
-        <button className={`tab-btn ${activeTab === 'permissions' ? 'active' : ''}`} onClick={() => navigate('/app/agents/permissions')}>
-          <Lock size={16} /> {t('Tool Permissions', 'Quyền công cụ')}
-        </button>
-        <button className={`tab-btn ${activeTab === 'monitor' ? 'active' : ''}`} onClick={() => navigate('/app/agents/monitor')}>
-          <History size={16} /> {t('Tool-call Monitor', 'Giám sát tool-call')}
-        </button>
-        <button className={`tab-btn ${activeTab === 'injection' ? 'active' : ''}`} onClick={() => navigate('/app/agents/prompt-injection')}>
-          <AlertTriangle size={16} /> {t('Prompt Injection', 'Prompt Injection')}
-        </button>
-        <button className={`tab-btn ${activeTab === 'simulation' ? 'active' : ''}`} onClick={() => navigate('/app/agents/simulation')}>
-          <Play size={16} /> {t('Policy Simulation', 'Mô phỏng chính sách')}
-        </button>
-        <button className={`tab-btn ${activeTab === 'runtime' ? 'active' : ''}`} onClick={() => navigate('/app/agents/runtime')}>
-          <ShieldCheck size={16} /> Runtime Controls
-        </button>
-        <button className={`tab-btn ${activeTab === 'redteam' ? 'active' : ''}`} onClick={() => navigate('/app/agents/red-team')}>
-          <Bug size={16} /> Red-team Tests
-        </button>
-      </div>
-
-      <div className="tab-content">
+      <section className="agent-control-brief card glass">
+        <div className="agent-control-brief-head">
+          <span><Bot size={20} /></span>
+          <div>
+            <h2>AI Agent Governance</h2>
+            <p>Kiểm soát AI Agent tự động trước khi Agent đọc dữ liệu, gọi tool, gửi email, export file hoặc thực hiện hành động rủi ro.</p>
+          </div>
+        </div>
+        <div className="agent-control-grid">
+          <div><FileText size={16} /><strong>Agent Registry</strong><span>Đăng ký Agent với name, code, mô tả, phòng ban và hạn mức chi phí.</span></div>
+          <div><ShieldCheck size={16} /><strong>Tool Permission</strong><span>Allow, RequireApproval hoặc Deny theo tool, domain, record limit và quyền đọc/ghi/xóa.</span></div>
+          <div><Route size={16} /><strong>Tool-call Interception</strong><span>Chặn hoặc yêu cầu duyệt trước khi Agent thực thi send_email, read_database, export_csv.</span></div>
+          <div><Bug size={16} /><strong>Prompt Injection Guard</strong><span>Phát hiện lệnh kiểu “ignore previous instructions” và block hành vi exfiltration.</span></div>
+          <div><ScrollText size={16} /><strong>Action Logs</strong><span>Ghi lại Agent, tool, decision, timestamp, tham số và estimated cost.</span></div>
+          <div><LockKeyhole size={16} /><strong>Credential Rotation</strong><span>Rotate agent key khi nghi ngờ lộ khóa, key mới chỉ hiển thị một lần.</span></div>
+          <div><FlaskConical size={16} /><strong>Simulation Mode</strong><span>Test policy trước khi áp dụng thật, ví dụ gửi email ra domain ngoài công ty.</span></div>
+          <div className="highlight"><Code2 size={16} /><strong>Desktop + AI Agent</strong><span>Use case: Cursor đọc workspace có .env chứa AWS_KEY, Desktop Agent phát hiện critical risk và cảnh báo/chặn theo policy.</span></div>
+        </div>
+      </section>
+      <section className="agent-reality-brief card glass">
+        <div className="agent-control-brief-head">
+          <span><ShieldCheck size={20} /></span>
+          <div>
+            <h2>Tool-call Gating & thực tế triển khai</h2>
+            <p>Chặn Agent trước khi thực hiện hành động nguy hiểm, nhưng vẫn cần SDK, policy và cơ chế enforce phù hợp để tránh bypass.</p>
+          </div>
+        </div>
+        <div className="agent-gating-story">
+          <div>
+            <strong>Use case: Sales Agent gửi email hàng loạt</strong>
+            <span>Sales Agent muốn gửi email cho 1000 khách, kèm file customer-list.csv. AIGuard scan attachment, phát hiện CCCD và số điện thoại, quyết định Block, alert admin và log incident.</span>
+          </div>
+          <div>
+            <strong>Policy theo tool + parameters + domain</strong>
+            <span>send_email có thể chỉ cho phép @company.com, export_csv bị chặn khi vượt số dòng, read_database yêu cầu phê duyệt, delete_record bị Deny.</span>
+          </div>
+          <div>
+            <strong>Audit trail đầy đủ</strong>
+            <span>Lưu Agent, toolName, decision, reason, riskScore, parameters, estimatedCost và timestamp để điều tra sau sự cố.</span>
+          </div>
+        </div>
+        <div className="agent-reality-grid">
+          <div className="agent-reality-card warn">
+            <strong>Hạn chế Desktop Agent</strong>
+            <span>Không chặn clipboard interactive, không chặn USB ở kernel nếu thiếu driver, dễ bị bypass nếu user tắt service, kill process có thể làm mất công việc đang làm.</span>
+          </div>
+          <div className="agent-reality-card warn">
+            <strong>Hạn chế AI Agent</strong>
+            <span>Agent phải tự integrate AIGuard API, mỗi tool-call có thêm latency, nếu Agent không tuân thủ SDK/API thì vẫn có thể bypass.</span>
+          </div>
+          <div className="agent-reality-card ok">
+            <strong>Desktop Agent: 4/5</strong>
+            <span>Giá trị thực tế cao với AI Coding App Protection. Nên bán kèm Microsoft Intune/JAMF policy template để enforce tốt hơn.</span>
+          </div>
+          <div className="agent-reality-card">
+            <strong>AI Agent: 3/5</strong>
+            <span>Concept tốt nhưng thị trường autonomous agent chưa phổ biến. Nên là phase 2/3 sau khi Desktop Agent chứng minh được pain point.</span>
+          </div>
+        </div>
+        <div className="agent-roadmap">
+          <div><b>Phase 1</b><strong>Browser Extension + Desktop Agent</strong><span>Focus IT outsourcing, demo Cursor đọc .env rồi Agent cảnh báo/chặn theo policy.</span></div>
+          <div><b>Phase 2</b><strong>Desktop Agent Full DLP</strong><span>Mở rộng USB, print, network share bằng partnership Intune/JAMF/GPO.</span></div>
+          <div><b>Phase 3</b><strong>AI Agent Control Tower</strong><span>Release SDK Python, Node.js, C# cho LangChain, AutoGPT và agent nội bộ.</span></div>
+        </div>
+      </section>
+<div className="tab-content">
         {activeTab === 'list' && (
           <div className="list-tab card glass">
             <div className="card-header">
@@ -402,10 +441,10 @@ export const Agents: React.FC = () => {
         {activeTab === 'runtime' && (
           <div className="governance-stack">
             <div className="governance-metric-grid">
-              <div className="governance-metric-card ok"><div><strong>{agents.filter(agent => agent.isEnabled).length}</strong><span>Agent dang bat</span></div><b>Enabled</b></div>
-              <div className="governance-metric-card warn"><div><strong>{agents.reduce((sum, agent) => sum + agent.toolCallsToday, 0)}</strong><span>Tool-call hom nay</span></div><b>Quota</b></div>
-              <div className="governance-metric-card"><div><strong>Vault-ready</strong><span>UI quan ly identity/credential rieng cho Agent. Can backend vault de cap secret that.</span></div><b>Config</b></div>
-              <div className="governance-metric-card danger"><div><strong>Kill switch</strong><span>Tat Agent bang API update isEnabled=false.</span></div><b>Live</b></div>
+              <div className="governance-metric-card ok"><div><strong>{agents.filter(agent => agent.isEnabled).length}</strong><span>Agent đang bật</span></div><b>Enabled</b></div>
+              <div className="governance-metric-card warn"><div><strong>{agents.reduce((sum, agent) => sum + agent.toolCallsToday, 0)}</strong><span>Tool-call hôm nay</span></div><b>Quota</b></div>
+              <div className="governance-metric-card"><div><strong>Vault-ready</strong><span>UI quản lý identity/credential riêng cho Agent. Cần backend vault để cấp secret thật.</span></div><b>Config</b></div>
+              <div className="governance-metric-card danger"><div><strong>Kill switch</strong><span>Tắt Agent bằng API update isEnabled=false.</span></div><b>Live</b></div>
             </div>
             <div className="card glass governance-section">
               <h2><ShieldCheck size={18} /> Runtime controls</h2>
@@ -428,10 +467,10 @@ export const Agents: React.FC = () => {
             <div className="card glass governance-section">
               <h2><KeyRound size={18} /> Credential & quota blueprint</h2>
               <div className="governance-metric-grid">
-                <div className="governance-metric-card"><div><strong>Credential vault</strong><span>Chua co backend vault that. Frontend da co khu vuc quan ly va can API issue/rotate secret rieng cho Agent.</span></div><b>Pending BE</b></div>
-                <div className="governance-metric-card"><div><strong>Cost limit</strong><span>Can backend luu daily token/cost budget. Hien co risk theo recordCount trong simulation.</span></div><b>Partial</b></div>
-                <div className="governance-metric-card ok"><div><strong>External block</strong><span>Simulation/tool-call check da co recipient ngoai cong ty va export risk.</span></div><b>Live</b></div>
-                <div className="governance-metric-card warn"><div><strong>Agent-to-Agent</strong><span>Can runtime event schema de phat hien Agent goi Agent khac.</span></div><b>Pending BE</b></div>
+                <div className="governance-metric-card"><div><strong>Credential vault</strong><span>Chưa có backend vault thật. Frontend đã có khu vực quản lý và cần API issue/rotate secret riêng cho Agent.</span></div><b>Pending BE</b></div>
+                <div className="governance-metric-card"><div><strong>Cost limit</strong><span>Cần backend lưu daily token/cost budget. Hiện có risk theo recordCount trong simulation.</span></div><b>Partial</b></div>
+                <div className="governance-metric-card ok"><div><strong>External block</strong><span>Simulation/tool-call check đã có recipient ngoài công ty và export risk.</span></div><b>Live</b></div>
+                <div className="governance-metric-card warn"><div><strong>Agent-to-Agent</strong><span>Cần runtime event schema để phát hiện Agent gọi Agent khác.</span></div><b>Pending BE</b></div>
               </div>
             </div>
           </div>
@@ -468,7 +507,7 @@ export const Agents: React.FC = () => {
                   <p className="text-zinc-300 bg-zinc-900 p-3 rounded border border-zinc-700">{redTeamResult.reason}</p>
                 </div>
               ) : (
-                <p className="text-zinc-500 text-center py-12">Chay test de kiem tra guardrail prompt injection dinh ky.</p>
+                <p className="text-zinc-500 text-center py-12">Chạy test để kiểm tra guardrail prompt injection định kỳ.</p>
               )}
             </div>
           </div>

@@ -1,13 +1,11 @@
 const elements = {
-  quickSetup: document.getElementById("quickSetup"),
-  parseSetup: document.getElementById("parseSetup"),
-  enrollQuick: document.getElementById("enrollQuick"),
   api: document.getElementById("api"),
   host: document.getElementById("host"),
   email: document.getElementById("email"),
+  emailOptions: document.getElementById("emailOptions"),
+  emailList: document.getElementById("emailList"),
   department: document.getElementById("department"),
   enrollmentToken: document.getElementById("enrollmentToken"),
-  key: document.getElementById("key"),
   offline: document.getElementById("offline"),
   enabled: document.getElementById("enabled"),
   enroll: document.getElementById("enroll"),
@@ -20,12 +18,28 @@ const elements = {
 document.addEventListener("DOMContentLoaded", async () => {
   await loadConfiguration();
   applySetupFromUrl();
+  if (elements.enrollmentToken.value) {
+    await refreshTokenUsers();
+  }
 });
-elements.parseSetup.addEventListener("click", parseQuickSetup);
-elements.enrollQuick.addEventListener("click", enroll);
 elements.enroll.addEventListener("click", enroll);
 elements.save.addEventListener("click", saveConfiguration);
 elements.test.addEventListener("click", testConnection);
+
+// Show a selectable email list after the key is entered, then map department automatically.
+elements.enrollmentToken.addEventListener("input", refreshTokenUsers);
+elements.api.addEventListener("input", refreshTokenUsers);
+elements.email.addEventListener("input", () => {
+  const selectedEmail = elements.email.value.trim();
+  const found = tokenUsersList.find(u => u.email.trim().toLowerCase() === selectedEmail.trim().toLowerCase());
+  if (found && found.departmentName) {
+    elements.department.value = found.departmentName;
+  } else {
+    elements.department.value = "";
+  }
+  renderEmailList();
+});
+
 
 async function loadConfiguration() {
   const value = await chrome.storage.local.get([
@@ -46,7 +60,6 @@ async function loadConfiguration() {
   elements.host.value = value.hostname || "";
   elements.email.value = value.userEmail || "";
   elements.department.value = value.departmentName || "";
-  elements.key.value = value.endpointKey || "";
   elements.offline.checked = value.offlineCriticalBlock !== false;
   elements.enabled.checked = value.enabled !== false;
   elements.version.textContent = `v${chrome.runtime.getManifest().version}`;
@@ -73,7 +86,6 @@ async function loadConfiguration() {
 
 function setManagedLock(locked) {
   const fields = [
-    elements.quickSetup,
     elements.api,
     elements.host,
     elements.email,
@@ -83,8 +95,6 @@ function setManagedLock(locked) {
     elements.enabled
   ];
   for (const field of fields) field.disabled = locked;
-  elements.parseSetup.disabled = locked;
-  elements.enrollQuick.disabled = locked;
   elements.enroll.disabled = locked;
 
   if (locked) {
@@ -123,15 +133,6 @@ function applySetupFromUrl() {
   if (params.get("auto") === "1") enroll();
 }
 
-function parseQuickSetup() {
-  try {
-    const payload = extractSetupPayload(elements.quickSetup.value);
-    applySetupPayload(payload);
-    showStatus("Đã tự điền thông tin triển khai. Kiểm tra lại email rồi bấm đăng ký.", "success");
-  } catch (error) {
-    showStatus(error.message, "error");
-  }
-}
 
 function extractSetupPayload(rawValue) {
   const raw = rawValue.trim();
@@ -149,7 +150,11 @@ function extractSetupPayload(rawValue) {
   }
 
   try {
-    const url = new URL(raw);
+    let urlStr = raw;
+    if (urlStr.includes("<") || urlStr.includes(">")) {
+      urlStr = urlStr.replace(/<([^>]+)>/g, "$1");
+    }
+    const url = new URL(urlStr);
     const params = url.searchParams;
     return {
       apiBaseUrl: params.get("api") || params.get("apiBaseUrl"),
@@ -190,47 +195,66 @@ function readArgument(raw, name) {
   return match ? (match[1] || match[2] || match[3] || "").trim() : "";
 }
 
-function applySetupPayload(payload) {
+async function applySetupPayload(payload) {
   if (payload.apiBaseUrl) elements.api.value = payload.apiBaseUrl;
   if (payload.enrollmentToken) elements.enrollmentToken.value = payload.enrollmentToken;
-  if (payload.userEmail) elements.email.value = payload.userEmail.toLowerCase();
-  if (payload.departmentName) elements.department.value = payload.departmentName;
+
+  if (payload.userEmail) {
+    const cleanedEmail = payload.userEmail.replace(/[<>]/g, "").toLowerCase();
+    if (cleanedEmail !== "employee@company.com" && cleanedEmail !== "nhanvien@company.com") {
+      elements.email.value = cleanedEmail;
+    } else {
+      elements.email.value = "";
+    }
+  } else {
+    elements.email.value = "";
+  }
+
+  if (payload.departmentName) {
+    const cleanedDept = payload.departmentName.replace(/[<>]/g, "");
+    if (cleanedDept !== "department") {
+      elements.department.value = cleanedDept;
+    }
+  } else {
+    elements.department.value = "";
+  }
+
   if (payload.hostname) elements.host.value = payload.hostname;
+
+  await refreshTokenUsers();
 }
 
 async function enroll() {
   setBusy(elements.enroll, true, "Đang đăng ký...");
-  setBusy(elements.enrollQuick, true, "Đang đăng ký...");
   try {
-    if (!elements.api.value || !elements.email.value ||
-        !elements.department.value || !elements.enrollmentToken.value) {
-      throw new Error("Vui lòng điền API URL, email, phòng ban và enrollment token.");
+    if (!elements.api.value || !elements.email.value || !elements.enrollmentToken.value) {
+      throw new Error("Vui lòng điền API URL, chọn email và nhập key đăng ký.");
     }
 
     const granted = await requestOriginPermission(elements.api.value);
     if (!granted) throw new Error("Bạn chưa cấp quyền kết nối đến Backend API");
 
+    let finalHost = elements.host.value.trim();
+
     const response = await chrome.runtime.sendMessage({
       type: "AIGUARD_ENROLL",
       body: {
         apiBaseUrl: elements.api.value,
-        hostname: elements.host.value,
-        userEmail: elements.email.value,
-        departmentName: elements.department.value,
-        enrollmentToken: elements.enrollmentToken.value
+        hostname: finalHost,
+        userEmail: elements.email.value.replace(/[<>]/g, "").trim().toLowerCase(),
+        departmentName: elements.department.value.replace(/[<>]/g, "").trim(),
+        enrollmentToken: elements.enrollmentToken.value.replace(/\s/g, "")
       }
     });
 
     if (!response?.ok) throw new Error(response?.error || "Đăng ký thiết bị thất bại");
     elements.enrollmentToken.value = "";
-    elements.quickSetup.value = "";
     await loadConfiguration();
     showStatus("Đăng ký thành công. AIGuard đang bảo vệ trình duyệt.", "success");
   } catch (error) {
     showStatus(error.message, "error");
   } finally {
     setBusy(elements.enroll, false, "Đăng ký và bật bảo vệ");
-    setBusy(elements.enrollQuick, false, "Đăng ký ngay");
   }
 }
 
@@ -246,7 +270,6 @@ async function saveConfiguration() {
       hostname: elements.host.value.trim(),
       userEmail: elements.email.value.trim().toLowerCase(),
       departmentName: elements.department.value.trim(),
-      endpointKey: elements.key.value.trim(),
       offlineCriticalBlock: elements.offline.checked,
       enabled: elements.enabled.checked
     });
@@ -287,4 +310,113 @@ function showStatus(message, tone) {
 function setBusy(button, busy, label) {
   button.disabled = busy;
   button.textContent = label;
+}
+
+let tokenUsersList = [];
+
+async function refreshTokenUsers() {
+  const token = elements.enrollmentToken.value.trim();
+  const api = elements.api.value.trim();
+  if (!token || !api) {
+    tokenUsersList = [];
+    updateEmailDatalist();
+    showStatus("Dán key để tải danh sách email.", "info");
+    return;
+  }
+
+  try {
+    showStatus("Đang tải danh sách email từ key...", "info");
+    const url = `${api.replace(/\/+$/, "")}/api/endpoints/deployment/token-users?token=${encodeURIComponent(token)}`;
+    const response = await fetch(url);
+    const json = await response.json().catch(() => null);
+    const payload = json?.data ?? json?.payload ?? null;
+    const success = json?.success ?? json?.ok ?? false;
+    const message = json?.message ?? json?.error ?? "";
+    if (!response.ok) {
+      throw new Error(message || `Không thể tải danh sách tài khoản cho key này (${response.status}).`);
+    }
+    if (success && Array.isArray(payload)) {
+      tokenUsersList = payload;
+      updateEmailDatalist();
+      if (tokenUsersList.length > 0) {
+        showStatus(`Đã tải danh sách ${tokenUsersList.length} nhân viên từ key. Hãy chọn Email bên dưới.`, "success");
+      } else {
+        showStatus("Key hợp lệ nhưng danh sách email đang trống.", "warning");
+      }
+    } else {
+      tokenUsersList = [];
+      updateEmailDatalist();
+      throw new Error(message || "API không trả về danh sách email hợp lệ.");
+    }
+  } catch (err) {
+    console.error("Could not fetch token users", err);
+    tokenUsersList = [];
+    updateEmailDatalist();
+    showStatus(err instanceof Error ? err.message : String(err), "error");
+  }
+}
+
+function updateEmailDatalist() {
+  if (tokenUsersList.length > 0) {
+    elements.emailOptions.innerHTML = "";
+    elements.emailList.classList.remove("hidden");
+
+    for (const u of tokenUsersList) {
+      if (u.email) {
+        const option = document.createElement("option");
+        option.value = u.email;
+        elements.emailOptions.appendChild(option);
+      }
+    }
+
+    const currentVal = elements.email.value.trim().toLowerCase();
+    const matchesCurrent = tokenUsersList.find(u => u.email.trim().toLowerCase() === currentVal);
+    if (matchesCurrent) {
+      elements.email.value = matchesCurrent.email;
+      elements.department.value = matchesCurrent.departmentName || "";
+    } else {
+      if (elements.department.readOnly) elements.department.value = "";
+    }
+    renderEmailList();
+  } else {
+    elements.emailOptions.innerHTML = "";
+    elements.emailList.innerHTML = "";
+    elements.emailList.classList.add("hidden");
+  }
+}
+
+function renderEmailList() {
+  if (!elements.emailList) return;
+  const filter = elements.email.value.trim().toLowerCase();
+  const matches = tokenUsersList.filter(u => {
+    const email = u.email.trim().toLowerCase();
+    return !filter || email.includes(filter);
+  });
+
+  elements.emailList.innerHTML = "";
+  if (matches.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "text-sm text-zinc-400";
+    empty.textContent = tokenUsersList.length > 0
+      ? "Không có email phù hợp."
+      : "Dán key để tải danh sách email.";
+    elements.emailList.appendChild(empty);
+    elements.emailList.classList.remove("hidden");
+    return;
+  }
+
+  for (const user of matches.slice(0, 24)) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = user.email;
+    button.addEventListener("click", () => {
+      elements.email.value = user.email;
+      elements.department.value = user.departmentName || "";
+      elements.email.focus();
+      renderEmailList();
+    });
+    elements.emailList.appendChild(button);
+  }
+
+  elements.emailList.classList.remove("hidden");
 }

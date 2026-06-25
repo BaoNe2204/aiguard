@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using aiguard_api.DTOs.Common;
 using aiguard_api.DTOs.Saas;
+using aiguard_api.DTOs.Governance;
 using aiguard_api.Services;
 
 namespace aiguard_api.Controllers;
@@ -87,6 +88,12 @@ public class PlatformBusinessController : ControllerBase
     public async Task<IActionResult> UpdatePlan(Guid id, [FromBody] ProductPlanRequest request) =>
         await _business.UpdatePlanAsync(id, request) is { } result
             ? Ok(ApiResponse<ProductPlanResponse>.Ok(result))
+            : NotFound(ApiResponse<object>.Fail("Plan not found."));
+
+    [HttpDelete("plans/{id:guid}")]
+    public async Task<IActionResult> DeletePlan(Guid id) =>
+        await _business.DeletePlanAsync(id)
+            ? Ok(ApiResponse<object>.Ok(new { }))
             : NotFound(ApiResponse<object>.Fail("Plan not found."));
 
     [HttpGet("orders")]
@@ -281,9 +288,30 @@ public class PlatformBusinessController : ControllerBase
             ? Ok(ApiResponse<TicketResponse>.Ok(result))
             : NotFound(ApiResponse<object>.Fail("Ticket not found."));
     }
+
+    [HttpGet("tenants/{tenantId:guid}/users")]
+    public async Task<IActionResult> GetTenantUsers(Guid tenantId) =>
+        Ok(ApiResponse<List<UserAdminResponse>>.Ok(await _business.GetTenantUsersAsync(tenantId)));
+
+    [HttpPut("tenants/{tenantId:guid}/users/{userId:guid}")]
+    public async Task<IActionResult> UpdateTenantUser(Guid tenantId, Guid userId, [FromBody] UpsertUserRequest request) =>
+        await _business.UpdateTenantUserAsync(tenantId, userId, request) is { } result
+            ? Ok(ApiResponse<UserAdminResponse>.Ok(result))
+            : NotFound(ApiResponse<object>.Fail("User not found."));
+
+    [HttpPost("tenants/{tenantId:guid}/users/{userId:guid}/change-password")]
+    public async Task<IActionResult> ChangeTenantUserPassword(Guid tenantId, Guid userId, [FromBody] ChangePasswordRequest request) =>
+        await _business.ChangeTenantUserPasswordAsync(tenantId, userId, request.NewPassword) is { } result
+            ? Ok(ApiResponse<UserAdminResponse>.Ok(result))
+            : NotFound(ApiResponse<object>.Fail("User not found."));
 }
 
 public class NoteRequest
 {
     public string? Note { get; set; }
+}
+
+public class ChangePasswordRequest
+{
+    public string NewPassword { get; set; } = string.Empty;
 }

@@ -183,6 +183,7 @@ textarea {
 }
 
 .field input,
+.field select,
 .field textarea {
   width: 100%;
   padding: 0 12px;
@@ -195,8 +196,19 @@ textarea {
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.field input {
+.field input,
+.field select {
   min-height: 43px;
+}
+
+.field select {
+  appearance: none;
+  cursor: pointer;
+}
+
+.field select:disabled {
+  color: #9ca3af;
+  cursor: not-allowed;
 }
 
 .field textarea {
@@ -216,6 +228,38 @@ textarea {
 .field textarea:disabled {
   opacity: 0.68;
   cursor: not-allowed;
+}
+
+.email-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px;
+  border: 1px solid rgba(99, 102, 241, 0.15);
+  border-radius: 12px;
+  background: rgba(17, 17, 20, 0.72);
+}
+
+.email-list.hidden {
+  display: none;
+}
+
+.email-list button {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 12px;
+  text-align: left;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  color: #f4f4f5;
+  cursor: pointer;
+}
+
+.email-list button:hover {
+  border-color: rgba(99, 102, 241, 0.45);
+  background: rgba(99, 102, 241, 0.12);
 }
 
 .field-grid {

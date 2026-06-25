@@ -10,6 +10,7 @@ export interface ApprovalResponse {
   assignedApproverName: string | null;
   status: string;
   reason: string | null;
+  businessJustification?: string | null;
   approverNote: string | null;
   createdAt: string;
   decidedAt: string | null;
@@ -27,10 +28,16 @@ export const approvalsApi = {
     );
   },
 
-  processApproval(id: string, action: string, note?: string): Promise<ApprovalResponse> {
+  processApproval(
+    id: string,
+    action: string,
+    note?: string,
+    addToWhitelist?: boolean,
+    whitelistKeyword?: string
+  ): Promise<ApprovalResponse> {
     return apiRequest<ApprovalResponse>(`/approvals/${id}/action`, {
       method: 'POST',
-      body: JSON.stringify({ action, note }),
+      body: JSON.stringify({ action, note, addToWhitelist, whitelistKeyword }),
     });
   },
 
@@ -38,5 +45,11 @@ export const approvalsApi = {
     return apiRequest<PagedResult<ApprovalResponse>>(
       `/approvals/history${buildQuery(query)}`
     );
+  },
+
+  revoke(id: string): Promise<ApprovalResponse> {
+    return apiRequest<ApprovalResponse>(`/approvals/${id}/revoke`, {
+      method: 'POST',
+    });
   },
 };

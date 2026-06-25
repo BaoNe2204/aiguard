@@ -8,7 +8,7 @@ namespace aiguard_api.Controllers;
 
 [ApiController]
 [Route("api/blockchain")]
-[Authorize(Roles = "SecurityAdmin,TenantOwner")]
+[Authorize(Roles = "SecurityAdmin,TenantOwner,PlatformAdmin")]
 public class BlockchainController : ControllerBase
 {
     private readonly IBlockchainService _blockchainService;

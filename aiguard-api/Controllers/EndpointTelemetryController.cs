@@ -8,7 +8,7 @@ namespace aiguard_api.Controllers;
 
 [ApiController]
 [Route("api/endpoints/telemetry")]
-[Authorize(Roles = "DepartmentManager,SecurityAdmin,TenantOwner")]
+[Authorize(Roles = "DepartmentManager,SecurityAdmin,TenantOwner,PlatformAdmin")]
 public class EndpointTelemetryController : ControllerBase
 {
     private readonly IEndpointTelemetryService _telemetry;

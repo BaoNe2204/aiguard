@@ -8,7 +8,7 @@ namespace aiguard_api.Controllers;
 
 [ApiController]
 [Route("api/endpoints/events")]
-[Authorize(Roles = "DepartmentManager,SecurityAdmin,TenantOwner")]
+[Authorize(Roles = "DepartmentManager,SecurityAdmin,TenantOwner,PlatformAdmin")]
 public class EndpointEventsController : ControllerBase
 {
     private readonly IEndpointEventService _eventService;

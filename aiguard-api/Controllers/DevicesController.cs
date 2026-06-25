@@ -1,19 +1,27 @@
+using System.Security.Claims;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using aiguard_api.DTOs.Common;
 using aiguard_api.DTOs.Endpoints;
 using aiguard_api.Services;
+using aiguard_api.Hubs;
 
 namespace aiguard_api.Controllers;
 
 [ApiController]
 [Route("api/endpoints/devices")]
-[Authorize(Roles = "SecurityAdmin,TenantOwner")]
+[Authorize(Roles = "SecurityAdmin,TenantOwner,PlatformAdmin")]
 public class DevicesController : ControllerBase
 {
     private readonly IDeviceService _deviceService;
+    private readonly IHubContext<EndpointHub> _endpointHub;
 
-    public DevicesController(IDeviceService deviceService) => _deviceService = deviceService;
+    public DevicesController(IDeviceService deviceService, IHubContext<EndpointHub> endpointHub)
+    {
+        _deviceService = deviceService;
+        _endpointHub = endpointHub;
+    }
 
     /// <summary>Get paginated list of protected devices</summary>
     [HttpGet]
@@ -38,6 +46,19 @@ public class DevicesController : ControllerBase
     {
         var ok = await _deviceService.SyncPolicyAsync(id);
         if (!ok) return NotFound(ApiResponse<object>.Fail("Device not found"));
+
+        var tenant = User.FindFirstValue("tenantCode") ?? "DEFAULT";
+        var triggeredBy = User.FindFirstValue(ClaimTypes.Email) ?? User.FindFirstValue("email") ?? "admin";
+
+        await _endpointHub.Clients
+            .Group(NotificationGroups.Device(tenant, id))
+            .SendAsync("PolicyRefresh", new
+            {
+                commandId = Guid.NewGuid(),
+                triggeredBy,
+                triggeredAt = DateTime.UtcNow
+            });
+
         return Ok(ApiResponse<object>.Ok(new { }, "Policy sync triggered"));
     }
 
@@ -101,5 +122,29 @@ public class DevicesController : ControllerBase
 
         var device = await _deviceService.HeartbeatAsync(request);
         return Ok(ApiResponse<DeviceResponse>.Ok(device));
+    }
+
+    [HttpGet("{id:guid}/custom-settings")]
+    public async Task<IActionResult> GetCustomSettings(Guid id)
+    {
+        var result = await _deviceService.GetCustomSettingsAsync(id);
+        if (result == null) return NotFound(ApiResponse<object>.Fail("Device not found"));
+        return Ok(ApiResponse<DeviceCustomSettingsResponse>.Ok(result));
+    }
+
+    [HttpPut("{id:guid}/custom-settings")]
+    public async Task<IActionResult> UpdateCustomSettings(Guid id, [FromBody] DeviceCustomSettingsRequest request)
+    {
+        var result = await _deviceService.UpdateCustomSettingsAsync(id, request);
+        if (result == null) return NotFound(ApiResponse<object>.Fail("Device not found"));
+        return Ok(ApiResponse<DeviceCustomSettingsResponse>.Ok(result));
+    }
+
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> DeleteDevice(Guid id)
+    {
+        var result = await _deviceService.DeleteDeviceAsync(id);
+        if (!result) return NotFound(ApiResponse<object>.Fail("Device not found"));
+        return Ok(ApiResponse<object>.Ok(null));
     }
 }

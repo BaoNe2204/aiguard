@@ -22,6 +22,9 @@ for %%F in (
   copy /Y "%ROOT%%%F" "%DIST%\%%F" >nul
 )
 
+del /q "%DIST%\aiguard-extension.zip" >nul 2>nul
+powershell -NoProfile -Command "Compress-Archive -Path '%DIST%\*' -DestinationPath '%DIST%\aiguard-extension.zip' -Force" || exit /b 1
+
 node --check "%DIST%\background.js" || exit /b 1
 node --check "%DIST%\content.js" || exit /b 1
 node --check "%DIST%\options.js" || exit /b 1

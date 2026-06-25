@@ -17,6 +17,7 @@ public class DeviceResponse
     public bool IsOnline { get; set; }
     public bool IsQuarantined { get; set; }
     public bool IsRemoteDisabled { get; set; }
+    public bool EndpointKeyRevoked { get; set; }
     public string? QuarantineReason { get; set; }
     public DateTime? LastPolicySyncAt { get; set; }
     public string AgentStatus { get; set; } = string.Empty;
@@ -151,8 +152,8 @@ public class EnrollDeviceRequest
     [Required, EmailAddress]
     public string UserEmail { get; set; } = string.Empty;
 
-    [Required, MaxLength(100)]
-    public string DepartmentName { get; set; } = string.Empty;
+    [MaxLength(100)]
+    public string? DepartmentName { get; set; }
 
     public string? AgentVersion { get; set; }
     public string? ExtensionVersion { get; set; }
@@ -220,3 +221,31 @@ public class EndpointTelemetryResponse : EndpointTelemetryItemRequest
     public string DepartmentName { get; set; } = string.Empty;
     public DateTime ReceivedAt { get; set; }
 }
+
+public class DeviceCustomSettingsRequest
+{
+    public Guid? CustomSecurityPolicyId { get; set; }
+    public List<DeviceAiWebsiteOverrideDto> AiWebsiteOverrides { get; set; } = new();
+}
+
+public class DeviceCustomSettingsResponse
+{
+    public Guid DeviceId { get; set; }
+    public Guid? CustomSecurityPolicyId { get; set; }
+    public List<DeviceAiWebsiteOverrideDto> AiWebsiteOverrides { get; set; } = new();
+}
+
+public class DeviceAiWebsiteOverrideDto
+{
+    public Guid AiWebsiteId { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string GlobalMode { get; set; } = string.Empty;
+    public string OverrideMode { get; set; } = string.Empty;
+}
+
+public class TokenUserDto
+{
+    public string Email { get; set; } = string.Empty;
+    public string DepartmentName { get; set; } = string.Empty;
+}
+

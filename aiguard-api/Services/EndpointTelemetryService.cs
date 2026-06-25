@@ -17,7 +17,9 @@ public class EndpointTelemetryService : IEndpointTelemetryService
     private static readonly HashSet<string> Categories = new(StringComparer.OrdinalIgnoreCase)
     {
         "RemovableStorage", "NetworkShare", "RdpClient", "EmailClient",
-        "PrintService", "Clipboard", "AgentHealth"
+        "PrintService", "Clipboard", "AgentHealth", "AiCodeApp",
+        "SensitiveWorkspace", "DeveloperSecret", "AiCodePolicyDecision",
+        "ExtensionMonitor", "NetworkSharePolicy", "TamperProtection"
     };
     private static readonly HashSet<string> Severities = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -56,6 +58,7 @@ public class EndpointTelemetryService : IEndpointTelemetryService
             };
         }).ToList();
         _db.EndpointTelemetryEvents.AddRange(records);
+        ApplyAutomaticDeviceControls(device, records);
         await _db.SaveChangesAsync();
 
         foreach (var item in records.Where(x => x.Severity is "High" or "Critical"))
@@ -71,6 +74,11 @@ public class EndpointTelemetryService : IEndpointTelemetryService
                 new { device.Id, device.Hostname, item.Category, item.EventType, item.Detail, item.OccurredAt });
         }
         return records.Count;
+    }
+
+    private static void ApplyAutomaticDeviceControls(Device device, List<EndpointTelemetryEvent> records)
+    {
+        // Removed auto quarantine on AI block to prevent full device lockdown just for opening Cursor/Code.
     }
 
     public async Task<PagedResult<EndpointTelemetryResponse>> GetAsync(PagedQuery query, string? category)

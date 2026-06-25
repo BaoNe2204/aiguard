@@ -77,6 +77,7 @@ public static class LegacyDatabaseBootstrapper
 
         await EnsureLegacyScopeColumnsAsync(connection, logger, cancellationToken);
         await EnsureRuntimeFeatureSchemaAsync(connection, logger, cancellationToken);
+        await EnsureUniqueIndexesRepairAsync(connection, logger, cancellationToken);
 
         await using var baselineCommand = connection.CreateCommand();
         baselineCommand.CommandText = $"""
@@ -268,6 +269,45 @@ public static class LegacyDatabaseBootstrapper
             """;
         await command.ExecuteNonQueryAsync(cancellationToken);
         logger.LogInformation("Legacy runtime feature schema repair completed.");
+    }
+
+    private static async Task EnsureUniqueIndexesRepairAsync(
+        System.Data.Common.DbConnection connection,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            -- 1. Departments index repair
+            IF EXISTS (SELECT 1 FROM sys.indexes WHERE [name] = N'IX_Departments_Code' AND [object_id] = OBJECT_ID(N'[dbo].[Departments]'))
+                DROP INDEX [IX_Departments_Code] ON [dbo].[Departments];
+
+            IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE [name] = N'IX_Departments_TenantCode_Code' AND [object_id] = OBJECT_ID(N'[dbo].[Departments]'))
+                CREATE UNIQUE INDEX [IX_Departments_TenantCode_Code] ON [dbo].[Departments] ([TenantCode], [Code]);
+
+            -- 2. Users index repair
+            IF EXISTS (SELECT 1 FROM sys.indexes WHERE [name] = N'IX_Users_Email' AND [object_id] = OBJECT_ID(N'[dbo].[Users]'))
+                DROP INDEX [IX_Users_Email] ON [dbo].[Users];
+
+            IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE [name] = N'IX_Users_TenantCode_Email' AND [object_id] = OBJECT_ID(N'[dbo].[Users]'))
+                CREATE UNIQUE INDEX [IX_Users_TenantCode_Email] ON [dbo].[Users] ([TenantCode], [Email]);
+
+            -- 3. Devices index repair
+            IF EXISTS (SELECT 1 FROM sys.indexes WHERE [name] = N'IX_Devices_Hostname' AND [object_id] = OBJECT_ID(N'[dbo].[Devices]'))
+                DROP INDEX [IX_Devices_Hostname] ON [dbo].[Devices];
+
+            IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE [name] = N'IX_Devices_TenantCode_Hostname' AND [object_id] = OBJECT_ID(N'[dbo].[Devices]'))
+                CREATE UNIQUE INDEX [IX_Devices_TenantCode_Hostname] ON [dbo].[Devices] ([TenantCode], [Hostname]);
+
+            -- 4. Agents index repair
+            IF EXISTS (SELECT 1 FROM sys.indexes WHERE [name] = N'IX_Agents_Code' AND [object_id] = OBJECT_ID(N'[dbo].[Agents]'))
+                DROP INDEX [IX_Agents_Code] ON [dbo].[Agents];
+
+            IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE [name] = N'IX_Agents_TenantCode_Code' AND [object_id] = OBJECT_ID(N'[dbo].[Agents]'))
+                CREATE UNIQUE INDEX [IX_Agents_TenantCode_Code] ON [dbo].[Agents] ([TenantCode], [Code]);
+            """;
+        await command.ExecuteNonQueryAsync(cancellationToken);
+        logger.LogInformation("Legacy database unique indexes repaired successfully.");
     }
 
     private static string AddColumnSql(string table, string column, string definition) => $"""

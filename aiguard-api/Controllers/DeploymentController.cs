@@ -8,7 +8,7 @@ namespace aiguard_api.Controllers;
 
 [ApiController]
 [Route("api/endpoints/deployment")]
-[Authorize(Roles = "TenantOwner")]
+[Authorize(Roles = "TenantOwner,PlatformAdmin,SecurityAdmin")]
 public class DeploymentController : ControllerBase
 {
     private readonly IDeploymentService _deploymentService;
@@ -29,6 +29,16 @@ public class DeploymentController : ControllerBase
     {
         var response = await _deploymentService.RotateTokenAsync(tenantCode);
         return Ok(ApiResponse<DeploymentTokenResponse>.Ok(response, "Token rotated"));
+    }
+
+    /// <summary>Get list of employees (email & department) for a valid enrollment token</summary>
+    [HttpGet("token-users")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetTokenUsers([FromQuery] string token)
+    {
+        var users = await _deploymentService.GetTokenUsersAsync(token);
+        if (users == null) return BadRequest(ApiResponse<object>.Fail("Invalid or expired enrollment token"));
+        return Ok(ApiResponse<List<TokenUserDto>>.Ok(users));
     }
 
     [HttpPost("enroll")]

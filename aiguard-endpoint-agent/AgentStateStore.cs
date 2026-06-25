@@ -14,6 +14,8 @@ public sealed class AgentStateStore
     public string DirectoryPath => _directory;
     public string StatePath => Path.Combine(_directory, "agent-state.json");
     public string ConfigPath => Path.Combine(_directory, "agent-config.json");
+    public string PolicyCachePath => Path.Combine(_directory, "policy-cache.protected");
+    public string OfflineTelemetryQueuePath => Path.Combine(_directory, "offline-telemetry.protected");
 
     public AgentConfig LoadConfig()
     {
@@ -69,6 +71,12 @@ public sealed class AgentConfig
     public string UserEmail { get; set; } = "";
     public string DepartmentName { get; set; } = "";
     public int HeartbeatSeconds { get; set; } = 30;
+    public bool EnableAiCodeAppProtection { get; set; } = true;
+    public bool EnableProcessKill { get; set; } = false;
+    public int OfflinePolicyTtlMinutes { get; set; } = 1440;
+    public bool OfflineFallbackToBlock { get; set; } = true;
+    public int MaxQueuedTelemetryEvents { get; set; } = 1000;
+    public List<string> WorkspaceRoots { get; set; } = new();
 }
 
 public sealed record AgentState(Guid DeviceId, string EndpointKey, string PolicyVersion);

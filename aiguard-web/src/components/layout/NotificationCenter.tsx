@@ -6,6 +6,8 @@ import { API_BASE, getToken } from '../../api/client';
 import { governanceApi, type NotificationItem } from '../../api/governance';
 
 const realtimeEvents = [
+  'Connected',
+  'GroupJoined',
   'NewApprovalRequest',
   'ApprovalDecided',
   'ApprovalRevoked',
@@ -14,8 +16,35 @@ const realtimeEvents = [
   'FalsePositiveSubmitted',
   'FalsePositiveReviewed',
   'IncidentCreated',
-  'IncidentUpdated'
+  'IncidentUpdated',
+  // Extension real-time events
+  'ExtensionDlpEvent',
+  'ExtensionOnline',
+  'ExtensionOffline',
+  'ExtensionHeartbeat',
 ];
+
+export interface ExtensionDlpEvent {
+  deviceId: string;
+  hostname: string;
+  userEmail: string;
+  websiteAi: string;
+  eventType: string;
+  riskScore: number;
+  riskLevel: string;
+  dataTypeMatched: string;
+  decision: string;
+  createdAt: string;
+}
+
+export interface ExtensionStatus {
+  deviceId: string;
+  hostname: string;
+  userEmail: string;
+  connected?: boolean;
+  disconnectedAt?: string;
+  connectedAt?: string;
+}
 
 function notificationHubUrl(): string {
   if (API_BASE.startsWith('http://') || API_BASE.startsWith('https://')) {
@@ -29,6 +58,8 @@ export const NotificationCenter: React.FC = () => {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [realtimeAlert, setRealtimeAlert] = useState('');
+  const [extensionStatus, setExtensionStatus] = useState<Map<string, ExtensionStatus>>(new Map());
+  const [recentDlpEvents, setRecentDlpEvents] = useState<ExtensionDlpEvent[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
@@ -46,16 +77,51 @@ export const NotificationCenter: React.FC = () => {
   }, [load]);
 
   useEffect(() => {
+    let disposed = false;
+    let started = false;
     const connection = new signalR.HubConnectionBuilder()
       .withUrl(notificationHubUrl(), { accessTokenFactory: () => getToken() || '' })
       .withAutomaticReconnect()
-      .configureLogging(signalR.LogLevel.Warning)
+      .configureLogging(signalR.LogLevel.None)
       .build();
 
     const receive = (eventName: string, payload: unknown) => {
       const record = payload && typeof payload === 'object'
         ? payload as Record<string, unknown>
         : {};
+
+      // Handle extension DLP events
+      if (eventName === 'ExtensionDlpEvent') {
+        const evt = record as unknown as ExtensionDlpEvent;
+        setRecentDlpEvents(prev => [evt, ...prev].slice(0, 50));
+        const subject = `${evt.websiteAi} | ${evt.eventType} | ${evt.riskLevel}`;
+        setRealtimeAlert(`DLP Event: ${subject}`);
+        void load();
+        return;
+      }
+
+      // Handle extension online/offline
+      if (eventName === 'ExtensionOnline') {
+        const status = record as unknown as ExtensionStatus & { connectedAt: string };
+        setExtensionStatus(prev => {
+          const next = new Map(prev);
+          next.set(status.deviceId, { ...status, connected: true });
+          return next;
+        });
+        setRealtimeAlert(`Extension Online: ${status.hostname}`);
+        return;
+      }
+      if (eventName === 'ExtensionOffline') {
+        const status = record as unknown as ExtensionStatus & { disconnectedAt: string };
+        setExtensionStatus(prev => {
+          const next = new Map(prev);
+          next.set(status.deviceId, { ...status, connected: false });
+          return next;
+        });
+        setRealtimeAlert(`Extension Offline: ${status.hostname}`);
+        return;
+      }
+
       const subject = String(record.title || record.status || record.riskLevel || '');
       setRealtimeAlert(`${eventName}${subject ? `: ${subject}` : ''}`);
       void load();
@@ -64,10 +130,16 @@ export const NotificationCenter: React.FC = () => {
     realtimeEvents.forEach(eventName => {
       connection.on(eventName, payload => receive(eventName, payload));
     });
-    void connection.start().catch(() => undefined);
+    void connection.start()
+      .then(() => {
+        started = true;
+        if (disposed) void connection.stop();
+      })
+      .catch(() => undefined);
     return () => {
+      disposed = true;
       realtimeEvents.forEach(eventName => connection.off(eventName));
-      void connection.stop();
+      if (started) void connection.stop();
     };
   }, [load]);
 
@@ -91,6 +163,10 @@ export const NotificationCenter: React.FC = () => {
     setOpen(false);
     if (item.actionUrl) navigate(item.actionUrl);
   };
+
+  if (false as boolean) {
+    console.debug(extensionStatus, recentDlpEvents);
+  }
 
   return (
     <div className="notification-center" ref={containerRef}>

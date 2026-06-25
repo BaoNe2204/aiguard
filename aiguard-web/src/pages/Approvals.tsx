@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { User, Cpu, History, Check, X, Eye } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
+import { Check, X, Eye } from 'lucide-react';
 import { DataTable } from '../components/ui/DataTable';
 import { RiskBadge } from '../components/ui/RiskBadge';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
@@ -10,12 +10,14 @@ import { useLanguage } from '../contexts/LanguageContext';
 
 export const Approvals: React.FC = () => {
   const location = useLocation();
-  const navigate = useNavigate();
   const { t, locale } = useLanguage();
   const activeTab = location.pathname.endsWith('/agents') ? 'agents'
     : location.pathname.endsWith('/history') ? 'history'
-    : 'prompts';
+    : location.pathname.endsWith('/prompts') ? 'prompts'
+    : 'agents';
   const [selectedApproval, setSelectedApproval] = useState<ApprovalResponse | null>(null);
+  const [addToWhitelist, setAddToWhitelist] = useState(false);
+  const [whitelistKeyword, setWhitelistKeyword] = useState('');
 
   // Pending prompts
   const [prompts, setPrompts] = useState<ApprovalResponse[]>([]);
@@ -76,14 +78,28 @@ export const Approvals: React.FC = () => {
     else if (activeTab === 'history') fetchHistory();
   }, [activeTab, fetchPrompts, fetchAgents, fetchHistory]);
 
-  const handleAction = async (id: string, action: string, note?: string) => {
+  const handleCloseModal = () => {
+    setSelectedApproval(null);
+    setAddToWhitelist(false);
+    setWhitelistKeyword('');
+  };
+
+  const handleAction = async (id: string, action: string, note?: string, addWl?: boolean, wlKeyword?: string) => {
     setActionLoading(id);
     try {
-      await approvalsApi.processApproval(id, action, note);
-      setSelectedApproval(null);
+      await approvalsApi.processApproval(id, action, note, addWl, wlKeyword);
+      handleCloseModal();
       // Refresh current tab
       if (activeTab === 'prompts') fetchPrompts();
       else if (activeTab === 'agents') fetchAgents();
+    } catch {} finally { setActionLoading(null); }
+  };
+
+  const handleRevoke = async (id: string) => {
+    setActionLoading(id);
+    try {
+      await approvalsApi.revoke(id);
+      fetchHistory();
     } catch {} finally { setActionLoading(null); }
   };
 
@@ -95,20 +111,7 @@ export const Approvals: React.FC = () => {
           <p className="subtitle">{t('Review and authorize sensitive prompts and AI Agent actions', 'Xem xét và phê duyệt prompt nhạy cảm cùng hành động của AI Agent')}</p>
         </div>
       </div>
-
-      <div className="tabs-container">
-        <button className={`tab-btn ${activeTab === 'prompts' ? 'active' : ''}`} onClick={() => navigate('/app/approvals/prompts')}>
-          <User size={16} /> {t('Prompt Approvals', 'Duyệt prompt')} ({promptsTotalCount})
-        </button>
-        <button className={`tab-btn ${activeTab === 'agents' ? 'active' : ''}`} onClick={() => navigate('/app/approvals/agents')}>
-          <Cpu size={16} /> {t('Agent Approvals', 'Duyệt Agent')} ({agentsTotalCount})
-        </button>
-        <button className={`tab-btn ${activeTab === 'history' ? 'active' : ''}`} onClick={() => navigate('/app/approvals/history')}>
-          <History size={16} /> {t('History', 'Lịch sử')}
-        </button>
-      </div>
-
-      <div className="tab-content">
+<div className="tab-content">
         {activeTab === 'prompts' && (
           <div className="prompts-tab card glass">
             {promptsLoading ? <LoadingSpinner text={t('Loading pending prompts...', 'Đang tải prompt chờ duyệt...')} /> : (
@@ -155,12 +158,20 @@ export const Approvals: React.FC = () => {
                   data={agents}
                   columns={[
                     { header: t('Requester', 'Người yêu cầu'), accessor: 'requestedByUserEmail' },
-                    { header: t('Summary', 'Tóm tắt'), accessor: (item) => item.eventSummary || '—' },
-                    { header: t('Risk Level', 'Mức rủi ro'), accessor: (item) => item.riskLevel ? <RiskBadge level={item.riskLevel as any} /> : '—', width: '100px' },
-                    { header: t('Risk Score', 'Điểm rủi ro'), accessor: (item) => item.riskScore ?? '—', width: '100px' },
+                    { header: t('App Name', 'Tên ứng dụng'), accessor: (item) => {
+                      const match = (item.reason || item.businessJustification || '').match(/\[DesktopApp:\s*([^\]]+)\]/);
+                      return match ? match[1] : '—';
+                    }, width: '150px' },
+                    { header: t('Reason', 'Lý do'), accessor: (item) => {
+                      const str = item.reason || item.businessJustification || '';
+                      return str.replace(/\[DesktopApp:\s*[^\]]+\]\s*/, '') || '—';
+                    } },
                     { header: t('Time', 'Thời gian'), accessor: (item) => new Date(item.createdAt).toLocaleString(locale), width: '160px' },
                     { header: t('Actions', 'Thao tác'), accessor: (item) => (
                       <div className="flex gap-2">
+                        <button className="btn-action px-2 py-1 flex items-center gap-1 text-xs" onClick={() => setSelectedApproval(item)}>
+                          <Eye size={12} /> {t('Details', 'Chi tiết')}
+                        </button>
                         <button className="btn-action px-2 py-1 text-emerald-400 border border-emerald-500/20 bg-emerald-500/5 hover:bg-emerald-500/10 text-xs flex items-center gap-1"
                           disabled={actionLoading === item.id}
                           onClick={() => handleAction(item.id, 'Approve')}>
@@ -172,7 +183,7 @@ export const Approvals: React.FC = () => {
                           <X size={12} /> {t('Block', 'Chặn')}
                         </button>
                       </div>
-                    ), width: '180px' }
+                    ), width: '280px' }
                   ]}
                 />
                 <Pagination page={agentsPage} totalPages={agentsTotalPages} totalCount={agentsTotalCount} pageSize={20} onPageChange={setAgentsPage} />
@@ -190,7 +201,7 @@ export const Approvals: React.FC = () => {
                   columns={[
                     { header: t('Requester', 'Người yêu cầu'), accessor: 'requestedByUserEmail' },
                     { header: t('Type', 'Loại'), accessor: 'requestType', width: '110px' },
-                    { header: t('Summary', 'Tóm tắt'), accessor: (item) => item.eventSummary || item.dataTypeMatched || '—' },
+                    { header: t('Summary', 'Tóm tắt'), accessor: (item) => item.eventSummary || (item.reason ? item.reason : item.dataTypeMatched || '—') },
                     { header: t('Risk Score', 'Điểm rủi ro'), accessor: (item) => item.riskScore ?? '—', width: '100px' },
                     { header: t('Time', 'Thời gian'), accessor: (item) => new Date(item.createdAt).toLocaleString(locale), width: '160px' },
                     { header: t('Decision', 'Quyết định'), accessor: (item) => (
@@ -201,6 +212,20 @@ export const Approvals: React.FC = () => {
                       }`}>
                         {item.status}
                       </span>
+                    ), width: '120px' },
+                    { header: t('Actions', 'Thao tác'), accessor: (item) => (
+                      <div className="flex gap-2">
+                        <button className="btn-action px-2 py-1 flex items-center gap-1 text-xs" onClick={() => setSelectedApproval(item)}>
+                          <Eye size={12} /> {t('Details', 'Chi tiết')}
+                        </button>
+                        {(item.status === 'Approved' || item.status === 'ApprovedWithMasking') && (
+                          <button className="btn-action px-2 py-1 text-rose-400 border border-rose-500/20 bg-rose-500/5 hover:bg-rose-500/10 text-xs flex items-center gap-1"
+                            disabled={actionLoading === item.id}
+                            onClick={() => handleRevoke(item.id)}>
+                            <X size={12} /> {t('Revoke', 'Thu hồi')}
+                          </button>
+                        )}
+                      </div>
                     ), width: '180px' }
                   ]}
                 />
@@ -217,7 +242,7 @@ export const Approvals: React.FC = () => {
           <div className="modal-card max-w-2xl w-full glass">
             <div className="modal-header">
               <h2>{t('Approval Details', 'Chi tiết phê duyệt')}</h2>
-              <button className="text-zinc-400 hover:text-white" onClick={() => setSelectedApproval(null)}><X size={18} /></button>
+              <button className="text-zinc-400 hover:text-white" onClick={handleCloseModal}><X size={18} /></button>
             </div>
             <div className="modal-body flex flex-col gap-4 text-sm">
               <div>
@@ -243,37 +268,109 @@ export const Approvals: React.FC = () => {
                     <RiskBadge level={selectedApproval.riskLevel as any} />
                   </div>
                 )}
-                {selectedApproval.riskScore !== null && (
+                {selectedApproval.riskScore != null && (
                   <div>
                     <span className="font-semibold text-zinc-400 block mb-1">{t('Risk Score', 'Điểm rủi ro')}:</span>
                     <span className="text-white font-bold">{selectedApproval.riskScore} / 100</span>
                   </div>
                 )}
               </div>
-              {selectedApproval.reason && (
+              
+              {selectedApproval.requestType === 'AgentAction' ? (() => {
+                const rawStr = selectedApproval.reason || selectedApproval.businessJustification || '';
+                const match = rawStr.match(/\[DesktopApp:\s*([^\]]+)\]/);
+                const appName = match ? match[1] : '—';
+                const reason = rawStr.replace(/\[DesktopApp:\s*[^\]]+\]\s*/, '') || '—';
+                return (
+                  <>
+                    <div>
+                      <span className="font-semibold text-zinc-400 block mb-1">{t('App Name', 'Tên ứng dụng')}:</span>
+                      <span className="text-white font-semibold">{appName}</span>
+                    </div>
+                    <div>
+                      <span className="font-semibold text-zinc-400 block mb-1">{t('Reason', 'Lý do')}:</span>
+                      <span className="text-zinc-300">{reason}</span>
+                    </div>
+                  </>
+                );
+              })() : selectedApproval.reason ? (
                 <div>
                   <span className="font-semibold text-zinc-400 block mb-1">{t('Reason', 'Lý do')}:</span>
                   <span className="text-zinc-300">{selectedApproval.reason}</span>
                 </div>
+              ) : null}
+              {selectedApproval.requestType === 'EndpointDLP' && (
+                <div className="mt-4 p-4 rounded bg-zinc-800/60 border border-zinc-700/50 flex flex-col gap-3">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="addToWhitelist"
+                      checked={addToWhitelist}
+                      onChange={(e) => {
+                        setAddToWhitelist(e.target.checked);
+                        if (!e.target.checked) setWhitelistKeyword('');
+                      }}
+                      className="rounded bg-zinc-900 border-zinc-700 text-indigo-500 focus:ring-indigo-500/30"
+                    />
+                    <label htmlFor="addToWhitelist" className="font-semibold text-white cursor-pointer select-none">
+                      {t('Add to Whitelist (bypass future checks)', 'Đồng thời thêm vào Whitelist (bỏ qua kiểm tra sau này)')}
+                    </label>
+                  </div>
+                  {addToWhitelist && (
+                    <div className="flex flex-col gap-1.5 pl-5">
+                      <label className="text-xs text-zinc-400 font-semibold">
+                        {t('Whitelist Excluded Keyword (Optional)', 'Từ khóa loại trừ Whitelist (Tùy chọn)')}
+                      </label>
+                      <input
+                        type="text"
+                        value={whitelistKeyword}
+                        onChange={(e) => setWhitelistKeyword(e.target.value)}
+                        placeholder={t(
+                          "Enter a specific word, or leave blank to whitelist the exact content hash...",
+                          "Nhập từ khóa cụ thể, hoặc để trống để whitelist theo mã Hash của nội dung..."
+                        )}
+                        className="bg-zinc-900 border border-zinc-700 text-white text-xs p-2 rounded w-full placeholder-zinc-500"
+                      />
+                    </div>
+                  )}
+                </div>
               )}
             </div>
             <div className="modal-footer flex justify-end gap-2 mt-4">
-              <button className="btn-action px-3 py-1.5" onClick={() => setSelectedApproval(null)}>{t('Close', 'Đóng')}</button>
-              <button className="btn-action px-3 py-1.5 text-sky-400 border border-sky-500/20 bg-sky-500/5 hover:bg-sky-500/10"
-                disabled={actionLoading === selectedApproval.id}
-                onClick={() => handleAction(selectedApproval.id, 'ApproveWithMasking')}>
-                {t('Approve with Masking', 'Phê duyệt sau khi che dữ liệu')}
-              </button>
-              <button className="btn-action px-3 py-1.5 text-emerald-400 border border-emerald-500/20 bg-emerald-500/5 hover:bg-emerald-500/10"
-                disabled={actionLoading === selectedApproval.id}
-                onClick={() => handleAction(selectedApproval.id, 'Approve')}>
-                {t('Approve Raw', 'Phê duyệt dữ liệu gốc')}
-              </button>
-              <button className="btn-action px-3 py-1.5 text-rose-400 border border-rose-500/20 bg-rose-500/5 hover:bg-rose-500/10"
-                disabled={actionLoading === selectedApproval.id}
-                onClick={() => handleAction(selectedApproval.id, 'Reject')}>
-                {t('Reject & Block', 'Từ chối và chặn')}
-              </button>
+              <button className="btn-action px-3 py-1.5" onClick={handleCloseModal}>{t('Close', 'Đóng')}</button>
+              
+              {selectedApproval.requestType === 'EndpointDLP' ? (
+                <>
+                  <button className="btn-action px-3 py-1.5 text-sky-400 border border-sky-500/20 bg-sky-500/5 hover:bg-sky-500/10"
+                    disabled={actionLoading === selectedApproval.id}
+                    onClick={() => handleAction(selectedApproval.id, 'ApproveWithMasking', undefined, addToWhitelist, whitelistKeyword)}>
+                    {t('Approve with Masking', 'Phê duyệt sau khi che dữ liệu')}
+                  </button>
+                  <button className="btn-action px-3 py-1.5 text-emerald-400 border border-emerald-500/20 bg-emerald-500/5 hover:bg-emerald-500/10"
+                    disabled={actionLoading === selectedApproval.id}
+                    onClick={() => handleAction(selectedApproval.id, 'Approve', undefined, addToWhitelist, whitelistKeyword)}>
+                    {t('Approve Raw', 'Phê duyệt dữ liệu gốc')}
+                  </button>
+                  <button className="btn-action px-3 py-1.5 text-rose-400 border border-rose-500/20 bg-rose-500/5 hover:bg-rose-500/10"
+                    disabled={actionLoading === selectedApproval.id}
+                    onClick={() => handleAction(selectedApproval.id, 'Reject')}>
+                    {t('Reject & Block', 'Từ chối và chặn')}
+                  </button>
+                </>
+              ) : selectedApproval.status === 'Pending' ? (
+                <>
+                  <button className="btn-action px-3 py-1.5 text-emerald-400 border border-emerald-500/20 bg-emerald-500/5 hover:bg-emerald-500/10"
+                    disabled={actionLoading === selectedApproval.id}
+                    onClick={() => handleAction(selectedApproval.id, 'Approve')}>
+                    {t('Approve', 'Phê duyệt')}
+                  </button>
+                  <button className="btn-action px-3 py-1.5 text-rose-400 border border-rose-500/20 bg-rose-500/5 hover:bg-rose-500/10"
+                    disabled={actionLoading === selectedApproval.id}
+                    onClick={() => handleAction(selectedApproval.id, 'Reject')}>
+                    {t('Reject', 'Từ chối')}
+                  </button>
+                </>
+              ) : null}
             </div>
           </div>
         </div>

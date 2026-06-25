@@ -14,9 +14,11 @@ public interface IApprovalService
     Task<PagedResult<ApprovalResponse>> GetForUserAsync(PagedQuery query, string email);
     Task<ApprovalResponse?> GetByIdAsync(Guid id);
     Task<ApprovalResponse?> RevokeAsync(Guid id, string requestedByEmail);
+    Task<ApprovalResponse?> AdminRevokeAsync(Guid id);
     Task<ApprovalResponse> CreateApprovalAsync(
         string requestType, Guid? endpointEventId, Guid? agentActionLogId,
         string requestedByEmail, string? businessJustification = null);
+    Task<(Guid? deviceId, string? tenantCode)> GetEventDeviceInfoAsync(Guid endpointEventId);
 }
 
 public class ApprovalService : IApprovalService
@@ -110,6 +112,66 @@ public class ApprovalService : IApprovalService
             .Include(a => a.AgentActionLog)
             .Include(a => a.AssignedApprover)
             .FirstAsync(a => a.Id == id);
+
+        if (request.AddToWhitelist && (status == "Approved" || status == "ApprovedWithMasking"))
+        {
+            if (updated.EndpointEvent != null)
+            {
+                var isKeyword = !string.IsNullOrWhiteSpace(request.WhitelistKeyword);
+                var value = isKeyword ? request.WhitelistKeyword!.Trim() : updated.EndpointEvent.OriginalHash;
+                var entryType = isKeyword ? "Keyword" : "ContentHash";
+
+                var exists = await _db.PolicyListEntries
+                    .AnyAsync(e => e.ListType == "Whitelist" && e.EntryType == entryType && e.Value == value && e.TenantCode == updated.TenantCode);
+
+                if (!exists)
+                {
+                    _db.PolicyListEntries.Add(new PolicyListEntry
+                    {
+                        ListType = "Whitelist",
+                        EntryType = entryType,
+                        Value = value,
+                        TenantCode = updated.TenantCode,
+                        Source = $"Approval {updated.Id}",
+                        IsActive = true,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                    await _db.SaveChangesAsync();
+                }
+            }
+        }
+        else if (status == "Approved" || status == "ApprovedWithMasking")
+        {
+            // Auto-whitelist DesktopApp requests
+            if (!string.IsNullOrEmpty(updated.BusinessJustification) && updated.BusinessJustification.StartsWith("[DesktopApp:"))
+            {
+                var appNamePart = updated.BusinessJustification.Substring(12);
+                var closingBraceIdx = appNamePart.IndexOf(']');
+                if (closingBraceIdx > 0)
+                {
+                    var appName = appNamePart.Substring(0, closingBraceIdx).Trim();
+                    var userAppKey = $"{updated.RequestedByUserEmail}:{appName}";
+                    var exists = await _db.PolicyListEntries
+                        .AnyAsync(e => e.ListType == "Whitelist" && e.EntryType == "UserProcessName" && e.Value == userAppKey && e.TenantCode == updated.TenantCode);
+
+                    if (!exists)
+                    {
+                        _db.PolicyListEntries.Add(new PolicyListEntry
+                        {
+                            ListType = "Whitelist",
+                            EntryType = "UserProcessName",
+                            Value = userAppKey,
+                            TenantCode = updated.TenantCode,
+                            Source = $"Approval {updated.Id}",
+                            IsActive = true,
+                            CreatedAt = DateTime.UtcNow
+                        });
+                        await _db.SaveChangesAsync();
+                    }
+                }
+            }
+        }
+
         return MapToResponse(updated);
     }
 
@@ -187,6 +249,49 @@ public class ApprovalService : IApprovalService
         return MapToResponse(approval);
     }
 
+    public async Task<ApprovalResponse?> AdminRevokeAsync(Guid id)
+    {
+        var approval = await _db.Approvals
+            .Include(a => a.EndpointEvent)
+            .Include(a => a.AgentActionLog)
+            .Include(a => a.AssignedApprover)
+            .FirstOrDefaultAsync(a => a.Id == id);
+            
+        if (approval == null) return null;
+        
+        if ((approval.Status == "Approved" || approval.Status == "ApprovedWithMasking") && !string.IsNullOrEmpty(approval.BusinessJustification) && approval.BusinessJustification.StartsWith("[DesktopApp:"))
+        {
+            var appNamePart = approval.BusinessJustification.Substring(12);
+            var closingBraceIdx = appNamePart.IndexOf(']');
+            if (closingBraceIdx > 0)
+            {
+                var appName = appNamePart.Substring(0, closingBraceIdx).Trim();
+                var userAppKey = $"{approval.RequestedByUserEmail}:{appName}";
+                var whitelistEntries = await _db.PolicyListEntries
+                    .Where(e => e.ListType == "Whitelist" && e.EntryType == "UserProcessName" && e.Value == userAppKey && e.TenantCode == approval.TenantCode)
+                    .ToListAsync();
+                if (whitelistEntries.Any())
+                {
+                    _db.PolicyListEntries.RemoveRange(whitelistEntries);
+                }
+                
+                var globalEntries = await _db.PolicyListEntries
+                    .Where(e => e.ListType == "Whitelist" && e.EntryType == "ProcessName" && e.Value == appName && e.TenantCode == approval.TenantCode)
+                    .ToListAsync();
+                if (globalEntries.Any())
+                {
+                    _db.PolicyListEntries.RemoveRange(globalEntries);
+                }
+            }
+        }
+        
+        approval.Status = "Revoked";
+        approval.RevokedAt = DateTime.UtcNow;
+        approval.ConcurrencyToken = Guid.NewGuid();
+        await _db.SaveChangesAsync();
+        return MapToResponse(approval);
+    }
+
     public async Task<ApprovalResponse> CreateApprovalAsync(
         string requestType, Guid? endpointEventId, Guid? agentActionLogId,
         string requestedByEmail, string? businessJustification = null)
@@ -213,6 +318,20 @@ public class ApprovalService : IApprovalService
         _db.Approvals.Add(approval);
         await _db.SaveChangesAsync();
         return MapToResponse(approval);
+    }
+
+    public async Task<(Guid? deviceId, string? tenantCode)> GetEventDeviceInfoAsync(Guid endpointEventId)
+    {
+        var evt = await _db.EndpointEvents
+            .AsNoTracking()
+            .FirstOrDefaultAsync(e => e.Id == endpointEventId);
+        if (evt == null) return (null, null);
+
+        // Find device by hostname + tenantCode (EndpointEvent stores hostname as a string, not FK)
+        var device = await _db.Devices
+            .AsNoTracking()
+            .FirstOrDefaultAsync(d => d.Hostname == evt.Hostname && d.TenantCode == evt.TenantCode);
+        return (device?.Id, evt.TenantCode);
     }
 
     private static ApprovalResponse MapToResponse(Approval a)

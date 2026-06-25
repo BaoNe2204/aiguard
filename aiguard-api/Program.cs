@@ -9,6 +9,7 @@ using aiguard_api.Services;
 using aiguard_api.Workers;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Data.SqlClient;
 using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -27,7 +28,13 @@ builder.Services.AddDbContext<AiguardDbContext>(options =>
     if (builder.Environment.IsEnvironment("Testing"))
         options.UseSqlite(connectionString);
     else
-        options.UseSqlServer(connectionString);
+    {
+        var sqlConnection = new SqlConnectionStringBuilder(connectionString)
+        {
+            MultipleActiveResultSets = false
+        };
+        options.UseSqlServer(sqlConnection.ConnectionString);
+    }
 });
 
 // ── Authentication (JWT) ──
@@ -167,6 +174,13 @@ builder.Services.AddHttpClient<IOcrService, OcrService>(client =>
     client.Timeout = TimeSpan.FromSeconds(
         Math.Clamp(builder.Configuration.GetValue("OcrSettings:TimeoutSeconds", 30), 5, 120));
 });
+builder.Services.AddHttpClient<IAiSecurityEngineClient, AiSecurityEngineClient>(client =>
+{
+    var baseUrl = builder.Configuration.GetValue<string>("AiSecuritySettings:BaseUrl") ?? "http://127.0.0.1:8000";
+    client.BaseAddress = new Uri(baseUrl);
+    var timeout = builder.Configuration.GetValue<int>("AiSecuritySettings:TimeoutSeconds", 5);
+    client.Timeout = TimeSpan.FromSeconds(Math.Clamp(timeout, 1, 60));
+});
 builder.Services.AddSingleton<IEvmBlockchainAnchorClient, EvmBlockchainAnchorClient>();
 
 // ── SignalR ──
@@ -205,17 +219,19 @@ app.UseAuthorization();
 
 app.MapControllers();
 app.MapHub<NotificationHub>("/hubs/notifications").RequireAuthorization();
+app.MapHub<EndpointHub>("/hubs/endpoint");
 
 // ── Database Migration & Seed ──
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AiguardDbContext>();
+    if (builder.Configuration.GetValue<bool>("DatabaseSettings:ResetOnStartup"))
+    {
+        await db.Database.EnsureDeletedAsync();
+    }
+
     if (app.Environment.IsEnvironment("Testing"))
     {
-        if (builder.Configuration.GetValue<bool>("DatabaseSettings:ResetOnStartup"))
-        {
-            await db.Database.EnsureDeletedAsync();
-        }
         await db.Database.EnsureCreatedAsync();
     }
     else
@@ -224,7 +240,8 @@ using (var scope = app.Services.CreateScope())
             db, app.Logger, app.Lifetime.ApplicationStopping);
         await db.Database.MigrateAsync();
     }
-    await DbSeeder.SeedAsync(db, builder.Configuration);
+    await DbSeeder.SeedAsync(db, app.Configuration);
+
 }
 
 app.Run();

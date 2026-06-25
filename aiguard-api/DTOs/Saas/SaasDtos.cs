@@ -59,6 +59,7 @@ public class PublicTrialSignupRequest
     [Required, MaxLength(255)] public string EmailDomain { get; set; } = string.Empty;
     [Required] public string OwnerName { get; set; } = string.Empty;
     [Required, EmailAddress] public string OwnerEmail { get; set; } = string.Empty;
+    [Required, MinLength(8)] public string OwnerPassword { get; set; } = string.Empty;
     public string? OwnerPhone { get; set; }
     public string? Industry { get; set; }
     public string? CompanySize { get; set; }
@@ -106,6 +107,7 @@ public class TenantSettingsRequest
     public string? BankAccountName { get; set; }
     public string? PaymentWebhookUrl { get; set; }
     public string? BillingAddress { get; set; }
+    public string? AgentBlockedCodeApps { get; set; }
 }
 
 public class TenantSettingsResponse : TenantSettingsRequest
@@ -209,6 +211,22 @@ public class PaymentReconcileRequest
     public string? Note { get; set; }
 }
 
+public class CheckoutOrderRequest
+{
+    [Range(0.01, double.MaxValue)] public decimal Amount { get; set; }
+    public string Currency { get; set; } = "VND";
+    public string Method { get; set; } = "InstantDemo";
+    public string? TransactionReference { get; set; }
+    [Range(1, 36)] public int PeriodMonths { get; set; } = 1;
+}
+
+public class CheckoutOrderResponse
+{
+    public OrderResponse Order { get; set; } = null!;
+    public PaymentResponse Payment { get; set; } = null!;
+    public LicenseCreatedResponse License { get; set; } = null!;
+}
+
 public class PaymentResponse
 {
     public Guid Id { get; set; }
@@ -216,6 +234,7 @@ public class PaymentResponse
     public Guid OrderId { get; set; }
     public string OrderNumber { get; set; } = string.Empty;
     public Guid TenantId { get; set; }
+    public string TenantCode { get; set; } = string.Empty;
     public decimal Amount { get; set; }
     public string Currency { get; set; } = string.Empty;
     public string Method { get; set; } = string.Empty;
@@ -438,6 +457,12 @@ public class EnrollmentTokenResponse
     public string EnrollmentToken { get; set; } = string.Empty;
     public DateTime ExpiresAt { get; set; }
     public string InstallCommand { get; set; } = string.Empty;
+}
+
+public class OnboardingListResponse
+{
+    public List<OnboardingResponse> Items { get; set; } = [];
+    public int Total { get; set; }
 }
 
 public class OnboardingResponse

@@ -17,6 +17,9 @@ public interface IDeviceService
     Task<DeviceResponse?> QuarantineAsync(Guid id, string reason);
     Task<DeviceResponse?> ReleaseQuarantineAsync(Guid id);
     Task<DeviceResponse?> SetRemoteDisabledAsync(Guid id, bool disabled, string reason);
+    Task<bool> DeleteDeviceAsync(Guid id);
+    Task<DeviceCustomSettingsResponse?> GetCustomSettingsAsync(Guid id);
+    Task<DeviceCustomSettingsResponse?> UpdateCustomSettingsAsync(Guid id, DeviceCustomSettingsRequest request);
 }
 
 public class DeviceService : IDeviceService
@@ -194,8 +197,29 @@ public class DeviceService : IDeviceService
         ,IsOnline = d.LastSeen >= DateTime.UtcNow.AddMinutes(-5)
         ,IsQuarantined = d.IsQuarantined
         ,IsRemoteDisabled = d.IsRemoteDisabled
+        ,EndpointKeyRevoked = d.EndpointKeyRevoked
         ,QuarantineReason = d.QuarantineReason
         ,LastPolicySyncAt = d.LastPolicySyncAt
         ,AgentStatus = d.AgentStatus
     };
+
+    public async Task<bool> DeleteDeviceAsync(Guid id)
+    {
+        var device = await _db.Devices.FindAsync(id);
+        if (device == null) return false;
+
+        _db.Devices.Remove(device);
+        await _db.SaveChangesAsync();
+        return true;
+    }
+
+    public Task<DeviceCustomSettingsResponse?> GetCustomSettingsAsync(Guid id)
+    {
+        return Task.FromResult<DeviceCustomSettingsResponse?>(new DeviceCustomSettingsResponse { DeviceId = id });
+    }
+
+    public Task<DeviceCustomSettingsResponse?> UpdateCustomSettingsAsync(Guid id, DeviceCustomSettingsRequest request)
+    {
+        return Task.FromResult<DeviceCustomSettingsResponse?>(new DeviceCustomSettingsResponse { DeviceId = id });
+    }
 }

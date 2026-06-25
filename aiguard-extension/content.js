@@ -11,6 +11,34 @@
   const replayFileInputs = new WeakSet();
   let submitInProgress = false;
 
+  let wsConnection = null;
+  let wsConfig = null;
+  let wsReconnectTimer = null;
+  const RECORD_SEPARATOR = String.fromCharCode(30);
+
+  // Pending approvals: approvalId -> { resolve, reject, expiresAt }
+  const pendingApprovals = new Map();
+
+  // Listen for real-time messages from background script
+  chrome.runtime.onMessage.addListener((message) => {
+    if (!message) return;
+    if (message.type === "AIGUARD_APPROVAL_DECISION") {
+      const { approvalId, status, note, decision } = message;
+      const pending = pendingApprovals.get(approvalId);
+      if (pending) {
+        pendingApprovals.delete(approvalId);
+        pending.resolve({ status, note, decision });
+      }
+    } else if (message.type === "AIGUARD_SHOW_NOTIFICATION") {
+      const { message: text, tone } = message.payload || {};
+      if (text) {
+        notify(text, tone || "info");
+      }
+    } else if (message.type === "AIGUARD_SCAN_REQUEST") {
+      notify("Admin requested a scan.", "info");
+    }
+  });
+
   async function getConfig() {
     return chrome.storage.local.get([
       "apiBaseUrl", "hostname", "endpointKey", "offlineCriticalBlock", "enabled"
@@ -45,7 +73,7 @@
     const config = await getConfig();
     if (config.enabled === false) return { config, result: null, disabled: true };
     if (!config.apiBaseUrl || !config.hostname || !config.endpointKey) {
-      throw new Error("AIGuard chua duoc dang ky");
+      return { config, result: null, disabled: true };
     }
     const result = await sendApi("POST", "/api/dlp/scan", {
       content: text,
@@ -232,20 +260,22 @@
           <div class="ag-head"><div class="ag-logo">AG</div><div><div class="ag-eye">AIGuard Control Tower</div><h2></h2></div><button class="ag-close">x</button></div>
           <div class="ag-chips"><span class="ag-chip ag-risk"></span><span class="ag-chip ag-score"></span><span class="ag-chip ag-decision"></span></div>
           <p class="ag-reason"></p><div class="ag-findings"></div>
-          <div class="ag-mask" hidden><label>Du lieu sau khi che</label><pre></pre></div>
-          <label class="ag-input" hidden>Ly do nghiep vu / bao cao<textarea maxlength="2000" placeholder="Nhap ly do..."></textarea></label>
+          <div class="ag-mask" hidden><label>Dữ liệu sau khi che</label><pre></pre></div>
+          <label class="ag-input" hidden>Lý do nghiệp vụ / báo cáo<textarea maxlength="2000" placeholder="Nhập lý do..."></textarea></label>
           <div class="ag-status" hidden></div><div class="ag-actions"></div>
         </div>`;
 
+      const riskLabels = { Critical: "Nghiêm trọng", High: "Cao", Medium: "Trung bình", Low: "Thấp" };
+      const decisionLabels = { Block: "Chặn", Mask: "Che dữ liệu", PendingApproval: "Chờ duyệt", Allow: "Cho phép" };
       const isPending = result.decision === "PendingApproval";
       overlay.querySelector("h2").textContent = isPending
-        ? "Noi dung can phe duyet"
-        : result.decision === "Mask" ? "Phat hien du lieu nhay cam" : "Da chan gui du lieu";
-      overlay.querySelector(".ag-risk").textContent = `Muc do: ${result.riskLevel}`;
-      overlay.querySelector(".ag-score").textContent = `Diem: ${result.riskScore}/100`;
-      overlay.querySelector(".ag-decision").textContent = `Xu ly: ${result.decision}`;
+        ? "Nội dung cần phê duyệt"
+        : result.decision === "Mask" ? "Phát hiện dữ liệu nhạy cảm" : "Đã chặn gửi dữ liệu";
+      overlay.querySelector(".ag-risk").textContent = `Mức độ: ${riskLabels[result.riskLevel] || result.riskLevel}`;
+      overlay.querySelector(".ag-score").textContent = `Điểm: ${result.riskScore}/100`;
+      overlay.querySelector(".ag-decision").textContent = `Xử lý: ${decisionLabels[result.decision] || result.decision}`;
       overlay.querySelector(".ag-reason").textContent =
-        result.policyReason || "Noi dung vi pham chinh sach bao ve du lieu doanh nghiep.";
+        result.policyReason || "Nội dung vi phạm chính sách bảo vệ dữ liệu doanh nghiệp.";
 
       const findings = overlay.querySelector(".ag-findings");
       for (const match of result.matches || []) {
@@ -255,8 +285,8 @@
         title.textContent = `${match.dataType} (${match.count})`;
         const detail = document.createElement("small");
         const locations = (match.locations || []).slice(0, 5)
-          .map(location => `dong ${location.line}, cot ${location.column}`).join("; ");
-        detail.textContent = `${match.reason || "Du lieu nhay cam"}${locations ? ` - ${locations}` : ""}`;
+          .map(location => `dòng ${location.line}, cột ${location.column}`).join("; ");
+        detail.textContent = `${match.reason || "Dữ liệu nhạy cảm"}${locations ? ` - ${locations}` : ""}`;
         card.append(title, detail);
         findings.appendChild(card);
       }
@@ -283,21 +313,21 @@
         button.addEventListener("click", () => handler(button));
         actions.appendChild(button);
       };
-      addButton("Sua prompt", () => finish({ action: "edit" }));
-      if (result.maskedContent) addButton("Dung ban da che", () => finish({ action: "masked" }), "safe");
+      addButton("Sửa prompt", () => finish({ action: "edit" }));
+      if (result.maskedContent) addButton("Dùng bản đã che", () => finish({ action: "masked" }), "safe");
       if (options.allowReport && options.eventId) {
-        addButton("Bao cao chan nham", async button => {
+        addButton("Báo cáo chặn nhầm", async button => {
           const reason = reasonInput.value.trim();
           if (!reason) {
             status.hidden = false;
-            status.textContent = "Vui long nhap ly do bao cao.";
+            status.textContent = "Vui lòng nhập lý do báo cáo.";
             return;
           }
           button.disabled = true;
           try {
             await reportFalsePositive(options.eventId, result, reason);
             status.hidden = false;
-            status.textContent = "Da gui bao cao den Security Admin.";
+            status.textContent = "Đã gửi báo cáo đến Security Admin.";
             setTimeout(() => finish({ action: "reported" }), 800);
           } catch (error) {
             status.hidden = false;
@@ -307,17 +337,17 @@
         }, "danger");
       }
       if (isPending) {
-        addButton("Gui phe duyet", () => {
+        addButton("Gửi phê duyệt", () => {
           const reason = reasonInput.value.trim();
           if (!reason) {
             status.hidden = false;
-            status.textContent = "Vui long nhap ly do nghiep vu.";
+            status.textContent = "Vui lòng nhập lý do nghiệp vụ.";
             return;
           }
           finish({ action: "approval", reason });
         }, "primary");
       }
-      addButton("Dong", () => finish({ action: "cancel" }));
+      addButton("Đóng", () => finish({ action: "cancel" }));
       overlay.querySelector(".ag-close").addEventListener("click", () => finish({ action: "cancel" }));
       document.documentElement.appendChild(overlay);
       if (!inputLabel.hidden) reasonInput.focus();
@@ -337,10 +367,26 @@
     );
   }
 
-  async function pollApproval(approvalId, expiresAt) {
-    const config = await getConfig();
+  // Wait for approval decision via real-time WebSocket (SignalR), falling back to polling
+  async function waitForApproval(approvalId, expiresAt) {
     const expiration = expiresAt ? new Date(expiresAt).getTime() : Date.now() + 30 * 60 * 1000;
     const deadline = Math.min(expiration, Date.now() + 30 * 60 * 1000);
+
+    // Register pending approval for realtime delivery
+    const realtimePromise = new Promise((resolve) => {
+      pendingApprovals.set(approvalId, { resolve });
+    });
+
+    // Set up deadline timer
+    const timeoutMs = deadline - Date.now();
+    const timeoutPromise = new Promise(resolve => setTimeout(() => resolve({ status: "Expired" }), timeoutMs));
+
+    // Race: realtime signal OR deadline
+    const realtimeResult = await Promise.race([realtimePromise, timeoutPromise]);
+    if (realtimeResult?.status !== "Expired") return realtimeResult;
+
+    // Fallback: poll REST API after deadline expired with no realtime signal
+    const config = await getConfig();
     while (Date.now() < deadline) {
       await new Promise(resolve => setTimeout(resolve, 3000));
       try {
@@ -356,10 +402,133 @@
     return { status: "Expired" };
   }
 
+  function normalizeHubWsUrl(apiBaseUrl) {
+    const url = new URL(apiBaseUrl);
+    const wsProtocol = url.protocol === "https:" ? "wss:" : "ws:";
+    return `${wsProtocol}//${url.host}/hubs/endpoint`;
+  }
+
+  function sendWsRecord(data) {
+    if (!wsConnection || wsConnection.readyState !== WebSocket.OPEN) return;
+    wsConnection.send(JSON.stringify(data) + RECORD_SEPARATOR);
+  }
+
+  async function startSignalRConnection() {
+    if (wsConnection && wsConnection.readyState === WebSocket.OPEN) return;
+    try {
+      const config = await chrome.runtime.sendMessage({ type: "AIGUARD_GET_SIGNALR_CONFIG" });
+      if (!config?.ok) return;
+      wsConfig = config;
+
+      const wsUrl = `${normalizeHubWsUrl(config.hubUrl.replace("/hubs/endpoint", ""))}/hubs/endpoint?access_token=${encodeURIComponent(config.accessToken)}&hostname=${encodeURIComponent(config.hostname)}`;
+      wsConnection = new WebSocket(wsUrl);
+
+      wsConnection.addEventListener("open", () => {
+        // Send SignalR handshake
+        sendWsRecord({ protocol: "json", version: 1 });
+      });
+
+      wsConnection.addEventListener("message", async (event) => {
+        try {
+          const rawData = event.data;
+          if (typeof rawData !== "string") return;
+          const records = rawData.split(RECORD_SEPARATOR);
+          for (const record of records) {
+            if (!record.trim()) continue;
+            const msg = JSON.parse(record);
+            if (msg.type === 1) {
+              // Invocation message
+              const args = msg.arguments?.[0] || {};
+              if (msg.target === "ApprovalDecided") {
+                const { approvalId, status, note, decision } = args;
+                const pending = pendingApprovals.get(approvalId);
+                if (pending) {
+                  pendingApprovals.delete(approvalId);
+                  pending.resolve({ status, note, decision });
+                }
+                // Forward to background for other tabs
+                chrome.runtime.sendMessage({
+                  type: "AIGUARD_APPROVAL_DECIDED",
+                  payload: { approvalId, status, note, decision }
+                }).catch(() => undefined);
+              } else if (msg.target === "ExtensionCommand" || msg.target === "PolicyRefresh" || msg.target === "RequestScan") {
+                // Forward command to background script
+                chrome.runtime.sendMessage({
+                  type: "AIGUARD_EXTENSION_COMMAND",
+                  payload: args
+                }).catch(() => undefined);
+              }
+            } else if (msg.type === undefined && msg.protocol === "json" && msg.version === 1) {
+              // Handshake response - connection established
+            }
+          }
+        } catch {
+          // Ignore parse errors
+        }
+      });
+
+      wsConnection.addEventListener("close", () => {
+        wsConnection = null;
+        scheduleReconnect();
+      });
+
+      wsConnection.addEventListener("error", () => {
+        wsConnection?.close();
+      });
+    } catch {
+      scheduleReconnect();
+    }
+  }
+
+  function scheduleReconnect() {
+    if (wsReconnectTimer) return;
+    wsReconnectTimer = setTimeout(() => {
+      wsReconnectTimer = null;
+      startSignalRConnection();
+    }, 5000);
+  }
+
+  // Start connection early on load
+  startSignalRConnection();
+
+  // Send a SignalR invocation message through the WebSocket
+  function sendSignalRInvocation(method, args) {
+    if (!wsConnection || wsConnection.readyState !== WebSocket.OPEN) return;
+    const id = String(Date.now()) + Math.random().toString(36).slice(2);
+    sendWsRecord({
+      type: 1,
+      invocationId: id,
+      target: method,
+      arguments: [args]
+    });
+  }
+
+  // Push DLP event to backend in real-time via SignalR
+  function pushDlpEvent(eventType, decision, websiteAi, riskScore, riskLevel, dataTypeMatched) {
+    sendSignalRInvocation("SendDlpEvent", {
+      eventType,
+      decision,
+      websiteAi,
+      riskScore,
+      riskLevel,
+      dataTypeMatched
+    });
+  }
+
   async function evaluateText(text, eventType) {
     try {
       const { config, result, disabled } = await scanText(text);
       if (disabled) return { outcome: "allow", content: text };
+
+      // Real-time push DLP event to backend → frontend dashboard
+      pushDlpEvent(
+        eventType,
+        result.decision,
+        SITE,
+        result.riskScore,
+        result.riskLevel,
+        (result.matches || []).map(m => m.dataType).join(", ")
+      );
 
       if (result.decision === "Block") {
         const event = await recordTextEvent(text, result, eventType);
@@ -383,18 +552,18 @@
         }
         if (choice.action !== "approval") return { outcome: "blocked", content: text };
         const event = await recordTextEvent(text, result, eventType, choice.reason);
-        if (!event.approvalId) throw new Error("Backend khong tra ve ma phe duyet.");
-        notify("Da gui yeu cau phe duyet. Dang cho quan ly xu ly.", "warning");
-        const approval = await pollApproval(event.approvalId, event.expiresAt);
+        if (!event.approvalId) throw new Error("Backend không trả về mã phê duyệt.");
+        notify("Đã gửi yêu cầu phê duyệt. Đang chờ quản lý xử lý.", "warning");
+        const approval = await waitForApproval(event.approvalId, event.expiresAt);
         if (approval.status === "Approved") {
-          notify("Yeu cau da duoc phe duyet.", "success");
+          notify("Yêu cầu đã được phê duyệt.", "success");
           return { outcome: "allow", content: text };
         }
         if (approval.status === "ApprovedWithMasking" && result.maskedContent) {
-          notify("Da phe duyet voi du lieu duoc che.", "success");
+          notify("Đã phê duyệt với dữ liệu được che.", "success");
           return { outcome: "masked", content: result.maskedContent };
         }
-        notify(`Yeu cau phe duyet: ${approval.status}.`);
+        notify(`Yêu cầu phê duyệt: ${approval.status}.`);
         return { outcome: "blocked", content: text };
       }
 
@@ -402,7 +571,7 @@
       return { outcome: "allow", content: text };
     } catch (error) {
       const config = await getConfig();
-      notify(`AIGuard khong the xac minh thao tac: ${error.message}`);
+      notify(`AIGuard không thể xác minh thao tác: ${error.message}`);
       return {
         outcome: config.offlineCriticalBlock === false ? "allow" : "blocked",
         content: text
@@ -489,6 +658,9 @@
   async function scanFilesBeforeUpload(input, files) {
     const config = await getConfig();
     if (config.enabled === false) return replayFileSelection(input, files);
+    if (!config.apiBaseUrl || !config.hostname || !config.endpointKey) {
+      return replayFileSelection(input, files);
+    }
     try {
       for (const file of files) {
         if (file.size > MAX_FILE_BYTES) throw new Error(`${file.name} vuot qua 25 MB`);
@@ -497,6 +669,15 @@
           type: file.type,
           base64: arrayBufferToBase64(await file.arrayBuffer())
         });
+        // Real-time push to backend → frontend dashboard
+        pushDlpEvent(
+          result.decision === "Block" ? "FileUploadBlocked" : "FileUploadChecked",
+          result.decision,
+          SITE,
+          result.riskScore,
+          result.riskLevel,
+          file.name
+        );
         if (result.decision === "Block") {
           const event = await recordFileEvent(file, result);
           input.value = "";
@@ -511,14 +692,14 @@
           const choice = await showDecisionModal(result);
           if (choice.action !== "approval") return;
           const event = await recordFileEvent(file, result, choice.reason);
-          if (!event.approvalId) throw new Error("Backend khong tra ve ma phe duyet.");
-          notify(`Tep ${file.name} dang cho phe duyet.`, "warning");
-          const approval = await pollApproval(event.approvalId, event.expiresAt);
+          if (!event.approvalId) throw new Error("Backend không trả về mã phê duyệt.");
+          notify(`Tệp ${file.name} đang chờ phê duyệt.`, "warning");
+          const approval = await waitForApproval(event.approvalId, event.expiresAt);
           if (approval.status !== "Approved") {
-            notify(`Khong the upload tep: ${approval.status}.`);
+            notify(`Không thể upload tệp: ${approval.status}.`);
             return;
           }
-          notify(`Tep ${file.name} da duoc phe duyet.`, "success");
+          notify(`Tệp ${file.name} đã được phê duyệt.`, "success");
           continue;
         }
         if (result.decision === "Mask") {
@@ -534,14 +715,14 @@
         await recordFileEvent(file, result);
       }
       replayFileSelection(input, files);
-      notify(`AIGuard da kiem tra ${files.length} tep.`, "success");
+      notify(`AIGuard đã kiểm tra ${files.length} tệp.`, "success");
     } catch (error) {
       input.value = "";
       if (config.offlineCriticalBlock === false) {
         replayFileSelection(input, files);
-        notify("Khong the quet tep; dang cho phep theo policy offline.", "warning");
+        notify("Không thể quét tệp; đang cho phép theo policy offline.", "warning");
       } else {
-        notify(`AIGuard chan upload: ${error.message}`);
+        notify(`AIGuard chặn upload: ${error.message}`);
       }
     }
   }

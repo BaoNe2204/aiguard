@@ -1,0 +1,215 @@
+
+[06/15/2026 5:47:25 PM] FAILED TOKEN:
+Received Raw: [uD8vEPJgrlupxZOiDV+We922OtK5Mo4GKixRpXy+mz7vvPCLDLkHxbqYPKC3a5jv]
+Computed Hash: 8d9a4d3ffbad6826a1131546d426c2b66889af748472f6fed872d6be4047e295
+---
+
+[06/15/2026 5:47:26 PM] FAILED TOKEN:
+Received Raw: [uD8vEPJgrlupxZOiDV+We922OtK5Mo4GKixRpXy+mz7vvPCLDLkHxbqYPKC3a5jv]
+Computed Hash: 8d9a4d3ffbad6826a1131546d426c2b66889af748472f6fed872d6be4047e295
+---
+
+[06/15/2026 5:47:27 PM] FAILED TOKEN:
+Received Raw: [uD8vEPJgrlupxZOiDV+We922OtK5Mo4GKixRpXy+mz7vvPCLDLkHxbqYPKC3a5jv]
+Computed Hash: 8d9a4d3ffbad6826a1131546d426c2b66889af748472f6fed872d6be4047e295
+---
+
+[06/15/2026 5:47:27 PM] FAILED TOKEN:
+Received Raw: [uD8vEPJgrlupxZOiDV+We922OtK5Mo4GKixRpXy+mz7vvPCLDLkHxbqYPKC3a5jv]
+Computed Hash: 8d9a4d3ffbad6826a1131546d426c2b66889af748472f6fed872d6be4047e295
+---
+
+[06/15/2026 5:47:27 PM] FAILED TOKEN:
+Received Raw: [uD8vEPJgrlupxZOiDV+We922OtK5Mo4GKixRpXy+mz7vvPCLDLkHxbqYPKC3a5jv]
+Computed Hash: 8d9a4d3ffbad6826a1131546d426c2b66889af748472f6fed872d6be4047e295
+---
+
+[06/15/2026 5:47:28 PM] FAILED TOKEN:
+Received Raw: [uD8vEPJgrlupxZOiDV+We922OtK5Mo4GKixRpXy+mz7vvPCLDLkHxbqYPKC3a5jv]
+Computed Hash: 8d9a4d3ffbad6826a1131546d426c2b66889af748472f6fed872d6be4047e295
+---
+
+[06/15/2026 5:47:28 PM] FAILED TOKEN:
+Received Raw: [uD8vEPJgrlupxZOiDV+We922OtK5Mo4GKixRpXy+mz7vvPCLDLkHxbqYPKC3a5jv]
+Computed Hash: 8d9a4d3ffbad6826a1131546d426c2b66889af748472f6fed872d6be4047e295
+---
+
+[06/15/2026 5:47:31 PM] FAILED TOKEN:
+Received Raw: [uD8vEPJgrlupxZOiDV+We922OtK5Mo4GKixRpXy+mz7vvPCLDLkHxbqYPKC3a5jv]
+Computed Hash: 8d9a4d3ffbad6826a1131546d426c2b66889af748472f6fed872d6be4047e295
+---
+
+[06/16/2026 4:42:12 PM] FAILED TOKEN:
+Received Raw: [1vKJr5/TyMJQRaog8PHh/9y+OWpip8WJ44nPQVvgpsb61qzIzrTLIFnZPke90Ii0]
+Computed Hash: ae5ebafee64304727319c37027c71d76f3174cc1e73fd729b44dc70e047b1976
+---
+
+[06/16/2026 4:42:12 PM] FAILED TOKEN:
+Received Raw: [1vKJr5/TyMJQRaog8PHh/9y+OWpip8WJ44nPQVvgpsb61qzIzrTLIFnZPke90Ii0]
+Computed Hash: ae5ebafee64304727319c37027c71d76f3174cc1e73fd729b44dc70e047b1976
+---
+
+[06/16/2026 4:42:13 PM] FAILED TOKEN:
+Received Raw: [1vKJr5/TyMJQRaog8PHh/9y+OWpip8WJ44nPQVvgpsb61qzIzrTLIFnZPke90Ii0]
+Computed Hash: ae5ebafee64304727319c37027c71d76f3174cc1e73fd729b44dc70e047b1976
+---
+
+[06/16/2026 4:42:13 PM] FAILED TOKEN:
+Received Raw: [1vKJr5/TyMJQRaog8PHh/9y+OWpip8WJ44nPQVvgpsb61qzIzrTLIFnZPke90Ii0]
+Computed Hash: ae5ebafee64304727319c37027c71d76f3174cc1e73fd729b44dc70e047b1976
+---
+
+[06/16/2026 4:42:14 PM] FAILED TOKEN:
+Received Raw: [1vKJr5/TyMJQRaog8PHh/9y+OWpip8WJ44nPQVvgpsb61qzIzrTLIFnZPke90Ii0]
+Computed Hash: ae5ebafee64304727319c37027c71d76f3174cc1e73fd729b44dc70e047b1976
+---
+
+[06/16/2026 4:42:14 PM] FAILED TOKEN:
+Received Raw: [1vKJr5/TyMJQRaog8PHh/9y+OWpip8WJ44nPQVvgpsb61qzIzrTLIFnZPke90Ii0]
+Computed Hash: ae5ebafee64304727319c37027c71d76f3174cc1e73fd729b44dc70e047b1976
+---
+
+[06/16/2026 4:42:14 PM] FAILED TOKEN:
+Received Raw: [1vKJr5/TyMJQRaog8PHh/9y+OWpip8WJ44nPQVvgpsb61qzIzrTLIFnZPke90Ii0]
+Computed Hash: ae5ebafee64304727319c37027c71d76f3174cc1e73fd729b44dc70e047b1976
+---
+
+[06/16/2026 5:03:29 PM] FAILED TOKEN:
+Received Raw: [/FkOyZ+4de00VzRL6Lv3nRwEz36UJdUeQnzy/JVFbxjcU6nlJ+L6M80pu9zS0zVy]
+Computed Hash: bddfe85d08d5d83dff4de03d60cc8107a416f1d7ea5fec4b11d7502212aaea12
+---
+
+[06/17/2026 5:20:14 PM] FAILED TOKEN:
+Received Raw: [invalid-token]
+Computed Hash: 644d0c3b82bfe5e0665a116b2eb139d6abd6c9083ede0891237b1723e0010a14
+---
+
+[06/17/2026 5:20:53 PM] FAILED TOKEN:
+Received Raw: [invalid-token]
+Computed Hash: 644d0c3b82bfe5e0665a116b2eb139d6abd6c9083ede0891237b1723e0010a14
+---
+
+[06/17/2026 5:21:21 PM] FAILED TOKEN:
+Received Raw: [invalid-token]
+Computed Hash: 644d0c3b82bfe5e0665a116b2eb139d6abd6c9083ede0891237b1723e0010a14
+---
+
+[06/17/2026 5:23:09 PM] FAILED TOKEN:
+Received Raw: [invalid-token]
+Computed Hash: 644d0c3b82bfe5e0665a116b2eb139d6abd6c9083ede0891237b1723e0010a14
+---
+
+[6/18/2026 2:56:14 PM] FAILED TOKEN:
+Received Raw: [TOKEN_TREN_WEB]
+Computed Hash: ca54bd049c7665f18a8730dcd092288d13b79c53c46146d40835ac510bb10596
+---
+
+[6/18/2026 2:56:23 PM] FAILED TOKEN:
+Received Raw: [TOKEN_TREN_WEB]
+Computed Hash: ca54bd049c7665f18a8730dcd092288d13b79c53c46146d40835ac510bb10596
+---
+
+[6/18/2026 3:19:43 PM] FAILED TOKEN:
+Received Raw: [TOKEN_TREN_WEB]
+Computed Hash: ca54bd049c7665f18a8730dcd092288d13b79c53c46146d40835ac510bb10596
+---
+
+[6/18/2026 3:20:17 PM] FAILED TOKEN:
+Received Raw: [TOKEN_TREN_WEB]
+Computed Hash: ca54bd049c7665f18a8730dcd092288d13b79c53c46146d40835ac510bb10596
+---
+
+[6/18/2026 3:20:27 PM] FAILED TOKEN:
+Received Raw: [TOKEN_TREN_WEB]
+Computed Hash: ca54bd049c7665f18a8730dcd092288d13b79c53c46146d40835ac510bb10596
+---
+
+[06/19/2026 9:44:30 AM] FAILED TOKEN:
+Received Raw: [invalid-token]
+Computed Hash: 644d0c3b82bfe5e0665a116b2eb139d6abd6c9083ede0891237b1723e0010a14
+---
+
+[06/20/2026 4:15:22 AM] FAILED TOKEN:
+Received Raw: [02pnZz9OKAxuYQygHubMqN+98df9wnGy4oNfttUPyUTKieb1I4BEhLmx2BAVsvUd]
+Computed Hash: ea69674d27131e7e14cd9dc36ea6dd934163b4132858e24c58bccec0a4af8a1b
+---
+
+[06/20/2026 6:47:01 AM] FAILED TOKEN:
+Received Raw: [d5uwF5s8VROBQybNEO7ufpjKzBP30jA9rZth//xQIDLEzzmKzNd5FfgronvUXR7j]
+Computed Hash: 6e68ceb26d3dbc3dc6e61d58ae8330756cb81dcfe8d08b8fb02de11584f16768
+---
+
+[06/20/2026 6:47:02 AM] FAILED TOKEN:
+Received Raw: [d5uwF5s8VROBQybNEO7ufpjKzBP30jA9rZth//xQIDLEzzmKzNd5FfgronvUXR7j]
+Computed Hash: 6e68ceb26d3dbc3dc6e61d58ae8330756cb81dcfe8d08b8fb02de11584f16768
+---
+
+[06/20/2026 6:47:02 AM] FAILED TOKEN:
+Received Raw: [d5uwF5s8VROBQybNEO7ufpjKzBP30jA9rZth//xQIDLEzzmKzNd5FfgronvUXR7j]
+Computed Hash: 6e68ceb26d3dbc3dc6e61d58ae8330756cb81dcfe8d08b8fb02de11584f16768
+---
+
+[06/20/2026 6:47:02 AM] FAILED TOKEN:
+Received Raw: [d5uwF5s8VROBQybNEO7ufpjKzBP30jA9rZth//xQIDLEzzmKzNd5FfgronvUXR7j]
+Computed Hash: 6e68ceb26d3dbc3dc6e61d58ae8330756cb81dcfe8d08b8fb02de11584f16768
+---
+
+[06/20/2026 6:47:03 AM] FAILED TOKEN:
+Received Raw: [d5uwF5s8VROBQybNEO7ufpjKzBP30jA9rZth//xQIDLEzzmKzNd5FfgronvUXR7j]
+Computed Hash: 6e68ceb26d3dbc3dc6e61d58ae8330756cb81dcfe8d08b8fb02de11584f16768
+---
+
+[06/20/2026 6:47:03 AM] FAILED TOKEN:
+Received Raw: [d5uwF5s8VROBQybNEO7ufpjKzBP30jA9rZth//xQIDLEzzmKzNd5FfgronvUXR7j]
+Computed Hash: 6e68ceb26d3dbc3dc6e61d58ae8330756cb81dcfe8d08b8fb02de11584f16768
+---
+
+[06/20/2026 6:47:03 AM] FAILED TOKEN:
+Received Raw: [d5uwF5s8VROBQybNEO7ufpjKzBP30jA9rZth//xQIDLEzzmKzNd5FfgronvUXR7j]
+Computed Hash: 6e68ceb26d3dbc3dc6e61d58ae8330756cb81dcfe8d08b8fb02de11584f16768
+---
+
+[06/20/2026 6:47:03 AM] FAILED TOKEN:
+Received Raw: [d5uwF5s8VROBQybNEO7ufpjKzBP30jA9rZth//xQIDLEzzmKzNd5FfgronvUXR7j]
+Computed Hash: 6e68ceb26d3dbc3dc6e61d58ae8330756cb81dcfe8d08b8fb02de11584f16768
+---
+
+[06/20/2026 6:47:03 AM] FAILED TOKEN:
+Received Raw: [d5uwF5s8VROBQybNEO7ufpjKzBP30jA9rZth//xQIDLEzzmKzNd5FfgronvUXR7j]
+Computed Hash: 6e68ceb26d3dbc3dc6e61d58ae8330756cb81dcfe8d08b8fb02de11584f16768
+---
+
+[06/20/2026 6:47:03 AM] FAILED TOKEN:
+Received Raw: [d5uwF5s8VROBQybNEO7ufpjKzBP30jA9rZth//xQIDLEzzmKzNd5FfgronvUXR7j]
+Computed Hash: 6e68ceb26d3dbc3dc6e61d58ae8330756cb81dcfe8d08b8fb02de11584f16768
+---
+
+[06/20/2026 6:47:04 AM] FAILED TOKEN:
+Received Raw: [d5uwF5s8VROBQybNEO7ufpjKzBP30jA9rZth//xQIDLEzzmKzNd5FfgronvUXR7j]
+Computed Hash: 6e68ceb26d3dbc3dc6e61d58ae8330756cb81dcfe8d08b8fb02de11584f16768
+---
+
+[06/20/2026 6:47:04 AM] FAILED TOKEN:
+Received Raw: [d5uwF5s8VROBQybNEO7ufpjKzBP30jA9rZth//xQIDLEzzmKzNd5FfgronvUXR7j]
+Computed Hash: 6e68ceb26d3dbc3dc6e61d58ae8330756cb81dcfe8d08b8fb02de11584f16768
+---
+
+[06/20/2026 6:55:58 AM] FAILED TOKEN:
+Received Raw: [eInpmqbjyZlVJCpJiWpyFz8Wgmph1AUad33e4SFKlOalBvULHJPiZPBOUJkvLNHX]
+Computed Hash: 9d658afa3b7cc9928c0ffdeb00bdc2d12c90bedf9fe7c079a7b1b2d713b2fc76
+---
+
+[06/20/2026 8:32:54 AM] FAILED TOKEN:
+Received Raw: [invalid-token]
+Computed Hash: 644d0c3b82bfe5e0665a116b2eb139d6abd6c9083ede0891237b1723e0010a14
+---
+
+[06/20/2026 8:45:45 AM] FAILED TOKEN:
+Received Raw: [invalid-token]
+Computed Hash: 644d0c3b82bfe5e0665a116b2eb139d6abd6c9083ede0891237b1723e0010a14
+---
+
+[06/20/2026 9:01:54 AM] FAILED TOKEN:
+Received Raw: [invalid-token]
+Computed Hash: 644d0c3b82bfe5e0665a116b2eb139d6abd6c9083ede0891237b1723e0010a14
+---

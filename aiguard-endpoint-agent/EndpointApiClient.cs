@@ -57,10 +57,23 @@ public sealed class EndpointApiClient
             token);
         policyResponse.EnsureSuccessStatusCode();
         var policy = await ReadDataAsync<PolicyData>(policyResponse, token);
+        EndpointAiPolicyData? aiPolicy = null;
+        try
+        {
+            var aiPolicyResponse = await client.GetAsync(
+                $"/api/endpoints/shadow-ai/policy?hostname={Uri.EscapeDataString(Environment.MachineName)}",
+                token);
+            aiPolicyResponse.EnsureSuccessStatusCode();
+            aiPolicy = await ReadDataAsync<EndpointAiPolicyData>(aiPolicyResponse, token);
+        }
+        catch
+        {
+            // Older API builds may not expose endpoint AI policy yet; regular DLP policy still applies.
+        }
 
         var nextState = state with { PolicyVersion = policy.Version };
         _store.SaveState(nextState);
-        return new EndpointSyncResult(nextState, device, policy);
+        return new EndpointSyncResult(nextState, device, policy, aiPolicy);
     }
 
     public async Task<int> SendTelemetryAsync(
@@ -98,6 +111,22 @@ public sealed class EndpointApiClient
         }, token);
         response.EnsureSuccessStatusCode();
         return await ReadDataAsync<DlpScanData>(response, token);
+    }
+    public async Task<bool> RequestDesktopAppApprovalAsync(
+        AgentConfig config,
+        AgentState state,
+        string appName,
+        string reason,
+        CancellationToken token)
+    {
+        using var client = Client(config, state.EndpointKey);
+        var response = await client.PostAsJsonAsync($"/api/endpoints/approvals/request?hostname={Uri.EscapeDataString(Environment.MachineName)}", new
+        {
+            appName,
+            reason
+        }, token);
+        
+        return response.IsSuccessStatusCode;
     }
 
     public async Task<DlpScanData> ScanFileAsync(
@@ -159,9 +188,31 @@ public sealed class EndpointApiClient
         public string EndpointKey { get; set; } = "";
         public string PolicyVersion { get; set; } = "";
     }
+
+    public async Task<List<TokenUserDto>> GetTokenUsersAsync(string apiUrl, string token, CancellationToken cancellationToken)
+    {
+        using var client = new HttpClient { BaseAddress = new Uri(apiUrl.TrimEnd('/')) };
+        var response = await client.GetAsync($"/api/endpoints/deployment/token-users?token={Uri.EscapeDataString(token)}", cancellationToken);
+        response.EnsureSuccessStatusCode();
+        var envelope = await JsonSerializer.DeserializeAsync<ApiEnvelope<List<TokenUserDto>>>(
+            await response.Content.ReadAsStreamAsync(cancellationToken),
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true },
+            cancellationToken);
+        return envelope?.Data ?? new List<TokenUserDto>();
+    }
 }
 
-public sealed record EndpointSyncResult(AgentState State, DeviceData Device, PolicyData Policy);
+public sealed class TokenUserDto
+{
+    public string Email { get; set; } = "";
+    public string DepartmentName { get; set; } = "";
+}
+
+public sealed record EndpointSyncResult(
+    AgentState State,
+    DeviceData Device,
+    PolicyData Policy,
+    EndpointAiPolicyData? AiPolicy);
 
 public sealed class DeviceData
 {
@@ -180,11 +231,20 @@ public sealed class PolicyData
 {
     public string Version { get; set; } = "";
     public int SensitivityThreshold { get; set; }
+    public bool EnableApiKeyDetection { get; set; } = true;
+    public bool EnableDbUrlDetection { get; set; } = true;
+    public bool EnablePrivateKeyDetection { get; set; } = true;
+    public bool EnableSourceCodeDetection { get; set; } = true;
+    public string LowAction { get; set; } = "Allow";
+    public string MediumAction { get; set; } = "Mask";
+    public string HighAction { get; set; } = "PendingApproval";
+    public string CriticalAction { get; set; } = "Block";
     public bool ScanOnPaste { get; set; }
     public bool ScanOnSubmit { get; set; }
     public bool ScanFileUpload { get; set; }
     public bool ClipboardWarning { get; set; }
     public bool OfflineCriticalBlock { get; set; }
+    public string BlockedCodeApps { get; set; } = "code,cursor,codex,claude,windsurf,trae,tabnine,github copilot";
 }
 
 public sealed class DlpScanData
@@ -217,4 +277,20 @@ public sealed class DetectionLocationData
     public int EndIndex { get; set; }
     public int Line { get; set; }
     public int Column { get; set; }
+}
+
+public sealed class EndpointAiPolicyData
+{
+    public List<AiWebsiteRuleData> Websites { get; set; } = new();
+    public bool BlockUnknownAi { get; set; }
+}
+
+public sealed class AiWebsiteRuleData
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = "";
+    public string DomainPattern { get; set; } = "";
+    public bool IsActive { get; set; }
+    public string Mode { get; set; } = "";
+    public DateTime LastUpdated { get; set; }
 }

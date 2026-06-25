@@ -4,6 +4,7 @@ interface Column<T> {
   header: string;
   accessor: keyof T | ((item: T) => React.ReactNode);
   width?: string;
+  align?: 'left' | 'center' | 'right';
 }
 
 interface DataTableProps<T> {
@@ -19,7 +20,7 @@ export function DataTable<T>({ columns, data, emptyMessage = 'No data available 
         <thead>
           <tr>
             {columns.map((column, idx) => (
-              <th key={idx} style={{ width: column.width }}>
+              <th key={idx} style={{ width: column.width, textAlign: column.align || 'left' }}>
                 {column.header}
               </th>
             ))}
@@ -41,7 +42,7 @@ export function DataTable<T>({ columns, data, emptyMessage = 'No data available 
                       ? column.accessor(item)
                       : (item[column.accessor] as React.ReactNode);
                   return (
-                    <td key={colIdx}>
+                    <td key={colIdx} style={{ textAlign: column.align || 'left' }}>
                       {content}
                     </td>
                   );

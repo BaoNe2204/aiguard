@@ -18,7 +18,7 @@ export const Login: React.FC = () => {
   const [searchParams] = useSearchParams();
   const { login, verifyMfa } = useAuth();
   const { t } = useLanguage();
-  const [tenantCode, setTenantCode] = useState(
+  const [tenantCode] = useState(
     searchParams.get('tenant') ||
     localStorage.getItem('aiguard_tenant_code') ||
     'DEFAULT'
@@ -32,6 +32,7 @@ export const Login: React.FC = () => {
 
   const goToHome = (role: string) => {
     if (role === 'Employee') navigate('/app/my-usage/logs');
+    else if (role === 'PlatformAdmin') navigate('/app/business/operations');
     else if (role === 'TenantOwner') navigate('/app/business/onboarding');
     else navigate('/app/dashboard');
   };
@@ -46,8 +47,11 @@ export const Login: React.FC = () => {
     setError('');
     setLoading(true);
     try {
-      const normalizedTenant = tenantCode.trim().toUpperCase();
-      const result = await login(normalizedTenant, email.trim(), password);
+      const normalizedEmail = email.trim().toLowerCase();
+      const normalizedTenant = normalizedEmail === 'platform@aiguard.com'
+        ? 'PLATFORM'
+        : tenantCode.trim().toUpperCase();
+      const result = await login(normalizedTenant, normalizedEmail, password);
       if (result.requiresMfa) {
         if (!result.mfaChallengeToken) throw new Error('MFA challenge is missing');
         setPendingMfa({
@@ -96,10 +100,12 @@ export const Login: React.FC = () => {
       <div className="login-language"><LanguageSwitcher /></div>
       <div className="login-card">
         <div className="login-card-header">
-          <div className="login-logo">
-            <Shield size={36} className="text-indigo-500" />
-          </div>
-          <h1>AIGuard Control Tower</h1>
+          <Link to="/" className="login-brand-link" aria-label="Về trang chủ AIGuard">
+            <span className="login-logo">
+              <Shield size={36} className="text-indigo-500" />
+            </span>
+            <h1>AIGuard Control Tower</h1>
+          </Link>
           <p className="subtitle">
             {t(
               'Endpoint AI DLP & Agent Protection Console',

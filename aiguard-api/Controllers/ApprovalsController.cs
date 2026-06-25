@@ -11,7 +11,7 @@ namespace aiguard_api.Controllers;
 
 [ApiController]
 [Route("api/approvals")]
-[Authorize(Roles = "DepartmentManager,SecurityAdmin,TenantOwner")]
+[Authorize(Roles = "DepartmentManager,SecurityAdmin,TenantOwner,PlatformAdmin")]
 public class ApprovalsController : ControllerBase
 {
     private readonly IApprovalService _approvalService;
@@ -39,14 +39,32 @@ public class ApprovalsController : ControllerBase
         var result = await _approvalService.ProcessApprovalAsync(id, request, approverId);
         if (result == null) return NotFound(ApiResponse<object>.Fail("Approval not found or already processed"));
 
-        // Send realtime notification to the requester
         var tenant = User.FindFirstValue("tenantCode") ?? "DEFAULT";
+
+        // Send to web frontend (user group)
         await _hubContext.Clients.Group(NotificationGroups.User(tenant, result.RequestedByUserEmail)).SendAsync("ApprovalDecided", new
         {
             approvalId = result.Id,
             status = result.Status,
             note = result.ApproverNote
         });
+
+        // Send to browser extension (device group) for the device that created the event
+        if (result.EndpointEventId.HasValue)
+        {
+            var (deviceId, tenantCodeForDevice) = await _approvalService.GetEventDeviceInfoAsync(result.EndpointEventId.Value);
+            if (deviceId.HasValue && !string.IsNullOrEmpty(tenantCodeForDevice))
+            {
+                await _hubContext.Clients.Group(NotificationGroups.Device(tenantCodeForDevice, deviceId.Value))
+                    .SendAsync("ApprovalDecided", new
+                    {
+                        approvalId = result.Id,
+                        status = result.Status,
+                        note = result.ApproverNote,
+                        decision = result.Status == "Approved" ? "Allow" : result.Status == "ApprovedWithMasking" ? "Mask" : "Block"
+                    });
+            }
+        }
 
         return Ok(ApiResponse<ApprovalResponse>.Ok(result));
     }
@@ -63,10 +81,8 @@ public class ApprovalsController : ControllerBase
     [Authorize]
     public async Task<IActionResult> Revoke(Guid id)
     {
-        var email = User.FindFirstValue(ClaimTypes.Email) ?? User.FindFirstValue("email");
-        if (string.IsNullOrWhiteSpace(email)) return Unauthorized(ApiResponse<object>.Fail("Email claim is missing"));
-        var result = await _approvalService.RevokeAsync(id, email);
-        if (result == null) return NotFound(ApiResponse<object>.Fail("Approval not found or cannot be revoked"));
+        var result = await _approvalService.AdminRevokeAsync(id);
+        if (result == null) return NotFound(ApiResponse<object>.Fail("Approval not found"));
         var tenant = User.FindFirstValue("tenantCode") ?? "DEFAULT";
         await _hubContext.Clients.Group(NotificationGroups.Role(tenant, "DepartmentManager"))
             .SendAsync("ApprovalRevoked", new { approvalId = result.Id });

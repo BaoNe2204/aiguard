@@ -12,6 +12,13 @@ export interface DeviceResponse {
   policyVersion: string;
   lastSeen: string;
   riskStatus: string;
+  isOnline?: boolean;
+  isQuarantined?: boolean;
+  isRemoteDisabled?: boolean;
+  endpointKeyRevoked?: boolean;
+  quarantineReason?: string | null;
+  lastPolicySyncAt?: string | null;
+  agentStatus?: string;
 }
 
 export interface EndpointEventResponse {
@@ -87,6 +94,24 @@ export interface RotateEndpointKeyResponse {
   rotatedAt: string;
 }
 
+export interface DeviceAiWebsiteOverrideDto {
+  aiWebsiteId: string;
+  name: string;
+  globalMode: string;
+  overrideMode: string;
+}
+
+export interface DeviceCustomSettingsRequest {
+  customSecurityPolicyId: string | null;
+  aiWebsiteOverrides: DeviceAiWebsiteOverrideDto[];
+}
+
+export interface DeviceCustomSettingsResponse {
+  deviceId: string;
+  customSecurityPolicyId: string | null;
+  aiWebsiteOverrides: DeviceAiWebsiteOverrideDto[];
+}
+
 export const endpointsApi = {
   getDevices(query: PagedQuery = {}): Promise<PagedResult<DeviceResponse>> {
     return apiRequest<PagedResult<DeviceResponse>>(`/endpoints/devices${buildQuery(query)}`);
@@ -106,6 +131,21 @@ export const endpointsApi = {
 
   revokeEndpointKey(id: string): Promise<void> {
     return apiRequest<void>(`/endpoints/devices/${id}/revoke-key`, { method: 'POST' });
+  },
+
+  deleteDevice(id: string): Promise<void> {
+    return apiRequest<void>(`/endpoints/devices/${id}`, { method: 'DELETE' });
+  },
+
+  getDeviceCustomSettings(id: string): Promise<DeviceCustomSettingsResponse> {
+    return apiRequest<DeviceCustomSettingsResponse>(`/endpoints/devices/${id}/custom-settings`);
+  },
+
+  updateDeviceCustomSettings(id: string, data: DeviceCustomSettingsRequest): Promise<DeviceCustomSettingsResponse> {
+    return apiRequest<DeviceCustomSettingsResponse>(`/endpoints/devices/${id}/custom-settings`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
   },
 
   getEvents(
@@ -158,6 +198,26 @@ export const endpointsApi = {
   rotateDeploymentToken(tenantCode: string = 'DEFAULT'): Promise<DeploymentTokenResponse> {
     return apiRequest<DeploymentTokenResponse>(
       `/endpoints/deployment/rotate-token${buildQuery({ tenantCode })}`,
+      { method: 'POST' }
+    );
+  },
+
+  // Real-time commands to extensions
+  sendCommand(data: {
+    targetType: 'device' | 'all';
+    deviceId?: string;
+    command: string;
+    payload?: Record<string, unknown>;
+  }): Promise<void> {
+    return apiRequest<void>('/endpoints/commands/send', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  refreshPolicy(deviceId?: string): Promise<void> {
+    return apiRequest<void>(
+      `/endpoints/commands/policy-refresh${buildQuery(deviceId ? { deviceId } : {})}`,
       { method: 'POST' }
     );
   },

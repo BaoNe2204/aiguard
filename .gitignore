@@ -2,6 +2,9 @@ bin/
 obj/
 dist/
 build/
+aiguard-api/codex-build-check/
+aiguard-api/_buildcheck/
+_buildcheck/
 .vs/
 
 .env
@@ -15,6 +18,11 @@ appsettings.Development.json
 
 node_modules/
 
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+
 *.log
 aiguard-web-beta/
 .DS_Store
@@ -26,3 +34,9 @@ AIGuard-Frontend-Full-Feature-Spec.md
 AIGuard-Business-Packaging-Strategy.md
 AIGuard-Enterprise-Operating-Model-and-Role-Governance.md
 AIGuard-Implementation-Status.md
+AIGuard-Project-Feature-Description.md
+AIGuard-Endpoint-Agent-Detailed-Description.md
+aiguard-web/public/aiguard-endpoint-agent.exe
+RESET_DB.bat
+RUN_AGENT.bat
+DEMO_GUIDE.md

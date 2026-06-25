@@ -30,6 +30,7 @@ public class SecurityPolicyResponse
     public bool ScanFileUpload { get; set; }
     public bool ClipboardWarning { get; set; }
     public bool OfflineCriticalBlock { get; set; }
+    public string BlockedCodeApps { get; set; } = string.Empty;
     public string Version { get; set; } = string.Empty;
     public DateTime UpdatedAt { get; set; }
 }
